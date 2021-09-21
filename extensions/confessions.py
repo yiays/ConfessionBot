@@ -1,5 +1,5 @@
 from array import array
-import asyncio
+import asyncio, re
 from typing import Optional, Union
 import discord
 from discord.ext import commands
@@ -90,7 +90,7 @@ class Confessions(commands.cog.Cog):
 		anonid="facade"
 		if self.bot.config.getint('confessions', str(channel.guild.id)+'_'+str(channel.id)) == CHANNEL_TYPE.untraceable:
 			lead=""
-		elif self.bot.config.getint('confessions', str(channel.guild.id)+'_'+str(channel.id)) in (CHANNEL_TYPE.traceable, CHANNEL_TYPE.feedback):
+		else:
 			offset = self.bot.config.getint('shuffle', str(channel.guild.id), fallback=0) + self.bot.config.getint('shuffle', str(authorid), fallback=0)
 			anonid = self.get_anonid(channel.guild.id,authorid,offset)
 			lead=f"**[Anon-*{anonid}*]:** "
@@ -99,7 +99,7 @@ class Confessions(commands.cog.Cog):
 	def generate_list(self, user:discord.User, matches:array, vetting:bool, enum:bool=False):
 		channelicon = {CHANNEL_TYPE.untraceable: '🙈', CHANNEL_TYPE.traceable: '👁', CHANNEL_TYPE.feedback: '📢'}
 		return ',\n'.join([(str(i+1)+':' if enum else '') + f'{channelicon[c[1]]}<#{c[0].id}>'+(' ('+c[0].guild.name+')' if not isinstance(user, discord.Member) else '') for i,c in enumerate(matches)]) +\
-					 ('\n'+self.bot.babel((user.id),'confessions','vetting') if vetting else '')
+					 ('\n'+self.bot.babel((user.id,),'confessions','vetting') if vetting else '')
 	
 	def scanguild(self, member:discord.Member):
 		matches = []
@@ -286,6 +286,12 @@ class Confessions(commands.cog.Cog):
 					await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'nosendimages'))
 					return
 			
+			# check if the message appears to be spam
+			for spamflag in self.bot.config.get('confessions', 'spam_flags', fallback=None).splitlines():
+				if re.match(spamflag, msg.content):
+					await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'nospam'))
+					return
+			
 			embed = self.generate_confession(anonid, lead, msg.content, image)
 
 			vettingchannel = self.findvettingchannel(targetchannel.guild)
@@ -294,7 +300,10 @@ class Confessions(commands.cog.Cog):
 			await choicemsg.add_reaction(status)
 
 			if vettingchannel:
-				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id),'confessions','vetmessagecta',channel=targetchannel.mention),embed=embed)
+				vlead, vanonid = self.get_anon_details(vettingchannel, msg.author.id)
+				vembed = self.generate_confession(vanonid, vlead, msg.content, image)
+
+				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id),'confessions','vetmessagecta',channel=targetchannel.mention),embed=vembed)
 				await vetmessage.add_reaction('✅')
 				await vetmessage.add_reaction('❎')
 
