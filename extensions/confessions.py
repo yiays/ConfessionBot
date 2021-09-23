@@ -85,17 +85,6 @@ class Confessions(commands.cog.Cog):
 		exec(self.bot.config['confessions']['anonid_generator'], None, loc)
 		return loc['anonid']
 
-	def get_anon_details(self, channel:discord.TextChannel, authorid:int):
-		lead="**undefined**: "
-		anonid="facade"
-		if self.bot.config.getint('confessions', str(channel.guild.id)+'_'+str(channel.id)) == CHANNEL_TYPE.untraceable:
-			lead=""
-		else:
-			offset = self.bot.config.getint('shuffle', str(channel.guild.id), fallback=0) + self.bot.config.getint('shuffle', str(authorid), fallback=0)
-			anonid = self.get_anonid(channel.guild.id,authorid,offset)
-			lead=f"**[Anon-*{anonid}*]:** "
-		return lead, anonid
-
 	def generate_list(self, user:discord.User, matches:array, vetting:bool, enum:bool=False):
 		channelicon = {CHANNEL_TYPE.untraceable: '🙈', CHANNEL_TYPE.traceable: '👁', CHANNEL_TYPE.feedback: '📢'}
 		return ',\n'.join([(str(i+1)+':' if enum else '') + f'{channelicon[c[1]]}<#{c[0].id}>'+(' ('+c[0].guild.name+')' if not isinstance(user, discord.Member) else '') for i,c in enumerate(matches)]) +\
@@ -269,7 +258,11 @@ class Confessions(commands.cog.Cog):
 				choicemsg = msg
 
 			targetchannel = matches[choice][0]
-			lead, anonid = self.get_anon_details(targetchannel, msg.author.id)
+			offset = self.bot.config.getint('shuffle', str(targetchannel.guild.id), fallback=0) + self.bot.config.getint('shuffle', str(msg.author.id), fallback=0)
+			anonid = self.get_anonid(targetchannel.guild.id, msg.author.id, offset)
+			lead = ""
+			if self.bot.config.getint('confessions', str(targetchannel.guild.id)+'_'+str(targetchannel.id)) != CHANNEL_TYPE.untraceable:
+				lead = f"**[Anon-*{anonid}*]**"
 
 			# check if user was banned
 			if [i for i in self.bot.config.get('confessions', str(targetchannel.guild.id)+'_banned', fallback='').split(',') if anonid == i]:
@@ -292,7 +285,7 @@ class Confessions(commands.cog.Cog):
 					await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'nospam'))
 					return
 			
-			embed = self.generate_confession(anonid, lead, msg.content, image)
+			embed = self.generate_confession(anonid if lead else '', lead, msg.content, image)
 
 			vettingchannel = self.findvettingchannel(targetchannel.guild)
 			status = '💭' if vettingchannel else '✅'
@@ -300,10 +293,9 @@ class Confessions(commands.cog.Cog):
 			await choicemsg.add_reaction(status)
 
 			if vettingchannel:
-				vlead, vanonid = self.get_anon_details(vettingchannel, msg.author.id)
-				vembed = self.generate_confession(vanonid, vlead, msg.content, image)
+				vetembed = self.generate_confession(anonid, lead if lead else f"**[Anon-*{anonid}*]**", msg.content, image)
 
-				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id),'confessions','vetmessagecta',channel=targetchannel.mention),embed=vembed)
+				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id),'confessions','vetmessagecta',channel=targetchannel.mention),embed=vetembed)
 				await vetmessage.add_reaction('✅')
 				await vetmessage.add_reaction('❎')
 
