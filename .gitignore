@@ -3,3 +3,4 @@ __pycache__
 /config/config_history
 /config/config.ini
 /logs
+/babel/v1.x/*
