@@ -13,6 +13,7 @@ class Auth(commands.Cog):
     if 'authusers' not in bot.config['auth']:
       bot.config['auth']['authusers'] = ''
   
+  #TODO: figure out why this isn't working
   @commands.Cog.listener("on_command_error")
   async def check_autherror(self, ctx:commands.Context, error):
     if isinstance(error, commands.errors.CommandInvokeError):

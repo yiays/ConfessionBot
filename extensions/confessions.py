@@ -80,7 +80,8 @@ class Confessions(commands.cog.Cog):
 		self.initiated = set()
 		self.ignore = set()
 	
-	def get_anonid(self, guildid:int, userid:int, offset:int):
+	def get_anonid(self, guildid:int, userid:int):
+		offset = self.bot.config.getint('confessions', str(guildid)+'_shuffle', fallback=0)
 		loc = {'uuid' : guildid+userid+offset, 'anonid' : None}
 		exec(self.bot.config['confessions']['anonid_generator'], None, loc)
 		return loc['anonid']
@@ -123,7 +124,10 @@ class Confessions(commands.cog.Cog):
 		return matches, vetting
 	
 	def generate_confession(self, anonid:str, lead:str, content:str, image:Optional[str]):
-		embed = discord.Embed(colour=discord.Colour(int(anonid,16)),description=lead+content)
+		if anonid:
+			embed = discord.Embed(colour=discord.Colour(int(anonid,16)),description=lead+content)
+		else:
+			embed = discord.Embed(description=lead+content)
 		if image:
 			embed.set_image(url=image)
 		return embed
@@ -185,7 +189,11 @@ class Confessions(commands.cog.Cog):
 				await message.remove_reaction(data.emoji, data.member)
 		
 	async def on_confession_vetted(self, vetmessage:discord.Message, pendingconfession:PendingConfession, emoji:discord.Emoji, voter:discord.Member):
-		lead, anonid = self.get_anon_details(pendingconfession.targetchannel, pendingconfession.choicechannel.recipient.id)
+		anonid = self.get_anonid(pendingconfession.targetchannel.guild.id, pendingconfession.choicemsg.channel.recipient.id)
+		lead = ""
+		if self.bot.config.getint('confessions', str(pendingconfession.targetchannel.guild.id)+'_'+str(pendingconfession.targetchannel_id)) != CHANNEL_TYPE.untraceable:
+			lead = f"**[Anon-*{anonid}*]**"
+
 		embed = self.generate_confession(anonid, lead, pendingconfession.content, pendingconfession.image)
 		accepted = True if str(emoji) == '✅' else False
 		
@@ -195,7 +203,8 @@ class Confessions(commands.cog.Cog):
 		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id), 'confessions', 'vetaccepted' if accepted else 'vetdenied'), embed=embed)
 		await pendingconfession.choicemsg.remove_reaction('💭', self.bot.user)
 		await pendingconfession.choicemsg.add_reaction('✅' if accepted else '❎')
-		await self.send_confession(anonid, pendingconfession.choicechannel, pendingconfession.targetchannel, embed)
+		if accepted:
+			await self.send_confession(anonid, pendingconfession.choicechannel, pendingconfession.targetchannel, embed)
 
 	@commands.Cog.listener('on_ready')
 	async def reaction_catchup(self):
@@ -208,7 +217,10 @@ class Confessions(commands.cog.Cog):
 			except Exception as e:
 				print("Failed to fetch required channels or guilds related to a confession (catchup);\n"+str(e))
 				pendingconfession.failures += 1
-				self.bot.config['confessions'][option] = str(pendingconfession)
+				if pendingconfession.failures > 5:
+					self.bot.config.remove_option('confessions', option)
+				else:
+					self.bot.config['confessions'][option] = str(pendingconfession)
 				self.bot.config.save()
 			else:
 				for reaction in vetmessage.reactions:
@@ -251,15 +263,15 @@ class Confessions(commands.cog.Cog):
 					choicemsg = await self.bot.wait_for('message', check=lambda m:m.channel == msg.channel and m.author == msg.author and m.content.isdigit(), timeout=30)
 				except asyncio.TimeoutError:
 					await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'timeouterror'))
-					self.ignore.remove(msg.channel)
+					if msg.channel in self.ignore:
+						self.ignore.remove(msg.channel)
 					return
 				choice = int(choicemsg.content) - 1
 			else:
 				choicemsg = msg
 
 			targetchannel = matches[choice][0]
-			offset = self.bot.config.getint('shuffle', str(targetchannel.guild.id), fallback=0) + self.bot.config.getint('shuffle', str(msg.author.id), fallback=0)
-			anonid = self.get_anonid(targetchannel.guild.id, msg.author.id, offset)
+			anonid = self.get_anonid(targetchannel.guild.id, msg.author.id)
 			lead = ""
 			if self.bot.config.getint('confessions', str(targetchannel.guild.id)+'_'+str(targetchannel.id)) != CHANNEL_TYPE.untraceable:
 				lead = f"**[Anon-*{anonid}*]**"
@@ -366,11 +378,11 @@ class Confessions(commands.cog.Cog):
 				else:
 					self.bot.config.remove_option('confessions', str(ctx.guild.id)+'_banned')
 			
-			shuffle = self.bot.config.getint('confessions',str(ctx.guild.id)+'_shuffle', fallback=0)
-			self.bot.config.set('shuffle', str(ctx.guild.id), str(shuffle + 1))
+			shuffle = self.bot.config.getint('confessions', str(ctx.guild.id)+'_shuffle', fallback=0)
+			self.bot.config.set('confessions', str(ctx.guild.id)+'_shuffle', str(shuffle + 1))
 			self.bot.config.save()
 
-			ctx.reply(self.bot.babel(ctx, 'confessions', 'shufflesuccess'))
+			await ctx.reply(self.bot.babel(ctx, 'confessions', 'shufflesuccess'))
 	
 	@commands.guild_only()
 	@commands.command()
@@ -433,7 +445,7 @@ class Confessions(commands.cog.Cog):
 	async def botmod(self, ctx:commands.Context, target:str=None):
 		self.bot.cogs['Auth'].admins(ctx)
 
-		modlist = self.bot.config.get(ctx, 'confessions', str(ctx.guild.id)+'_promoted', fallback='')
+		modlist = self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='')
 		if target is None:
 			if modlist:
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodlist') + '\n```' + '\n'.join(modlist.split(' ')) + '```')
