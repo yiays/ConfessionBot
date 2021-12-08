@@ -18,10 +18,10 @@ class Premium(commands.cog.Cog):
       bot.config['premium']['restricted_commands'] = ''
     if 'premium_role_guild' not in bot.config['premium'] or\
        not bot.config['premium']['premium_role_guild'] or\
-       'premium_role' not in bot.config['premium'] or\
-       not bot.config['premium']['premium_role']:
+       'premium_roles' not in bot.config['premium'] or\
+       not bot.config['premium']['premium_roles']:
       bot.config['premium']['premium_role_guild'] = ''
-      bot.config['premium']['premium_role'] = ''
+      bot.config['premium']['premium_roles'] = ''
       raise Exception("You must provide a reference to a guild and role in order for premium to work!")
     if not bot.config.get('help', 'serverinv', fallback=''):
       raise Exception("You must have an invite to the support server with the supporter role in config[help][serverinv]!")
@@ -31,13 +31,13 @@ class Premium(commands.cog.Cog):
 
   def check_premium(self, user:discord.User):
     premiumguild = self.bot.get_guild(self.bot.config.getint('premium', 'premium_role_guild'))
-    premiumrole = premiumguild.get_role(self.bot.config.getint('premium', 'premium_role'))
-    if premiumrole is None:
+    premiumroles = [premiumguild.get_role(int(i)) for i in self.bot.config.get('premium', 'premium_roles').split(' ')]
+    if not premiumroles:
       raise Exception("The designated premium role was not found!")
     
     member = premiumguild.get_member(user.id)
     if isinstance(member, discord.Member):
-      return premiumrole in member.roles
+      return list(set(premiumroles) & set(member.roles))
     else:
       return False
 
