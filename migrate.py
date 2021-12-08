@@ -6,11 +6,6 @@ from configparser import ConfigParser
 import os, shutil
 
 def migrate_translations():
-  """ TODO: extras that need special code:
-    cb/meta/*
-    */meta/inherit
-    help/*desc
-  """
   keymap = {
     'metadata/language': 'merely/meta/name',
     'metadata/langcode': 'merely/meta/language',
@@ -67,7 +62,6 @@ def migrate_translations():
     'mod/vetmessage': 'cb/confessions/vetmessagecta',
     'mod/vetaccepted': 'cb/confessions/vetaccepted',
     'mod/vetdenied': 'cb/confessions/vetdenied',
-    'setprefix/success': 'merely/prefix/set_success',
     'setlanguage/promo': 'merely/language/contribute_cta',
     'admin/diesuccess': 'merely/admin/die_success'
   }
@@ -75,6 +69,8 @@ def migrate_translations():
   strmap = {
     '{botname}': '{c:main/botname}',
     '{prefix}': '{p:local}',
+    '{version}': '{c:main/ver}',
+    '{authorname}': '{c:main/creator}',
     'setlanguage': 'language',
     'setuntraceable': 'set untraceable',
     'setvetting': 'set vetting',
@@ -83,24 +79,76 @@ def migrate_translations():
     'setprefix': 'prefix',
     'enableimage': 'imagesupport enable',
     'disableimage': 'imagesupport disable',
-    'promoted': 'a botmod',
-    'promote': 'botmod',
-    'unban ': 'ban -',
-    'unban': 'ban'
+    'a botmod': 'promoted',
+    'botmod': 'promote',
+    '`unban ': '`ban -',
+    '`unban': '`ban'
   }
 
-  for f in os.scandir('babel/v1.x/'):
-    if f[-4:] == '.ini':
-      langv1 = ConfigParser(comment_prefixes='@', allow_no_value=True)
-      langv1.read('babel/v1.x/'+f)
+  refv2 = ConfigParser(comment_prefixes='@', allow_no_value=True)
+  refv2.read('babel/en.ini', encoding='utf-8')
+  refv2_cb = ConfigParser(comment_prefixes='@', allow_no_value=True)
+  refv2_cb.read('babel/confessionbot_en.ini', encoding='utf-8')
 
-      shutil.copy('babel/en.ini', 'babel/v2.0/'+f)
+  for langf in os.scandir('babel/v1.x/'):
+    if str(langf.name)[-4:] == '.ini':
+      langv1 = ConfigParser()
+      langv1.read('babel/v1.x/'+langf.name, encoding='utf-8')
+
       langv2 = ConfigParser(comment_prefixes='@', allow_no_value=True)
-      langv2.read('babel/v2.0/'+f)
 
-      shutil.copy('babel/confessionbot_en.ini', 'babel/v2.0/confessionbot_'+f)
       langv2_cb = ConfigParser(comment_prefixes='@', allow_no_value=True)
-      langv2_cb.read('babel/v2.0/confessionbot_'+f)
+
+      def updatestr(str: str):
+        for oldstr,newstr in strmap.items():
+          str = str.replace(oldstr, newstr)
+        return str
+
+      langv2_cb.add_section('meta')
+      for section in langv1.sections():
+        for key in langv1[section]:
+          if f'{section}/{key}' in keymap:
+            dest = keymap[f'{section}/{key}'].split('/')
+            tini = langv2 if dest[0] == 'merely' else langv2_cb
+            rini = refv2 if dest[0] == 'merely' else refv2_cb
+            
+            oldstr = rini.get(dest[1], dest[2]).splitlines()
+            newstr = updatestr(langv1[section][key]).splitlines()
+            if len(newstr) == 1 and len(oldstr) > 1:
+              newstr += oldstr[1:]
+
+            # one-off patches
+            if dest[0] == 'merely':
+              if dest[1] != 'meta':
+                newstr[0] = newstr[0].lower()
+              if dest[1] == 'language' and dest[2] =='contrbute_cta':
+                newstr[0] = newstr[0].replace('{url}', '{c:language/contribute_url}')
+            elif dest[0] == 'cb':
+              if dest[1] == 'ownerintro' and dest[2] == 'welcome':
+                newstr[0].replace('{p:local}', '{p:global}')
+              if dest[1] == 'confessions':
+                if dest[2] == 'vettingrequiredmissing':
+                  newstr[0] = "Unable to send an approved confession. "+newstr[0]
+                if dest[2] == 'vetting':
+                  newstr[0] = '**'+newstr[0]+'**'
+
+            if not tini.has_section(dest[1]):
+              tini.add_section(dest[1])
+            tini.set(dest[1], dest[2], '\n'.join(newstr))
+      
+      with open('babel/v2.0/'+langf.name, 'w') as f:
+        langv2['meta']['inherit'] = ''
+        langv2.write(f)
+      with open('babel/v2.0/confessionbot_'+langf.name, 'w') as f:
+        for key in langv2['meta']:
+          if key == 'inherit':
+            langv2_cb['meta']['inherit'] = langv2['meta']['language']
+          elif key == 'language':
+            langv2_cb['meta']['language'] = 'confessionbot_'+langv2['meta']['language']
+          else:
+            langv2_cb['meta'][key] = langv2['meta'][key]
+        langv2_cb.write(f)
+      print("migrated the "+langf.name[:-4]+" translation.")
 
 def migrate_config():
   pass
