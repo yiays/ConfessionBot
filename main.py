@@ -86,8 +86,10 @@ class Logger(object):
 		self.terminal = sys.stderr if err else sys.stdout
 		self.err = err
 	def write(self, message):
+		if not os.path.exists("logs/"+time.strftime("%m-%y")):
+			os.makedirs("logs/"+time.strftime("%m-%y"))
 		self.terminal.write(message.encode('utf-8').decode('ascii','ignore'))
-		with open("logs/merely"+('-errors' if self.err else '')+"-"+time.strftime("%d-%m-%y")+".log", "a", encoding='utf-8') as log:
+		with open("logs/"+time.strftime("%m-%y")+"/merelybot"+('-errors' if self.err else '')+"-"+time.strftime("%d-%m-%y")+".log", "a", encoding='utf-8') as log:
 			log.write(message)
 	def flush(self):
 		return self
