@@ -1,5 +1,5 @@
 from array import array
-import asyncio, re
+import asyncio, re, time
 from typing import Optional, Union
 import discord
 from discord.ext import commands
@@ -68,17 +68,20 @@ class Confessions(commands.cog.Cog):
 	def __init__(self, bot:commands.Bot):
 		self.bot = bot
 		if not bot.config.getboolean('extensions', 'auth', fallback=False):
-			raise Exception("'auth' must be enabled to use 'admin'")
+			raise Exception("'auth' must be enabled to use 'confessions'")
 		# ensure config file has required data
 		if not bot.config.has_section('confessions'):
 			bot.config.add_section('confessions')
 		if 'starttime' not in bot.config['confessions']:
 			bot.config['confessions']['starttime'] = '?'
+		if 'confession_cooldown' not in bot.config['confessions']:
+			bot.config['confessions']['confession_cooldown'] = 1
 		if 'anonid_generator' not in bot.config['confessions']:
 			bot.config['confessions']['anonid_generator'] = '#import\nanonid = hex(uuid)[-6:]'
 			print("WARNING: you should define a more advanced algorithm for hiding user ids. (config[confessions][anonid_generator])")
 		self.initiated = set()
 		self.ignore = set()
+		self.confession_cooldown = dict()
 	
 	def get_anonid(self, guildid:int, userid:int):
 		offset = self.bot.config.getint('confessions', str(guildid)+'_shuffle', fallback=0)
@@ -240,9 +243,13 @@ class Confessions(commands.cog.Cog):
 			if msg.channel in self.ignore:
 				self.ignore.remove(msg.channel)
 				return
+			if msg.author in self.confession_cooldown and self.confession_cooldown[msg.author] > time.time():
+				return
+			else:
+				self.confession_cooldown[msg.author] = time.time() + self.bot.config.getint('confessions', 'confession_cooldown', fallback=1)
 			
-			if 'log' in self.bot.cogs:
-				self.bot.cogs['log'].log_misc(msg)
+			if 'Log' in self.bot.cogs:
+				await self.bot.cogs['Log'].log_misc(msg)
 
 			matches,vetting = self.listavailablechannels(msg.author)
 
