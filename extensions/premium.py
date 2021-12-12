@@ -22,7 +22,7 @@ class Premium(commands.cog.Cog):
        not bot.config['premium']['premium_roles']:
       bot.config['premium']['premium_role_guild'] = ''
       bot.config['premium']['premium_roles'] = ''
-      raise Exception("You must provide a reference to a guild and role in order for premium to work!")
+      raise Exception("You must provide a reference to a guild and at least one role in order for premium to work!")
     if not bot.config.get('help', 'serverinv', fallback=''):
       raise Exception("You must have an invite to the support server with the supporter role in config[help][serverinv]!")
     bot.add_check(self.check_premium_command)

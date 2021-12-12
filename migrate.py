@@ -3,9 +3,12 @@
 """
 
 from configparser import ConfigParser
-import os, shutil
+from extensions.confessions import PendingConfession
+import os
 
 def migrate_translations():
+  print("migrate_translations():")
+
   keymap = {
     'metadata/language': 'merely/meta/name',
     'metadata/langcode': 'merely/meta/language',
@@ -151,7 +154,67 @@ def migrate_translations():
       print("migrated the "+langf.name[:-4]+" translation.")
 
 def migrate_config():
-  pass
+  """TODO: special sections
+  v1/channels
+  """
+  print("migrate_config():")
 
-migrate_translations()
+  keymap = {
+    'main/creator': 'main/creator',
+    'main/token': 'main/token',
+    'main/beta': 'main/beta',
+    'main/starttime': 'confessions/starttime',
+    'customprefix/*': 'prefix/{}',
+    'banned/*': 'confessions/{}_banned',
+    'shuffle/*': 'confessions/{}_shuffle',
+    'imagesupport/*': 'confessions/{}_imagesupport',
+    'promoted/*': 'confessions/{}_promoted'
+  }
+
+  refv2 = ConfigParser()
+  refv2.read('config/config.factory.ini', encoding='utf-8')
+  confv1 = ConfigParser()
+  confv1.read('config/v1.x/config.ini', encoding='utf-8')
+  confv2 = ConfigParser()
+  confv2.read('config/config.factory.ini', encoding='utf-8')
+
+  for section in confv1.sections():
+    if section == 'channels':
+      pass
+    elif section =='language':
+      for key in confv1['language']:
+        confv2['language'][key] = 'confessionbot_'+confv1['language'][key]
+    elif section.startswith('pending_vetting_'):
+      confession = PendingConfession('')
+      confession.offline = True
+      confession.choicechannel_id = int(confv1[section]['choicechannel'])
+      confession.choicemsg_id = int(confv1[section]['choicemsg'])
+      confession.targetchannel_id = int(confv1[section]['target'])
+      confession.content = confv1[section]['content'] if 'content' in confv1[section] else None
+      confession.image = confv1[section]['image'] if 'image' in confv1[section] else None
+      confession.failures = 0
+      confv2['confessions'][section] = str(confession)
+    elif f'{section}/*' in keymap:
+      t = keymap[f'{section}/*'].split('/')
+      tsect = t[0]
+      topt = t[1]
+      for key in confv1[section]:
+        confv2[tsect][topt.format(key)] = confv1[section][key]
+    else:
+      for key in confv1[section]:
+        if f'{section}/{key}' in keymap:
+          t = keymap[f'{section}/{key}'].split('/')
+          tsect = t[0]
+          topt = t[1]
+          confv2[tsect][topt] = confv1[section][key]
+        else:
+          print(f"'{section}/{key}' discarded.")
+    print(f"'{section}' migrated!")
+  
+  with open('config/v2.0/config.ini', 'w', encoding='utf-8') as f:
+    confv2.write(f)
+  
+  print("config migration complete!")
+
+#migrate_translations()
 migrate_config()

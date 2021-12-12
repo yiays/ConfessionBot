@@ -24,6 +24,8 @@ class PendingConfession:
 			self.image = lines[3] if len(lines[3]) else None
 			self.failures = int(lines[4])
 			self.content = '\n'.join(lines[5:])
+		elif input == '':
+			pass
 		else:
 			self.offline = False
 			self.choicechannel = choicemsg.channel
