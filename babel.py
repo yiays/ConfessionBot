@@ -1,7 +1,7 @@
 from configparser import ConfigParser
 from typing import Union
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 import os, re
 
 class Babel():
@@ -56,7 +56,7 @@ class Babel():
     dbg_origins = []
     if isinstance(ctx, commands.Context):
       authorid = ctx.author.id
-      guildid = ctx.guild.id if isinstance(ctx.channel, discord.abc.GuildChannel) else None
+      guildid = ctx.guild.id if isinstance(ctx.channel, nextcord.abc.GuildChannel) else None
     else:
       authorid = ctx[0]
       guildid = ctx[1] if len(ctx)>1 else None
@@ -121,7 +121,7 @@ class Babel():
     # Fill in prefixes
     prefixqueries = self.prefixreference.findall(match)
     for prefixquery in prefixqueries:
-      if prefixquery == 'local' and isinstance(ctx.channel, discord.TextChannel):
+      if prefixquery == 'local' and isinstance(ctx.channel, nextcord.TextChannel):
         match = match.replace('{p:'+prefixquery+'}', self.config.get('prefix', str(ctx.guild.id), fallback=self.config['main']['prefix_short']))
       else:
         match = match.replace('{p:'+prefixquery+'}', self.config['main']['prefix_short'])

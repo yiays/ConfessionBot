@@ -1,5 +1,5 @@
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 from typing import Dict, Pattern, Union
 import re, asyncio
 
@@ -22,7 +22,7 @@ class LightbulbDriver():
     else:
       self.action = None
 
-class Lightbulb(commands.cog.Cog):
+class Lightbulb(commands.Cog):
   """a prototype service for commandless bots"""
   drivers:Dict[str, LightbulbDriver] = {}
 
@@ -55,7 +55,7 @@ class Lightbulb(commands.cog.Cog):
         faileddriver = self.drivers.pop(k)
         print(f"unable to find command ({faileddriver.action}) for: {faileddriver.name}")
   
-  def scan_message(self, message:discord.Message):
+  def scan_message(self, message:nextcord.Message):
     for driver in self.drivers.values():
       match = driver.pattern.search(message.content)
       if match:
@@ -63,8 +63,8 @@ class Lightbulb(commands.cog.Cog):
     return None, None
 
   @commands.Cog.listener('on_message')
-  async def check_message(self, message:discord.Message):
-    if isinstance(message.channel, discord.channel.TextChannel) and\
+  async def check_message(self, message:nextcord.Message):
+    if isinstance(message.channel, nextcord.channel.TextChannel) and\
        str(message.guild.id) in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():
       match, driver = self.scan_message(message)
       if match:
@@ -76,9 +76,9 @@ class Lightbulb(commands.cog.Cog):
           pass
 
   @commands.Cog.listener('on_reaction_add')
-  async def check_reactions(self, reaction:discord.Reaction, user:discord.User):
+  async def check_reactions(self, reaction:nextcord.Reaction, user:nextcord.User):
     if user != self.bot.user and str(reaction.emoji) == '💡' and\
-       isinstance(reaction.message.channel, discord.channel.TextChannel) and\
+       isinstance(reaction.message.channel, nextcord.channel.TextChannel) and\
        str(reaction.message.guild.id) in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():
       match, driver = self.scan_message(reaction.message)
       if match:

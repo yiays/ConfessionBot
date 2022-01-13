@@ -1,7 +1,7 @@
-import discord, asyncio
-from discord.ext import commands
+import nextcord, asyncio
+from nextcord.ext import commands
 
-class Admin(commands.cog.Cog):
+class Admin(commands.Cog):
   """powerful commands only for administrators"""
   def __init__(self, bot:commands.Bot):
     self.bot = bot
@@ -12,12 +12,12 @@ class Admin(commands.cog.Cog):
     if not bot.config.has_section('admin'):
       bot.config.add_section('admin')
 
-  def check_delete(self, message:discord.Message, strict:bool=False):
+  def check_delete(self, message:nextcord.Message, strict:bool=False):
     return strict or\
       (message.author==self.bot.user or\
       message.content.lower().startswith(self.bot.config['main']['prefix_short']) or\
       message.content.startswith('<@'+str(self.bot.user.id)+'>') or\
-      message.type == discord.MessageType.pins_add or\
+      message.type == nextcord.MessageType.pins_add or\
       (self.bot.config['main']['prefix_long'] and\
       message.content.lower().startswith(self.bot.config['main']['prefix_long']))
       )
@@ -68,8 +68,8 @@ class Admin(commands.cog.Cog):
       if start>end: start,end = end,start
       deleted = await ctx.channel.purge(limit=1000,
                                         check=lambda m: m.id>start and m.id<end and self.check_delete(m, strict),
-                                        before=discord.Object(end),
-                                        after=discord.Object(start))
+                                        before=nextcord.Object(end),
+                                        after=nextcord.Object(start))
       await ctx.reply(self.bot.babel(ctx, 'admin', 'clean_success', n=len(deleted)))
 
   @commands.command()

@@ -1,7 +1,7 @@
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 
-class Meme(commands.cog.Cog):
+class Meme(commands.Cog):
   """cross promotion for another bot"""
   def __init__(self, bot:commands.Bot):
     self.bot = bot

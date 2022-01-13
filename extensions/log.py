@@ -1,7 +1,7 @@
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 
-class Log(commands.cog.Cog):
+class Log(commands.Cog):
   def __init__(self, bot:commands.Bot):
     self.bot = bot
     self.logchannel = None
@@ -19,10 +19,10 @@ class Log(commands.cog.Cog):
   def truncate(self, string:str, maxlen:int=30):
     return string[:maxlen] + ('...' if len(string) > maxlen else '')
   
-  def wrap(self, message:discord.Message):
-    if isinstance(message.channel, discord.TextChannel):
+  def wrap(self, message:nextcord.Message):
+    if isinstance(message.channel, nextcord.TextChannel):
       return f"[{self.truncate(message.guild.name, 10)}#{self.truncate(message.channel.name)}] {self.truncate(message.author.name, 10)}#{message.author.discriminator}: {self.truncate(message.content)}"
-    elif isinstance(message.channel, discord.DMChannel):
+    elif isinstance(message.channel, nextcord.DMChannel):
       return f"[DM({self.truncate(message.channel.recipient.name, 10)}#{message.channel.recipient.discriminator})] {'other' if message.author == self.bot.user else 'self'}: {self.truncate(message.content)}"
 
   @commands.Cog.listener('on_command')
@@ -44,7 +44,7 @@ class Log(commands.cog.Cog):
       if self.logchannel:
         await self.logchannel.send(logentry, embed=response.embeds[0] if response.embeds else None)
   
-  async def log_misc(self, msg:discord.Message):
+  async def log_misc(self, msg:nextcord.Message):
     """This version is intended to be called externally from other modules that react to more than just commands."""
     logentry = self.wrap(msg)
     print(logentry)

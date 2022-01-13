@@ -1,12 +1,12 @@
 import asyncio
-import discord
-from discord.ext import tasks, commands
+import nextcord
+from nextcord.ext import tasks, commands
 from time import time
 import re
 
-from discord.raw_models import RawReactionActionEvent, RawReactionClearEvent
+from nextcord.raw_models import RawReactionActionEvent, RawReactionClearEvent
 
-class Poll(commands.cog.Cog):
+class Poll(commands.Cog):
   """poll is an almost stateless poll extension for discord bots
   this improved poll handles votes even if the bot goes offline and keeps the countdown timer up to date for a week after expiry"""
 
@@ -115,7 +115,7 @@ class Poll(commands.cog.Cog):
     return '[' + width*'■' + abs(width-20)*'□' + ']'
   def generate_poll_embed(self, title:str, counter:int, answers:list, votes:list):
     """generates a poll embed based on the provided data"""
-    embed = discord.Embed(title=title)
+    embed = nextcord.Embed(title=title)
     if counter>0: embed.description = f"{'⏳' if counter>60 else '⌛'} {self.inttotime(counter, 1, beforeprefix='closing')}"
     elif counter < -604800: embed.description = "⌛ expired a long time ago"
     else: embed.description = f"⌛ {self.inttotime(counter, 2 if counter > -86400 else 3, afterprefix='closed')}"
@@ -128,7 +128,7 @@ class Poll(commands.cog.Cog):
     embed.set_footer(text="react to vote | this poll is multichoice")
     return embed
 
-  async def redraw_poll(self, msg:discord.Message, expiry:int, expired:bool=False):
+  async def redraw_poll(self, msg:nextcord.Message, expiry:int, expired:bool=False):
     """redraws the poll using real data"""
     title = msg.embeds[0].title
     counter = expiry - round(time())
@@ -143,7 +143,7 @@ class Poll(commands.cog.Cog):
     await msg.edit(embed=embed)
     return title, answers, votes # just returning these for the one situation where they need to be reused
   
-  async def expire_poll(self, msg:discord.Message, expiry:int):
+  async def expire_poll(self, msg:nextcord.Message, expiry:int):
     """announces the winner of the poll"""
     title, answers, votes = await self.redraw_poll(msg, expiry, expired=True)
     winners = []

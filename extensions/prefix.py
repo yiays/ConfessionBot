@@ -1,9 +1,9 @@
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 from typing import Dict, Pattern, Union
 import re, asyncio
 
-class Prefix(commands.cog.Cog):
+class Prefix(commands.Cog):
   """a prototype service for commandless bots"""
   def __init__(self, bot:commands.Bot):
     self.bot = bot
@@ -16,8 +16,8 @@ class Prefix(commands.cog.Cog):
     self.fallback_prefix = bot.command_prefix
     bot.command_prefix = self.check_prefix
 
-  def check_prefix(self, bot, message:discord.Message):
-    if isinstance(message.channel, discord.TextChannel):
+  def check_prefix(self, bot, message:nextcord.Message):
+    if isinstance(message.channel, nextcord.TextChannel):
       if str(message.channel.guild.id) in self.bot.config['prefix'] and len(self.bot.config['prefix'][str(message.channel.guild.id)]):
         return [self.bot.config['prefix'][str(message.guild.id)]] + commands.when_mentioned(bot, message)
     return self.fallback_prefix(bot, message)

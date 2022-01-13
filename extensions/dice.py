@@ -1,8 +1,8 @@
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 import random
 
-class Dice(commands.cog.Cog):
+class Dice(commands.Cog):
   """simple dice rolling command extension, could be treated like another example"""
   def __init__(self, bot:commands.Bot):
     self.bot = bot
