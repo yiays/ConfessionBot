@@ -165,6 +165,7 @@ def migrate_config():
     'main/beta': 'main/beta',
     'main/starttime': 'confessions/starttime',
     'customprefix/*': 'prefix/{}',
+    'channels/*': 'confessions/?_{}',
     'banned/*': 'confessions/{}_banned',
     'shuffle/*': 'confessions/{}_shuffle',
     'imagesupport/*': 'confessions/{}_imagesupport',
@@ -179,9 +180,7 @@ def migrate_config():
   confv2.read('config/config.factory.ini', encoding='utf-8')
 
   for section in confv1.sections():
-    if section == 'channels':
-      pass
-    elif section =='language':
+    if section =='language':
       for key in confv1['language']:
         confv2['language'][key] = 'confessionbot_'+confv1['language'][key]
     elif section.startswith('pending_vetting_'):

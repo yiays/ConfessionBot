@@ -99,7 +99,14 @@ class Confessions(commands.Cog):
 	def scanguild(self, member:nextcord.Member):
 		matches = []
 		vetting = False
+		save = False
 		for channel in member.guild.channels:
+			# Backwards compatibility (v1.x): add server id to confession channel config
+			if '?_'+str(channel.id) in self.bot.config['confessions']:
+				save = True
+				print('?')
+				self.bot.config['confessions'][str(member.guild.id)+'_'+str(channel.id)] = self.bot.config['confessions']['?_'+str(channel.id)]
+				self.bot.config.remove_option('confessions', '?_'+str(channel.id))
 			if str(member.guild.id)+'_'+str(channel.id) in self.bot.config['confessions']:
 				chtype = int(self.bot.config['confessions'][str(member.guild.id)+'_'+str(channel.id)])
 				if chtype == CHANNEL_TYPE.vetting:
@@ -108,9 +115,12 @@ class Confessions(commands.Cog):
 				if chtype == CHANNEL_TYPE.feedback:
 					matches.append((channel, chtype))
 					continue
-				if member.permissions_in(channel).read_messages:
+				if channel.permissions_for(member).read_messages:
 					matches.append((channel, chtype))
 					continue
+		
+		if save:
+			self.bot.config.save()
 		
 		return matches, vetting
 

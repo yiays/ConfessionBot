@@ -29,7 +29,7 @@ class Auth(commands.Cog):
 
   def admins(self, ctx:commands.Context):
       if ctx.message.author == ctx.message.guild.owner or\
-         ctx.message.author.permissions_in(ctx.channel).administrator or\
+         ctx.channel.permissions_for(ctx.message.author).administrator or\
          str(ctx.message.author.id) in self.bot.config['auth']['superusers']:
         return True
       else:
@@ -37,8 +37,8 @@ class Auth(commands.Cog):
 
   def mods(self, ctx:commands.Context):
       if ctx.message.author == ctx.message.guild.owner or\
-         ctx.message.author.permissions_in(ctx.channel).administrator or\
-         ctx.message.author.permissions_in(ctx.channel).ban_members or\
+         ctx.channel.permissions_for(ctx.message.author).administrator or\
+         ctx.channel.permissions_for(ctx.message.author).ban_members or\
          str(ctx.message.author.id) in self.bot.config['auth']['superusers'] or\
          str(ctx.message.author.id) in self.bot.config['auth']['authusers']:
         return True

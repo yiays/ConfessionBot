@@ -23,7 +23,10 @@ class Log(commands.Cog):
     if isinstance(message.channel, nextcord.TextChannel):
       return f"[{self.truncate(message.guild.name, 10)}#{self.truncate(message.channel.name)}] {self.truncate(message.author.name, 10)}#{message.author.discriminator}: {self.truncate(message.content)}"
     elif isinstance(message.channel, nextcord.DMChannel):
-      return f"[DM({self.truncate(message.channel.recipient.name, 10)}#{message.channel.recipient.discriminator})] {'other' if message.author == self.bot.user else 'self'}: {self.truncate(message.content)}"
+      if message.channel.recipient:
+        return f"[DM({self.truncate(message.channel.recipient.name, 10)}#{message.channel.recipient.discriminator})] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
+      else:
+        return f"[DM] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
 
   @commands.Cog.listener('on_command')
   async def log_command(self, ctx:commands.Context):
