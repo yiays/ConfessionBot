@@ -104,7 +104,6 @@ class Confessions(commands.Cog):
 			# Backwards compatibility (v1.x): add server id to confession channel config
 			if '?_'+str(channel.id) in self.bot.config['confessions']:
 				save = True
-				print('?')
 				self.bot.config['confessions'][str(member.guild.id)+'_'+str(channel.id)] = self.bot.config['confessions']['?_'+str(channel.id)]
 				self.bot.config.remove_option('confessions', '?_'+str(channel.id))
 			if str(member.guild.id)+'_'+str(channel.id) in self.bot.config['confessions']:
@@ -250,7 +249,7 @@ class Confessions(commands.Cog):
 		ctx = await self.bot.get_context(msg)
 		if ctx.prefix is not None:
 			return
-		if isinstance(msg.channel, nextcord.abc.PrivateChannel) and\
+		if isinstance(msg.channel, nextcord.abc.DMChannel) and\
 			 msg.author != self.bot.user:
 			if msg.channel in self.ignore:
 				self.ignore.remove(msg.channel)

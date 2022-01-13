@@ -210,6 +210,8 @@ def migrate_config():
           print(f"'{section}/{key}' discarded.")
     print(f"'{section}' migrated!")
   
+  if not os.path.isdir('config/v2.0'):
+    os.mkdir('config/v2.0')
   with open('config/v2.0/config.ini', 'w', encoding='utf-8') as f:
     confv2.write(f)
   

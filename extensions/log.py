@@ -27,6 +27,8 @@ class Log(commands.Cog):
         return f"[DM({self.truncate(message.channel.recipient.name, 10)}#{message.channel.recipient.discriminator})] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
       else:
         return f"[DM] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
+    elif isinstance(message.channel, nextcord.Thread):
+      return f"[Thread] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
 
   @commands.Cog.listener('on_command')
   async def log_command(self, ctx:commands.Context):
