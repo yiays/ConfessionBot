@@ -108,7 +108,7 @@ class Help(commands.Cog):
 
     else:
       # show the generic help embed with a variety of featured commands
-      if str(ctx.channel.recipient.id if isinstance(ctx.channel, nextcord.DMChannel) else ctx.channel.guild.id) in self.bot.config['prefix'] and\
+      if str(ctx.author.id if isinstance(ctx.channel, nextcord.DMChannel) else ctx.channel.guild.id) in self.bot.config['prefix'] and\
          len(self.bot.config['prefix'][str(ctx.channel.guild.id)]):
         longprefix = None
       else:

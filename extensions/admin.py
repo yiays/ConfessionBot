@@ -7,7 +7,6 @@ class Admin(commands.Cog):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
-    self.auth = bot.cogs['Auth']
     # ensure config file has required data
     if not bot.config.has_section('admin'):
       bot.config.add_section('admin')
@@ -39,7 +38,7 @@ class Admin(commands.Cog):
     if ctx.invoked_subcommand is None:
       raise commands.BadArgument
     else:
-      self.auth.admins(ctx)
+      self.bot.cogs['Auth'].admins(ctx)
   @janitor.command(name='join')
   async def janitor_join(self, ctx:commands.Context, strict=''):
     self.bot.config['admin'][f'{ctx.channel.id}_janitor'] = '1' if strict else '0'
@@ -58,28 +57,19 @@ class Admin(commands.Cog):
 
     if n_or_id.isdigit():
       n = int(n_or_id)
-      self.auth.mods(ctx)
+      self.bot.cogs['Auth'].mods(ctx)
       deleted = await ctx.channel.purge(limit=n, check=lambda m:self.check_delete(m, strict))
       await ctx.reply(self.bot.babel(ctx, 'admin', 'clean_success', n=len(deleted)))
     elif '-' in n_or_id:
       start,end = n_or_id.split('-')
       start,end = int(start),int(end)
-      self.auth.mods(ctx)
+      self.bot.cogs['Auth'].mods(ctx)
       if start>end: start,end = end,start
       deleted = await ctx.channel.purge(limit=1000,
                                         check=lambda m: m.id>start and m.id<end and self.check_delete(m, strict),
                                         before=nextcord.Object(end),
                                         after=nextcord.Object(start))
       await ctx.reply(self.bot.babel(ctx, 'admin', 'clean_success', n=len(deleted)))
-
-  @commands.command()
-  @commands.cooldown(1, 1)
-  async def die(self, ctx:commands.Context, saveconfig=False):
-    self.auth.superusers(ctx)
-    await ctx.reply(self.bot.babel(ctx, 'admin', 'die_success'))
-    if saveconfig:
-      self.bot.config.save()
-    await self.bot.close()
 
 
 def setup(bot):
