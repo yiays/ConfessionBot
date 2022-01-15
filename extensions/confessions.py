@@ -157,7 +157,7 @@ class Confessions(commands.Cog):
 			await targetchannel.send(embed=embed)
 		except nextcord.errors.Forbidden:
 			try:
-				await targetchannel.send(self.bot.babel((None, targetchannel.guild.id), 'confessions', 'missingperms', perm='Embed Messages'))
+				await targetchannel.send(self.bot.babel((None, targetchannel.guild.id,), 'confessions', 'missingperms', perm='Embed Messages'))
 				await choicechannel.send(self.bot.babel((choicechannel.recipient.id,), 'confessions', 'embederr'))
 			except:
 				await choicechannel.send(self.bot.babel((choicechannel.recipient.id,), 'confessions', 'missingchannelerr'))
@@ -194,7 +194,7 @@ class Confessions(commands.Cog):
 						await msg.delete()
 					else:
 						self.bot.config['confessions']['pending_vetting_'+str(data.message_id)] = str(pendingconfession)
-						await channel.send(self.bot.babel((data.member.id, data.member.guild.id)), 'confessions', 'vettingrequiredmissing')
+						await channel.send(self.bot.babel((data.member.id, data.member.guild.id,), 'confessions', 'vettingrequiredmissing'))
 				else:
 					await self.on_confession_vetted(vetmessage, pendingconfession, data.emoji, data.member)
 			else:
@@ -214,7 +214,7 @@ class Confessions(commands.Cog):
 		self.bot.config.remove_option('confessions', 'pending_vetting_'+str(vetmessage.id))
 		self.bot.config.save()
 		
-		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id), 'confessions', 'vetaccepted' if accepted else 'vetdenied'), embed=embed)
+		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied'), embed=embed)
 		await pendingconfession.choicemsg.remove_reaction('💭', self.bot.user)
 		await pendingconfession.choicemsg.add_reaction('✅' if accepted else '❎')
 		if accepted:
@@ -222,6 +222,7 @@ class Confessions(commands.Cog):
 
 	@commands.Cog.listener('on_ready')
 	async def reaction_catchup(self):
+		changed = 0
 		for option in (o for o in self.bot.config['confessions'] if o.startswith('pending_vetting_')):
 			pendingconfession = PendingConfession(self.bot.config['confessions'][option])
 			try:
@@ -233,9 +234,18 @@ class Confessions(commands.Cog):
 				pendingconfession.failures += 1
 				if pendingconfession.failures > 5:
 					self.bot.config.remove_option('confessions', option)
+					changed += 1
 				else:
 					self.bot.config['confessions'][option] = str(pendingconfession)
+					changed += 1
+				
+				# optimization to reduce the number of writes
+				if changed > 100:
+					self.bot.config.save()
+					changed = 0
+			if changed:
 				self.bot.config.save()
+				changed = 0
 			else:
 				for reaction in vetmessage.reactions:
 					async for voter in reaction.users():
@@ -249,7 +259,7 @@ class Confessions(commands.Cog):
 		ctx = await self.bot.get_context(msg)
 		if ctx.prefix is not None:
 			return
-		if isinstance(msg.channel, nextcord.abc.DMChannel) and\
+		if isinstance(msg.channel, nextcord.DMChannel) and\
 			 msg.author != self.bot.user:
 			if msg.channel in self.ignore:
 				self.ignore.remove(msg.channel)
@@ -325,7 +335,7 @@ class Confessions(commands.Cog):
 			if vettingchannel:
 				vetembed = self.generate_confession(anonid, lead if lead else f"**[Anon-*{anonid}*]**", msg.content, image)
 
-				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id),'confessions','vetmessagecta',channel=targetchannel.mention),embed=vetembed)
+				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id,),'confessions','vetmessagecta',channel=targetchannel.mention),embed=vetembed)
 				await vetmessage.add_reaction('✅')
 				await vetmessage.add_reaction('❎')
 
@@ -381,7 +391,8 @@ class Confessions(commands.Cog):
 	@commands.guild_only()
 	@commands.command()
 	async def shuffle(self, ctx, one:str = None):
-		self.bot.cogs['Auth'].admins(ctx)
+		if str(ctx.author.id) not in self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='').split(' '):
+			self.bot.cogs['Auth'].admins(ctx)
 		if one:
 			await ctx.reply(self.bot.babel(ctx, 'confessions', 'shuffleobsoleteone'))
 		else:
@@ -390,7 +401,7 @@ class Confessions(commands.Cog):
 				def check(m):
 					return m.channel == ctx.channel and m.author == ctx.author and m.content.lower() == 'yes'
 				try:
-					await msg.wait_for('message', check=check, timeout=30)
+					await self.bot.wait_for('message', check=check, timeout=30)
 				except asyncio.TimeoutError:
 					await ctx.send(self.bot.babel(ctx, 'confessions', 'timeouterror'))
 				else:
