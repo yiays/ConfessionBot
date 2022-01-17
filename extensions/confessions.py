@@ -176,7 +176,7 @@ class Confessions(commands.Cog):
 		if data.event_type == 'REACTION_ADD' and data.member and data.member != self.bot.user and\
 			 'pending_vetting_'+str(data.message_id) in self.bot.config['confessions']:
 			if (data.member.guild_permissions.ban_members or \
-					str(data.member.id) in self.bot.config.get('confessions', str(data.member.guild.id)+'_promoted', fallback='').split(' ')) and \
+					str(data.member.id) in self.bot.config.get('confessions', str(data.member.guild.id)+'_promoted', fallback='').split(',')) and \
 					str(data.emoji) in ['✅','❎']:
 				pendingconfession = PendingConfession(self.bot.config['confessions']['pending_vetting_'+str(data.message_id)])
 				try:
@@ -391,8 +391,8 @@ class Confessions(commands.Cog):
 	@commands.guild_only()
 	@commands.command()
 	async def shuffle(self, ctx, one:str = None):
-		if str(ctx.author.id) not in self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='').split(' '):
-			self.bot.cogs['Auth'].admins(ctx)
+		if str(ctx.author.id) not in self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='').split(','):
+			self.bot.cogs['Auth'].mods(ctx)
 		if one:
 			await ctx.reply(self.bot.babel(ctx, 'confessions', 'shuffleobsoleteone'))
 		else:
@@ -435,7 +435,7 @@ class Confessions(commands.Cog):
 	@commands.guild_only()
 	@commands.command()
 	async def ban(self, ctx:commands.Context, anonid:str=None):
-		if str(ctx.author.id) not in self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='').split(' '):
+		if str(ctx.author.id) not in self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='').split(','):
 			self.bot.cogs['Auth'].mods(ctx)
 
 		banlist = self.bot.config.get('confessions', str(ctx.guild.id)+'_banned', fallback='')
@@ -477,7 +477,7 @@ class Confessions(commands.Cog):
 		modlist = self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='')
 		if target is None:
 			if modlist:
-				await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodlist') + '\n```' + '\n'.join(modlist.split(' ')) + '```')
+				await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodlist') + '\n```\n' + '\n'.join(modlist.split(',')) + '```')
 			else:
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodemptylist'))
 		elif ctx.message.mentions:
@@ -491,15 +491,15 @@ class Confessions(commands.Cog):
 				return
 
 			if revoke:
-				if str(botmodee.id) in modlist.split(' '):
-					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] = modlist.replace(str(botmodee.id)+' ')
+				if str(botmodee.id) in modlist.split(','):
+					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] = modlist.replace(str(botmodee.id)+',','')
 					self.bot.config.save()
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmoddemotesuccess', user=botmodee.name))
 				else:
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmoddemoteerr'))
 			else:
-				if str(botmodee.id) not in modlist.split(' '):
-					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] += str(botmodee.id)+' '
+				if str(botmodee.id) not in modlist.split(','):
+					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] += str(botmodee.id)+','
 					self.bot.config.save()
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodsuccess', user=botmodee.name))
 				else:
