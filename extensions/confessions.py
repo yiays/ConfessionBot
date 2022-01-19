@@ -208,7 +208,7 @@ class Confessions(commands.Cog):
 		if self.bot.config.getint('confessions', str(pendingconfession.targetchannel.guild.id)+'_'+str(pendingconfession.targetchannel_id)) != CHANNEL_TYPE.untraceable:
 			lead = f"**[Anon-*{anonid}*]**"
 
-		embed = self.generate_confession(anonid, lead, pendingconfession.content, pendingconfession.image)
+		embed = self.generate_confession(anonid if lead else '', lead, pendingconfession.content, pendingconfession.image)
 		accepted = True if str(emoji) == '✅' else False
 		
 		self.bot.config.remove_option('confessions', 'pending_vetting_'+str(vetmessage.id))

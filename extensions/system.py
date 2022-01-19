@@ -1,6 +1,7 @@
 import nextcord
 from nextcord.ext import commands
 from glob import glob
+import asyncio
 
 class System(commands.Cog):
   """commands involved in working with a discord bot"""
@@ -41,9 +42,15 @@ class System(commands.Cog):
           ext = extcandidate[0]
     
       if ext:
-        if action == 'load':
-              self.bot.load_extension(ext)
-              await ctx.reply(self.bot.babel(ctx, 'main', 'extension_load_success', extension=module))
+        if action == 'enable':
+          self.bot.config['extensions'][module] = 'True'
+          await ctx.reply(self.bot.babel(ctx, 'main', 'extension_enable_success', extension=module))
+        elif action == 'disable':
+          self.bot.config['extensions'][module] = 'False'
+          await ctx.reply(self.bot.babel(ctx, 'main', 'extension_disable_success', extension=module))
+        elif action == 'load':
+          self.bot.load_extension(ext)
+          await ctx.reply(self.bot.babel(ctx, 'main', 'extension_load_success', extension=module))
         elif action == 'unload':
           self.bot.unload_extension(ext)
           await ctx.reply(self.bot.babel(ctx, 'main', 'extension_unload_success', extension=module))
@@ -55,7 +62,7 @@ class System(commands.Cog):
         if module.capitalize() in self.bot.cogs:
           for listener in self.bot.cogs[module.capitalize()].get_listeners():
             if listener[0] == 'on_ready':
-              await listener[1]()
+              asyncio.ensure_future(listener[1]())
       else:
         await ctx.reply(self.bot.babel(ctx, 'main', 'extension_file_missing'))
     else:
