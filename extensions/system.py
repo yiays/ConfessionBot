@@ -44,9 +44,11 @@ class System(commands.Cog):
       if ext:
         if action == 'enable':
           self.bot.config['extensions'][module] = 'True'
+          self.bot.config.save()
           await ctx.reply(self.bot.babel(ctx, 'main', 'extension_enable_success', extension=module))
         elif action == 'disable':
           self.bot.config['extensions'][module] = 'False'
+          self.bot.config.save()
           await ctx.reply(self.bot.babel(ctx, 'main', 'extension_disable_success', extension=module))
         elif action == 'load':
           self.bot.load_extension(ext)
