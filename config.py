@@ -8,6 +8,7 @@ class Config(ConfigParser):
   path = "config/"
   file = "config/config.ini"
   template = "config/config.factory.ini"
+  last_backup = 0
 
   def __init__(self):
     """
@@ -103,10 +104,15 @@ class Config(ConfigParser):
     self.save()
 
   def save(self):
-    if not path.exists(self.path+'config_history/'+time.strftime("%m-%y")):
-      makedirs(self.path+'config_history/'+time.strftime("%m-%y"))
-    if path.isfile(self.file):
-      copy(self.file, self.path+'config_history/'+time.strftime("%m-%y")+'/config-'+time.strftime("%H:%M.%S-%d-%m-%y")+'.ini')
+    # create a backup of the config (max 1 per hour)
+    if self.last_backup < time.time() - (60*60):
+      if not path.exists(self.path+'config_history'):
+        makedirs(self.path+'config_history')
+      if path.isfile(self.file):
+        copy(self.file, self.path+'config_history/config-'+time.strftime("%d-%m-%y %H:%M.%S")+'.ini')
+
+      self.last_backup = time.time()
+    #TODO: autodelete all but one of each config history
     with open(self.file, 'w', encoding='utf-8') as f:
       ConfigParser.write(self, f)
   
