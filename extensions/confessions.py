@@ -421,16 +421,16 @@ class Confessions(commands.Cog):
 			if self.bot.config.getboolean('confessions', str(ctx.guild.id)+'_imagesupport', fallback=True):
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportalreadyenabled'))
 			else:
-				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = True
+				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = 'True'
 				self.bot.config.save()
-				await ctx.reply('confessions', 'imagesupportenabled')
+				await ctx.reply(self.bot.babel('confessions', 'imagesupportenabled'))
 		elif cmd=='disable':
 			if not self.bot.config.getboolean('confessions', str(ctx.guild.id)+'_imagesupport', fallback=True):
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportalreadydisabled'))
 			else:
-				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = False
+				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = 'False'
 				self.bot.config.save()
-				await ctx.reply(self.bot.babel('confessions', 'imagesupportdisabled'))
+				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportdisabled'))
 
 	@commands.guild_only()
 	@commands.command()
