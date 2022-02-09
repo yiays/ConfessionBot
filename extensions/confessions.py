@@ -141,7 +141,7 @@ class Confessions(commands.Cog):
 		if anonid:
 			embed = nextcord.Embed(colour=nextcord.Colour(int(anonid,16)),description=lead+content)
 		else:
-			embed = nextcord.Embed(description=lead+content)
+			embed = nextcord.Embed(description=lead+' '+content)
 		if image:
 			embed.set_image(url=image)
 		return embed
@@ -214,7 +214,7 @@ class Confessions(commands.Cog):
 		self.bot.config.remove_option('confessions', 'pending_vetting_'+str(vetmessage.id))
 		self.bot.config.save()
 		
-		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied'), embed=embed)
+		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied', channel=pendingconfession.targetchannel.mention), embed=embed)
 		await pendingconfession.choicemsg.remove_reaction('💭', self.bot.user)
 		await pendingconfession.choicemsg.add_reaction('✅' if accepted else '❎')
 		if accepted:
