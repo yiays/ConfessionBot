@@ -22,15 +22,20 @@ class Config(ConfigParser):
     if path.isfile(self.path):
       remove(self.path)
     if not path.exists(self.path):
-      print(f"WARNING: ./{self.path} missing - creating folder and generating bare-minimum defaults, you should consider downloading and including ./{self.template}")
+      print(f"WARNING: {self.path} missing - creating folder and generating bare-minimum defaults, you should consider downloading and including ./{self.template}")
       makedirs(self.path)
     if not path.exists(self.file):
       if path.exists(self.template):
-        print(f"WARNING: ./{self.file} missing - reverting to template config")
+        print(f"WARNING: {self.file} missing - reverting to template config")
         copy(self.template, self.file)
       else:
-        print(f"WARNING: ./{self.template} missing - resorting to bare-minimum defaults")
-    ConfigParser.read(self, self.file, encoding='utf-8')
+        print(f"WARNING: {self.template} missing - resorting to bare-minimum defaults")
+    with open(self.file, 'r', encoding='utf-8') as f:
+      ini = f.read()
+      if ini.endswith('\n\n'):
+        ConfigParser.read_string(self, ini)
+      else:
+        raise Exception(f"FATAL: {self.file} appears to be incomplete!")
 
     # Ensure required sections exist and provide sane defaults
     if 'main' not in self.sections():
