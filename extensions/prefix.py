@@ -30,14 +30,22 @@ class Prefix(commands.Cog):
     else:
       self.auth.admins(ctx)
   @prefix.command(name='set')
-  async def prefix_set(self, ctx:commands.Context, prefix:str):
+  async def prefix_set(self, ctx:commands.Context, prefix:str, guild:int=0):
     prefix = prefix.strip(' ')
-    self.bot.config['prefix'][str(ctx.guild.id)] = prefix
+    if guild:
+      self.auth.authusers(ctx)
+      self.bot.config['prefix'][str(guild)] = prefix
+    else:
+      self.bot.config['prefix'][str(ctx.guild.id)] = prefix
     self.bot.config.save()
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'set_success', prefix=prefix))
   @prefix.command(name='unset')
-  async def prefix_unset(self, ctx:commands.Context):
-    self.bot.config.remove_option('prefix', str(ctx.guild.id))
+  async def prefix_unset(self, ctx:commands.Context, guild:int=0):
+    if guild:
+      self.auth.authusers(ctx)
+      self.bot.config.remove_option('prefix', str(guild))
+    else:
+      self.bot.config.remove_option('prefix', str(ctx.guild.id))
     self.bot.config.save()
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'unset_success'))
   @prefix.command(name='get')
