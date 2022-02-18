@@ -99,7 +99,7 @@ class ConfessionModal(disnake.ui.Modal):
 
 
     async def callback(self, interaction):
-        targetchannel self.findvettingchannel(interaction.guild)
+        targetchannel self.listavailablechannels(interaction.author)
         anonid = self.get_anonid(targetchannel.guild.id, interaction.author.id)
 
         embed = self.generate_confession(anonid if lead else '', lead, interaction.text_values["confession"])
@@ -125,8 +125,13 @@ class ConfessionModal(disnake.ui.Modal):
             
             return
 
-        await self.send_confession(anonid, interaction.channel, targetchannel, embed, view=PendingConfessionButtons(confessor=interaction.author))
-
+            await self.send_confession(anonid, interaction.channel, vettingchannel, embed, view=PendingConfessionButtons(confessor=interaction.author))
+        
+        else:
+            try:
+                await self.send_confession(anonid, interaction.channel, targetchannel, embed)
+            except:
+                await interaction.channel.send("Error")
 			
 class Confessions(commands.Cog):
 	"""Note that commands in this module have generic names which may clash with other commands
