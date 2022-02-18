@@ -135,24 +135,6 @@ class Confessions(commands.Cog):
 					vetting = vetting or newvetting
 		
 		return matches, vetting
-	
-	class channelview(disnake.ui.View):
-		def __init__(self, matches):
-			super().__init__(timeout=30)
-			for channel,channeltype in matches:
-				self.channel_selector.append_option(disnake.SelectOption(label=f'{channel.name} (from {channel.guild.name})',
-																						value=str(channel.id),
-																						emoji=Confessions.channel_icons[channeltype]))
-		
-		@disnake.ui.select(placeholder="Destination channel", min_values=1, max_values=1)
-		async def channel_selector(self, select:disnake.ui.Select, inter:disnake.Interaction):
-			self.send_button.disabled = False
-			self.channel_selector._selected_values = select._selected_values
-			await inter.response.edit_message(content=f"Selected confession target: <#{select._selected_values[0]}>", view=self)
-
-		@disnake.ui.button(label="Send confession", disabled=True, style=disnake.ButtonStyle.primary)
-		async def send_button(self, button:disnake.ui.Button, inter:disnake.Integration):
-			pass
 
 	def generate_confession(self, anonid:str, lead:str, content:str, image:Optional[str]):
 		if anonid:
@@ -297,10 +279,8 @@ class Confessions(commands.Cog):
 			if not matches:
 				await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'inaccessible'))
 				return
-			
-			await msg.reply("Select a destination channel for your confession.", view=self.channelview(matches))
 
-			"""choice = 0
+			choice = 0
 			if (not self.bot.is_ready()) or len(matches) > 1:
 				await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'multiplesendtargets'+('short' if msg.author in self.initiated else '')) + '\n' + \
 															 self.generate_list(msg.author, matches, vetting, True))
@@ -372,7 +352,7 @@ class Confessions(commands.Cog):
 				
 				return
 
-			await self.send_confession(anonid, msg.channel, targetchannel, embed)"""
+			await self.send_confession(anonid, msg.channel, targetchannel, embed)
 
 	@commands.guild_only()
 	@commands.command()
