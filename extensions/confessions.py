@@ -61,6 +61,73 @@ class PendingConfession:
 			self.targetchannel = await bot.fetch_channel(self.targetchannel_id)
 			self.offline = False
 
+			
+class PendingConfessionButtons(disnake.ui.View):
+    def __init__(self, confessor: disnake.Member):
+        super().__init__(timeout=None)
+        self.add_item(
+            disnake.ui.Button(
+                label="✅",
+                style=disnake.ButtonStyle.blurple,
+                custom_id=f"pending_confession_approve_{confessor.id}"
+            )
+        )
+        self.add_item(
+            disnake.ui.Button(
+                label="❎",
+                style=disnake.ButtonStyle.blurple,
+                custom_id=f"pending_confession_deny_{confessor.id}"
+            )
+        )
+			
+
+class ConfessionModal(disnake.ui.Modal):
+    def __init__(self):
+        components = [
+            disnake.ui.TextInput(
+                label="Type your confession here:",
+                placeholder="Your confession here",
+                custom_id="confession",
+                style=TextInputStyle.paragraph,
+            )
+        ]
+        super().__init__(
+            title="Anonymous Confession",
+            custom_id="confession_modal",
+            components=components
+        )
+
+
+    async def callback(self, interaction):
+        targetchannel self.findvettingchannel(interaction.guild)
+        anonid = self.get_anonid(targetchannel.guild.id, interaction.author.id)
+
+        embed = self.generate_confession(anonid if lead else '', lead, interaction.text_values["confession"])
+
+        vettingchannel = self.findvettingchannel(targetchannel.guild)
+
+        if vettingchannel:
+            vetembed = self.generate_confession(anonid, lead if lead else f"**[Anon-*{anonid}*]**", interaction.text_values["confession"])
+
+            vetmessage = await vettingchannel.send(self.bot.babel(None,targetchannel.guild.id,),'confessions','vetmessagecta',channel=targetchannel.mention,embed=vetembed)
+
+            # Store pending message details for handling after vetting
+            pendingconfession = PendingConfession(
+                vetmessage=vetmessage,
+                targetchannel=targetchannel,
+                content=interaction.text_values["confession"],
+            )
+            
+            self.bot.config['confessions']['pending_vetting_'+str(vetmessage.id)] = str(pendingconfession)
+            
+            # Store offline in case of restarts or power failures
+            self.bot.config.save()
+            
+            return
+
+        await self.send_confession(anonid, interaction.channel, targetchannel, embed, view=PendingConfessionButtons(confessor=interaction.author))
+
+			
 class Confessions(commands.Cog):
 	"""Note that commands in this module have generic names which may clash with other commands
 	or not make any sense outside of a confessions bot."""
@@ -520,6 +587,15 @@ class Confessions(commands.Cog):
 				self.bot.config.remove_option('confessions', option)
 				break
 		self.bot.config.save()
+
+
+    @commands.slash_command(
+		description="Send a confession"
+	)
+    @commands.guild_only()
+    async def confess(self, interaction):
+        await interaction.response.send_modal(modal=ConfessionModal())		
+
 
 def setup(bot):
 	bot.add_cog(Confessions(bot))
