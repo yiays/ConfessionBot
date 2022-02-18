@@ -499,7 +499,7 @@ class Confessions(commands.Cog):
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmoddemoteerr'))
 			else:
 				if str(botmodee.id) not in modlist.split(','):
-					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] += str(botmodee.id)+','
+					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] = modlist + str(botmodee.id)+','
 					self.bot.config.save()
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodsuccess', user=botmodee.name))
 				else:
