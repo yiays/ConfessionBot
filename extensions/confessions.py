@@ -1,8 +1,8 @@
 from array import array
 import asyncio, re, time
 from typing import Optional, Union
-import nextcord
-from nextcord.ext import commands
+import disnake
+from disnake.ext import commands
 
 class CHANNEL_TYPE:
 	invalid = -2
@@ -13,7 +13,7 @@ class CHANNEL_TYPE:
 	feedback = 3
 
 class PendingConfession:
-	def __init__(self, input:Optional[str]=None, *, vetmessage:nextcord.Message=None, choicemsg:nextcord.Message=None, targetchannel:nextcord.TextChannel=None, content:str=None, image:Optional[str]=None):
+	def __init__(self, input:Optional[str]=None, *, vetmessage:disnake.Message=None, choicemsg:disnake.Message=None, targetchannel:disnake.TextChannel=None, content:str=None, image:Optional[str]=None):
 		if input:
 			self.offline = True
 			self.vetmessage = vetmessage
@@ -65,7 +65,7 @@ class Confessions(commands.Cog):
 	"""Note that commands in this module have generic names which may clash with other commands
 	or not make any sense outside of a confessions bot."""
 
-	channel_types = CHANNEL_TYPE
+	channel_icons = {CHANNEL_TYPE.untraceable: '🙈', CHANNEL_TYPE.traceable: '👁', CHANNEL_TYPE.feedback: '📢'}
 
 	def __init__(self, bot:commands.Bot):
 		self.bot = bot
@@ -91,12 +91,11 @@ class Confessions(commands.Cog):
 		exec(self.bot.config['confessions']['anonid_generator'], None, loc)
 		return loc['anonid']
 
-	def generate_list(self, user:nextcord.User, matches:array, vetting:bool, enum:bool=False):
-		channelicon = {CHANNEL_TYPE.untraceable: '🙈', CHANNEL_TYPE.traceable: '👁', CHANNEL_TYPE.feedback: '📢'}
-		return ',\n'.join([(str(i+1)+':' if enum else '') + f'{channelicon[c[1]]}<#{c[0].id}>'+(' ('+c[0].guild.name+')' if not isinstance(user, nextcord.Member) else '') for i,c in enumerate(matches)]) +\
+	def generate_list(self, user:disnake.User, matches:array, vetting:bool, enum:bool=False):
+		return ',\n'.join([(str(i+1)+':' if enum else '') + f'{self.channel_icons[c[1]]}<#{c[0].id}>'+(' ('+c[0].guild.name+')' if not isinstance(user, disnake.Member) else '') for i,c in enumerate(matches)]) +\
 					 ('\n'+self.bot.babel((user.id,),'confessions','vetting') if vetting else '')
 	
-	def scanguild(self, member:nextcord.Member):
+	def scanguild(self, member:disnake.Member):
 		matches = []
 		vetting = False
 		save = False
@@ -123,8 +122,8 @@ class Confessions(commands.Cog):
 		
 		return matches, vetting
 
-	def listavailablechannels(self, user:Union[nextcord.User, nextcord.Member]):
-		if isinstance(user, nextcord.Member):
+	def listavailablechannels(self, user:Union[disnake.User, disnake.Member]):
+		if isinstance(user, disnake.Member):
 			matches,vetting = self.scanguild(user)
 		else:
 			matches = []
@@ -137,16 +136,34 @@ class Confessions(commands.Cog):
 		
 		return matches, vetting
 	
+	class channelview(disnake.ui.View):
+		def __init__(self, matches):
+			super().__init__(timeout=30)
+			for channel,channeltype in matches:
+				self.channel_selector.append_option(disnake.SelectOption(label=f'{channel.name} (from {channel.guild.name})',
+																						value=str(channel.id),
+																						emoji=Confessions.channel_icons[channeltype]))
+		
+		@disnake.ui.select(placeholder="Destination channel", min_values=1, max_values=1)
+		async def channel_selector(self, select:disnake.ui.Select, inter:disnake.Interaction):
+			self.send_button.disabled = False
+			self.channel_selector._selected_values = select._selected_values
+			await inter.response.edit_message(content=f"Selected confession target: <#{select._selected_values[0]}>", view=self)
+
+		@disnake.ui.button(label="Send confession", disabled=True, style=disnake.ButtonStyle.primary)
+		async def send_button(self, button:disnake.ui.Button, inter:disnake.Integration):
+			pass
+
 	def generate_confession(self, anonid:str, lead:str, content:str, image:Optional[str]):
 		if anonid:
-			embed = nextcord.Embed(colour=nextcord.Colour(int(anonid,16)),description=lead+content)
+			embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+content)
 		else:
-			embed = nextcord.Embed(description=lead+content)
+			embed = disnake.Embed(description=lead+content)
 		if image:
 			embed.set_image(url=image)
 		return embed
 
-	async def send_confession(self, anonid:str, choicechannel:nextcord.DMChannel, targetchannel:nextcord.TextChannel, embed:nextcord.Embed):
+	async def send_confession(self, anonid:str, choicechannel:disnake.DMChannel, targetchannel:disnake.TextChannel, embed:disnake.Embed):
 		""" Sends confessions through, plus the copious amounts of error handling """
 		# check if user was banned
 		if [i for i in self.bot.config.get('confessions', str(targetchannel.guild.id)+'_banned', fallback='').split(',') if anonid in i[-6:]]:
@@ -155,7 +172,7 @@ class Confessions(commands.Cog):
 
 		try:
 			await targetchannel.send(embed=embed)
-		except nextcord.errors.Forbidden:
+		except disnake.errors.Forbidden:
 			try:
 				await targetchannel.send(self.bot.babel((None, targetchannel.guild.id,), 'confessions', 'missingperms', perm='Embed Messages'))
 				await choicechannel.send(self.bot.babel((choicechannel.recipient.id,), 'confessions', 'embederr'))
@@ -172,7 +189,7 @@ class Confessions(commands.Cog):
 		return None
 
 	@commands.Cog.listener('on_raw_reaction_add')
-	async def vetting_reaction(self, data:nextcord.RawReactionActionEvent):
+	async def vetting_reaction(self, data:disnake.RawReactionActionEvent):
 		if data.event_type == 'REACTION_ADD' and data.member and data.member != self.bot.user and\
 			 'pending_vetting_'+str(data.message_id) in self.bot.config['confessions']:
 			if (data.member.guild_permissions.ban_members or \
@@ -202,7 +219,7 @@ class Confessions(commands.Cog):
 				message = await channel.fetch_message(data.message_id)
 				await message.remove_reaction(data.emoji, data.member)
 		
-	async def on_confession_vetted(self, vetmessage:nextcord.Message, pendingconfession:PendingConfession, emoji:nextcord.Emoji, voter:nextcord.Member):
+	async def on_confession_vetted(self, vetmessage:disnake.Message, pendingconfession:PendingConfession, emoji:disnake.Emoji, voter:disnake.Member):
 		anonid = self.get_anonid(pendingconfession.targetchannel.guild.id, pendingconfession.choicemsg.channel.recipient.id)
 		lead = ""
 		if self.bot.config.getint('confessions', str(pendingconfession.targetchannel.guild.id)+'_'+str(pendingconfession.targetchannel_id)) != CHANNEL_TYPE.untraceable:
@@ -250,16 +267,16 @@ class Confessions(commands.Cog):
 				for reaction in vetmessage.reactions:
 					async for voter in reaction.users():
 						if voter != self.bot.user:
-							if isinstance(voter, nextcord.Member):
-								data = nextcord.RawReactionActionEvent({'message_id':vetmessage.id, 'channel_id':vetchannel.id, 'user_id':voter.id}, reaction.emoji, 'REACTION_ADD')
+							if isinstance(voter, disnake.Member):
+								data = disnake.RawReactionActionEvent({'message_id':vetmessage.id, 'channel_id':vetchannel.id, 'user_id':voter.id}, reaction.emoji, 'REACTION_ADD')
 								await self.vetting_reaction(data)
 
 	@commands.Cog.listener('on_message')
-	async def confession_request(self, msg:nextcord.Message):
+	async def confession_request(self, msg:disnake.Message):
 		ctx = await self.bot.get_context(msg)
 		if ctx.prefix is not None:
 			return
-		if isinstance(msg.channel, nextcord.DMChannel) and\
+		if isinstance(msg.channel, disnake.DMChannel) and\
 			 msg.author != self.bot.user:
 			if msg.channel in self.ignore:
 				self.ignore.remove(msg.channel)
@@ -281,7 +298,9 @@ class Confessions(commands.Cog):
 				await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'inaccessible'))
 				return
 			
-			choice = 0
+			await msg.reply("Select a destination channel for your confession.", view=self.channelview(matches))
+
+			"""choice = 0
 			if (not self.bot.is_ready()) or len(matches) > 1:
 				await msg.channel.send(self.bot.babel((msg.author.id,), 'confessions', 'multiplesendtargets'+('short' if msg.author in self.initiated else '')) + '\n' + \
 															 self.generate_list(msg.author, matches, vetting, True))
@@ -353,7 +372,7 @@ class Confessions(commands.Cog):
 				
 				return
 
-			await self.send_confession(anonid, msg.channel, targetchannel, embed)
+			await self.send_confession(anonid, msg.channel, targetchannel, embed)"""
 
 	@commands.guild_only()
 	@commands.command()
@@ -383,9 +402,9 @@ class Confessions(commands.Cog):
 			#TODO: average ready time and report the real figure
 			await ctx.reply(self.bot.babel(ctx,'confessions','cachebuilding', s=self.bot.config['confessions']['starttime']))
 		elif len(matches) == 0:
-			await ctx.reply(self.bot.babel(ctx,'confessions','inaccessiblelocal' if isinstance(ctx.author, nextcord.Member) else 'inaccessible'))
+			await ctx.reply(self.bot.babel(ctx,'confessions','inaccessiblelocal' if isinstance(ctx.author, disnake.Member) else 'inaccessible'))
 		else:
-			await ctx.reply((self.bot.babel(ctx,'confessions','listtitlelocal') if isinstance(ctx.author, nextcord.Member) else self.bot.babel(ctx,'confessions','listtitle')) + \
+			await ctx.reply((self.bot.babel(ctx,'confessions','listtitlelocal') if isinstance(ctx.author, disnake.Member) else self.bot.babel(ctx,'confessions','listtitle')) + \
 											'\n'+self.generate_list(ctx.author, matches, vetting))
 	
 	@commands.guild_only()
@@ -508,14 +527,14 @@ class Confessions(commands.Cog):
 			raise commands.BadArgument()
 
 	@commands.Cog.listener('on_guild_leave')
-	async def guild_cleanup(self, guild:nextcord.Guild):
+	async def guild_cleanup(self, guild:disnake.Guild):
 		for option in self.bot.config['confessions']:
 			if option.startswith(str(guild.id)+'_'):
 				self.bot.config.remove_option('confessions', option)
 		self.bot.config.save()
 
 	@commands.Cog.listener('on_guild_channel_delete')
-	async def channel_cleanup(self, channel:nextcord.TextChannel):
+	async def channel_cleanup(self, channel:disnake.TextChannel):
 		for option in self.bot.config['confessions']:
 			if option == str(channel.guild.id)+'_'+str(channel.id):
 				self.bot.config.remove_option('confessions', option)

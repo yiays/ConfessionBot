@@ -1,5 +1,5 @@
-import nextcord
-from nextcord.ext import commands
+import disnake
+from disnake.ext import commands
 
 class Greeter(commands.Cog):
   """setup custom messages to send on an event"""

@@ -1,5 +1,5 @@
-import nextcord
-from nextcord.ext import commands
+import disnake
+from disnake.ext import commands
 from typing import Dict, Pattern, Union
 import re, asyncio
 
@@ -55,7 +55,7 @@ class Lightbulb(commands.Cog):
         faileddriver = self.drivers.pop(k)
         print(f"unable to find command ({faileddriver.action}) for: {faileddriver.name}")
   
-  def scan_message(self, message:nextcord.Message):
+  def scan_message(self, message:disnake.Message):
     for driver in self.drivers.values():
       match = driver.pattern.search(message.content)
       if match:
@@ -63,8 +63,8 @@ class Lightbulb(commands.Cog):
     return None, None
 
   @commands.Cog.listener('on_message')
-  async def check_message(self, message:nextcord.Message):
-    if isinstance(message.channel, nextcord.channel.TextChannel) and\
+  async def check_message(self, message:disnake.Message):
+    if isinstance(message.channel, disnake.channel.TextChannel) and\
        str(message.guild.id) in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():
       match, driver = self.scan_message(message)
       if match:
@@ -76,9 +76,9 @@ class Lightbulb(commands.Cog):
           pass
 
   @commands.Cog.listener('on_reaction_add')
-  async def check_reactions(self, reaction:nextcord.Reaction, user:nextcord.User):
+  async def check_reactions(self, reaction:disnake.Reaction, user:disnake.User):
     if user != self.bot.user and str(reaction.emoji) == '💡' and\
-       isinstance(reaction.message.channel, nextcord.channel.TextChannel) and\
+       isinstance(reaction.message.channel, disnake.channel.TextChannel) and\
        str(reaction.message.guild.id) in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():
       match, driver = self.scan_message(reaction.message)
       if match:
