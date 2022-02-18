@@ -49,6 +49,7 @@ class merelybot(commands.AutoShardedBot):
 		if 'verbose' in kwargs:
 			self.verbose = kwargs['verbose']
 
+		self.case_insensitive = True
 		prefixes = ()
 		if self.config['main']['prefix_short']:
 			prefixes += (self.config['main']['prefix_short']+' ', self.config['main']['prefix_short'])

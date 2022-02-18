@@ -8,6 +8,7 @@ class Config(ConfigParser):
   path = "config/"
   file = "config/config.ini"
   template = "config/config.factory.ini"
+  last_backup = 0
 
   def __init__(self):
     """
@@ -21,15 +22,20 @@ class Config(ConfigParser):
     if path.isfile(self.path):
       remove(self.path)
     if not path.exists(self.path):
-      print(f"WARNING: ./{self.path} missing - creating folder and generating bare-minimum defaults, you should consider downloading and including ./{self.template}")
+      print(f"WARNING: {self.path} missing - creating folder and generating bare-minimum defaults, you should consider downloading and including ./{self.template}")
       makedirs(self.path)
     if not path.exists(self.file):
       if path.exists(self.template):
-        print(f"WARNING: ./{self.file} missing - reverting to template config")
+        print(f"WARNING: {self.file} missing - reverting to template config")
         copy(self.template, self.file)
       else:
-        print(f"WARNING: ./{self.template} missing - resorting to bare-minimum defaults")
-    ConfigParser.read(self, self.file, encoding='utf-8')
+        print(f"WARNING: {self.template} missing - resorting to bare-minimum defaults")
+    with open(self.file, 'r', encoding='utf-8') as f:
+      ini = f.read()
+      if ini.endswith('\n\n'):
+        ConfigParser.read_string(self, ini)
+      else:
+        raise Exception(f"FATAL: {self.file} appears to be incomplete!")
 
     # Ensure required sections exist and provide sane defaults
     if 'main' not in self.sections():
@@ -103,10 +109,15 @@ class Config(ConfigParser):
     self.save()
 
   def save(self):
-    if not path.exists(self.path+'config_history/'+time.strftime("%m-%y")):
-      makedirs(self.path+'config_history/'+time.strftime("%m-%y"))
-    if path.isfile(self.file):
-      copy(self.file, self.path+'config_history/'+time.strftime("%m-%y")+'/config-'+time.strftime("%H:%M.%S-%d-%m-%y")+'.ini')
+    # create a backup of the config (max 1 per hour)
+    if self.last_backup < time.time() - (60*60):
+      if not path.exists(self.path+'config_history'):
+        makedirs(self.path+'config_history')
+      if path.isfile(self.file):
+        copy(self.file, self.path+'config_history/config-'+time.strftime("%d-%m-%y %H:%M.%S")+'.ini')
+
+      self.last_backup = time.time()
+    #TODO: autodelete all but one of each config history
     with open(self.file, 'w', encoding='utf-8') as f:
       ConfigParser.write(self, f)
   

@@ -158,7 +158,7 @@ class Confessions(commands.Cog):
 		if anonid:
 			embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+content)
 		else:
-			embed = disnake.Embed(description=lead+content)
+			embed = disnake.Embed(description=lead+' '+content)
 		if image:
 			embed.set_image(url=image)
 		return embed
@@ -231,7 +231,7 @@ class Confessions(commands.Cog):
 		self.bot.config.remove_option('confessions', 'pending_vetting_'+str(vetmessage.id))
 		self.bot.config.save()
 		
-		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied'), embed=embed)
+		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied', channel=pendingconfession.targetchannel.mention), embed=embed)
 		await pendingconfession.choicemsg.remove_reaction('💭', self.bot.user)
 		await pendingconfession.choicemsg.add_reaction('✅' if accepted else '❎')
 		if accepted:
@@ -440,16 +440,16 @@ class Confessions(commands.Cog):
 			if self.bot.config.getboolean('confessions', str(ctx.guild.id)+'_imagesupport', fallback=True):
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportalreadyenabled'))
 			else:
-				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = True
+				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = 'True'
 				self.bot.config.save()
-				await ctx.reply('confessions', 'imagesupportenabled')
+				await ctx.reply(self.bot.babel('confessions', 'imagesupportenabled'))
 		elif cmd=='disable':
 			if not self.bot.config.getboolean('confessions', str(ctx.guild.id)+'_imagesupport', fallback=True):
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportalreadydisabled'))
 			else:
-				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = False
+				self.bot.config['confessions'][str(ctx.guild.id)+'_imagesupport'] = 'False'
 				self.bot.config.save()
-				await ctx.reply(self.bot.babel('confessions', 'imagesupportdisabled'))
+				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportdisabled'))
 
 	@commands.guild_only()
 	@commands.command()
@@ -518,7 +518,7 @@ class Confessions(commands.Cog):
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmoddemoteerr'))
 			else:
 				if str(botmodee.id) not in modlist.split(','):
-					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] += str(botmodee.id)+','
+					self.bot.config['confessions'][str(ctx.guild.id)+'_promoted'] = modlist + str(botmodee.id)+','
 					self.bot.config.save()
 					await ctx.reply(self.bot.babel(ctx, 'confessions', 'botmodsuccess', user=botmodee.name))
 				else:
