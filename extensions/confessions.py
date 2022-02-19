@@ -82,7 +82,7 @@ class PendingConfessionButtons(disnake.ui.View):
 			
 
 class ConfessionModal(disnake.ui.Modal):
-    def __init__(self):
+    def __init__(self, continuous:bool):
         components = [
             disnake.ui.TextInput(
                 label="Type your confession here:",
@@ -98,40 +98,51 @@ class ConfessionModal(disnake.ui.Modal):
         )
 
 
-    async def callback(self, interaction):
-        targetchannel self.listavailablechannels(interaction.author)
-        anonid = self.get_anonid(targetchannel.guild.id, interaction.author.id)
+    async def callback(self, interaction, continuous:bool):
+        if continuous is True:
 
-        embed = self.generate_confession(anonid if lead else '', lead, interaction.text_values["confession"])
-
-        vettingchannel = self.findvettingchannel(targetchannel.guild)
-
-        if vettingchannel:
-            vetembed = self.generate_confession(anonid, lead if lead else f"**[Anon-*{anonid}*]**", interaction.text_values["confession"])
-
-            vetmessage = await vettingchannel.send(self.bot.babel(None,targetchannel.guild.id,),'confessions','vetmessagecta',channel=targetchannel.mention,embed=vetembed)
-
-            # Store pending message details for handling after vetting
-            pendingconfession = PendingConfession(
-                vetmessage=vetmessage,
-                targetchannel=targetchannel,
-                content=interaction.text_values["confession"],
+            embed=disnake.Embed(
+                title="Anonymous Confession",
+                description=interaction.text_values["confession"],
+                color=disnake.Color.blurple()
             )
-            
-            self.bot.config['confessions']['pending_vetting_'+str(vetmessage.id)] = str(pendingconfession)
-            
-            # Store offline in case of restarts or power failures
-            self.bot.config.save()
-            
-            return
+            await interaction.response.send_message(embed=embed)
 
-            await self.send_confession(anonid, interaction.channel, vettingchannel, embed, view=PendingConfessionButtons(confessor=interaction.author))
-        
         else:
-            try:
-                await self.send_confession(anonid, interaction.channel, targetchannel, embed)
-            except:
-                await interaction.channel.send("Error")
+
+            targetchannel self.listavailablechannels(interaction.author)
+            anonid = self.get_anonid(targetchannel.guild.id, interaction.author.id)
+
+            embed = self.generate_confession(anonid if lead else '', lead, interaction.text_values["confession"])
+
+            vettingchannel = self.findvettingchannel(targetchannel.guild)
+
+            if vettingchannel:
+                vetembed = self.generate_confession(anonid, lead if lead else f"**[Anon-*{anonid}*]**", interaction.text_values["confession"])
+
+                vetmessage = await vettingchannel.send(self.bot.babel(None,targetchannel.guild.id,),'confessions','vetmessagecta',channel=targetchannel.mention,embed=vetembed)
+
+                # Store pending message details for handling after vetting
+                pendingconfession = PendingConfession(
+                    vetmessage=vetmessage,
+                    targetchannel=targetchannel,
+                    content=interaction.text_values["confession"],
+                )
+                
+                self.bot.config['confessions']['pending_vetting_'+str(vetmessage.id)] = str(pendingconfession)
+                
+                # Store offline in case of restarts or power failures
+                self.bot.config.save()
+                
+                return
+
+                await self.send_confession(anonid, interaction.channel, vettingchannel, embed, view=PendingConfessionButtons(confessor=interaction.author))
+            
+            else:
+                try:
+                    await self.send_confession(anonid, interaction.channel, targetchannel, embed)
+                except:
+                    await interaction.channel.send("Error")
 			
 class Confessions(commands.Cog):
 	"""Note that commands in this module have generic names which may clash with other commands
@@ -595,11 +606,19 @@ class Confessions(commands.Cog):
 
 
     @commands.slash_command(
+		description="Send a confession to a confession channel"
+	)
+    @commands.guild_only()
+    async def confess_to(self, interaction, channel: disnake.TextChannel):
+        await interaction.response.send_modal(modal=ConfessionModal())
+
+
+    @commands.slash_command(
 		description="Send a confession"
 	)
     @commands.guild_only()
     async def confess(self, interaction):
-        await interaction.response.send_modal(modal=ConfessionModal())		
+        await interaction.response.send_modal(modal=ConfessionModal(continuous=True))
 
 
 def setup(bot):
