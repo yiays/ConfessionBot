@@ -4,6 +4,7 @@ from typing import Optional, Union
 import disnake
 from disnake.ext import commands
 from disnake.enums import TextInputStyle
+from disnake.ext.commands import Param
 
 class CHANNEL_TYPE:
 	invalid = -2
@@ -83,7 +84,7 @@ class PendingConfessionButtons(disnake.ui.View):
 			
 
 class ConfessionModal(disnake.ui.Modal):
-	def __init__(self):
+	def __init__(self, image):
 		components = [
 			disnake.ui.TextInput(
 				label="Type your confession here:",
@@ -97,6 +98,7 @@ class ConfessionModal(disnake.ui.Modal):
 			custom_id="confession_modal",
 			components=components
 		)
+		self.image=image
 
 	async def callback(self, interaction):
 		embed=disnake.Embed(
@@ -104,6 +106,8 @@ class ConfessionModal(disnake.ui.Modal):
 			description=interaction.text_values["confession"],
 			color=disnake.Color.blurple()
 		)
+		if self.image.content_type.startswith("image"):
+			embed.set_image(url=self.image.url)
 		await interaction.response.send_message("Your confession was confession posted ✅", ephemeral=True)
 		await interaction.channel.send(embed=embed)
 
@@ -149,8 +153,10 @@ class Confessions(commands.Cog):
 	@commands.slash_command(
 		description="Send a confession"
 	)
-	async def confess(self, interaction):
-		await interaction.response.send_modal(modal=ConfessionModal())
+	async def confess(self, interaction: disnake.GuildCommandInteraction,
+		image: disnake.Attachment=Param(None, description="Image attachment with confession")
+	):
+		await interaction.response.send_modal(modal=ConfessionModal(image=image))
 
 
 
