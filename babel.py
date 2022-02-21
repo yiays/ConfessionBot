@@ -51,7 +51,7 @@ class Babel():
     self.langs = {}
     self.load()
 
-  def resolve_lang(self, ctx:Union[commands.Context, tuple], debug=False):
+  def resolve_lang(self, ctx:Union[commands.Context, disnake.Interaction, tuple], debug=False):
     langs = []
     dbg_origins = []
     if isinstance(ctx, commands.Context):
@@ -99,7 +99,7 @@ class Babel():
     else:
       return langs, dbg_origins
 
-  def __call__(self, ctx:Union[commands.Context, tuple], scope:str, key:str, **values):
+  def __call__(self, ctx:Union[commands.Context, disnake.Interaction, tuple], scope:str, key:str, **values):
     reqlangs = self.resolve_lang(ctx)
 
     match = None

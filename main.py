@@ -110,5 +110,5 @@ if __name__ == '__main__':
 			bot.run(token)
 		else:
 			raise Exception("failed to login! make sure you filled the token field in the config file.")
-	
-	print("exited.")
+
+print("exited.")
