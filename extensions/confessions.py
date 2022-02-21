@@ -147,8 +147,7 @@ class Confessions(commands.Cog):
 
 
 	@commands.slash_command(
-		description="Send a confession",
-		guild_ids=[808624079736668160]
+		description="Send a confession"
 	)
 	async def confess(self, interaction):
 		await interaction.response.send_modal(modal=ConfessionModal())
