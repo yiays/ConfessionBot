@@ -1,7 +1,7 @@
 from configparser import ConfigParser
 from typing import Optional, Union
 from attr import has
-from disnake import Message, Interaction, User, Member
+from disnake import Guild, Message, Interaction, User, Member
 from disnake.ext.commands import Context
 import os, re
 
@@ -94,7 +94,7 @@ class Babel():
     else:
       return langs, dbg_origins
 
-  def __call__(self, target:Union[Context, Interaction, Message, User, Member, tuple], scope:str, key:str, **values):
+  def __call__(self, target:Union[Context, Interaction, Message, User, Member, Guild, tuple], scope:str, key:str, **values):
     if isinstance(target, Context) or isinstance(target, Interaction) or isinstance(target, Message):
       author_id = target.author.id
       guild_id = target.guild.id if hasattr(target, 'guild') and target.guild else None
@@ -104,6 +104,9 @@ class Babel():
     elif isinstance(target, Member):
       author_id = target.id
       guild_id = target.guild.id
+    elif isinstance(target, Guild):
+      author_id = None
+      guild_id = target.id
     else:
       author_id = target[0]
       guild_id = target[1] if len(target)>1 else None

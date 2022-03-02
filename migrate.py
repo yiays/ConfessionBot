@@ -186,8 +186,8 @@ def migrate_config():
     elif section.startswith('pending_vetting_'):
       confession = PendingConfession('')
       confession.offline = True
-      confession.choicechannel_id = int(confv1[section]['choicechannel'])
-      confession.choicemsg_id = int(confv1[section]['choicemsg'])
+      confession.origin_channel_id = int(confv1[section]['choicechannel'])
+      confession.origin_id = int(confv1[section]['choicemsg'])
       confession.targetchannel_id = int(confv1[section]['target'])
       confession.content = confv1[section]['content'] if 'content' in confv1[section] else None
       confession.image = confv1[section]['image'] if 'image' in confv1[section] else None
