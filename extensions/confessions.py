@@ -214,7 +214,7 @@ class Confessions(commands.Cog):
 		self.bot.config.remove_option('confessions', 'pending_vetting_'+str(vetmessage.id))
 		self.bot.config.save()
 		
-		await vetmessage.edit(content=self.bot.babel((voter.id, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied', channel=pendingconfession.targetchannel.mention), embed=embed)
+		await vetmessage.edit(content=self.bot.babel((None, voter.guild.id,), 'confessions', 'vetaccepted' if accepted else 'vetdenied', channel=pendingconfession.targetchannel.mention), embed=embed)
 		await pendingconfession.choicemsg.remove_reaction('💭', self.bot.user)
 		await pendingconfession.choicemsg.add_reaction('✅' if accepted else '❎')
 		if accepted:
@@ -328,11 +328,10 @@ class Confessions(commands.Cog):
 			embed = self.generate_confession(anonid if lead else '', lead, msg.content, image)
 
 			vettingchannel = self.findvettingchannel(targetchannel.guild)
-			status = '💭' if vettingchannel else '✅'
-			
-			await choicemsg.add_reaction(status)
 
-			if vettingchannel:
+			# Bypass vetting if the channel is feedback
+			if vettingchannel and self.bot.config.getint('confessions', f"{targetchannel.guild.id}_{targetchannel.id}") != CHANNEL_TYPE.feedback:
+				await choicemsg.add_reaction('💭')
 				vetembed = self.generate_confession(anonid, lead if lead else f"**[Anon-*{anonid}*]**", msg.content, image)
 
 				vetmessage = await vettingchannel.send(self.bot.babel((None,targetchannel.guild.id,),'confessions','vetmessagecta',channel=targetchannel.mention),embed=vetembed)
@@ -352,6 +351,9 @@ class Confessions(commands.Cog):
 				self.bot.config.save()
 				
 				return
+			
+			else:
+				await choicemsg.add_reaction('✅')
 
 			await self.send_confession(anonid, msg.channel, targetchannel, embed)
 
@@ -372,8 +374,8 @@ class Confessions(commands.Cog):
 			self.bot.config['confessions'][str(ctx.guild.id)+'_'+str(ctx.channel.id)] = str(type)
 		self.bot.config.save()
 
-		await ctx.reply(self.bot.babel(ctx, 'confessions', ('setsuccess'+str(type) if type>=0 else 'unsetsuccess')) + \
-										self.bot.babel(ctx, 'confessions', 'setundo' if type>=0 else 'unsetundo'))
+		await ctx.reply(self.bot.babel(ctx, 'confessions', ('setsuccess'+str(type) if type>CHANNEL_TYPE.none else 'unsetsuccess'+str(wastype))) +' '+ \
+										self.bot.babel(ctx, 'confessions', 'setundo' if type>CHANNEL_TYPE.none else 'unsetundo'))
 
 	@commands.command()
 	async def list(self, ctx):
