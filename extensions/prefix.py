@@ -1,5 +1,5 @@
-import nextcord
-from nextcord.ext import commands
+import disnake
+from disnake.ext import commands
 from typing import Dict, Pattern, Union
 import re, asyncio
 
@@ -16,8 +16,8 @@ class Prefix(commands.Cog):
     self.fallback_prefix = bot.command_prefix
     bot.command_prefix = self.check_prefix
 
-  def check_prefix(self, bot, message:nextcord.Message):
-    if isinstance(message.channel, nextcord.TextChannel):
+  def check_prefix(self, bot, message:disnake.Message):
+    if isinstance(message.channel, disnake.TextChannel):
       if str(message.channel.guild.id) in self.bot.config['prefix'] and len(self.bot.config['prefix'][str(message.channel.guild.id)]):
         return [self.bot.config['prefix'][str(message.guild.id)]] + commands.when_mentioned(bot, message)
     return self.fallback_prefix(bot, message)

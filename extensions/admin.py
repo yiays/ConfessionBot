@@ -1,5 +1,5 @@
-import nextcord, asyncio
-from nextcord.ext import commands
+import disnake, asyncio
+from disnake.ext import commands
 
 class Admin(commands.Cog):
   """powerful commands only for administrators"""
@@ -11,12 +11,12 @@ class Admin(commands.Cog):
     if not bot.config.has_section('admin'):
       bot.config.add_section('admin')
 
-  def check_delete(self, message:nextcord.Message, strict:bool=False):
+  def check_delete(self, message:disnake.Message, strict:bool=False):
     return strict or\
       (message.author==self.bot.user or\
       message.content.lower().startswith(self.bot.config['main']['prefix_short']) or\
       message.content.startswith('<@'+str(self.bot.user.id)+'>') or\
-      message.type == nextcord.MessageType.pins_add or\
+      message.type == disnake.MessageType.pins_add or\
       (self.bot.config['main']['prefix_long'] and\
       message.content.lower().startswith(self.bot.config['main']['prefix_long']))
       )
@@ -67,8 +67,8 @@ class Admin(commands.Cog):
       if start>end: start,end = end,start
       deleted = await ctx.channel.purge(limit=1000,
                                         check=lambda m: m.id>start and m.id<end and self.check_delete(m, strict),
-                                        before=nextcord.Object(end),
-                                        after=nextcord.Object(start))
+                                        before=disnake.Object(end),
+                                        after=disnake.Object(start))
       await ctx.reply(self.bot.babel(ctx, 'admin', 'clean_success', n=len(deleted)))
 
 

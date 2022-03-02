@@ -1,5 +1,5 @@
-import nextcord, asyncio
-from nextcord.ext import commands
+import disnake, asyncio
+from disnake.ext import commands
 
 class ReactRoles(commands.Cog):
   """allows admins to set up messages where reacting grants users roles"""
@@ -13,7 +13,7 @@ class ReactRoles(commands.Cog):
     # ensure config file has required data
     if not bot.config.has_section('reactroles'):
       bot.config.add_section('reactroles')
-    msglist = 'list[nextcord.abc.Messageable]'
+    msglist = 'list[disnake.abc.Messageable]'
     self.watching:msglist = []
   
   #TODO: make it possible for admins to add more reaction roles or delete them later
@@ -39,8 +39,8 @@ class ReactRoles(commands.Cog):
       #TODO: (low priority) maybe remove deleted message from self.watching?
 
   @commands.Cog.listener("on_raw_reaction_add")
-  async def reactrole_add(self, data:nextcord.RawReactionActionEvent):
-    if isinstance(data.member, nextcord.Member):
+  async def reactrole_add(self, data:disnake.RawReactionActionEvent):
+    if isinstance(data.member, disnake.Member):
       emojiid = data.emoji if data.emoji.is_unicode_emoji() else data.emoji.id
       if f"{data.channel_id}_{data.message_id}_{emojiid}_roles" in self.bot.config['reactroles']:
         channel = await self.bot.fetch_channel(data.channel_id)
@@ -55,7 +55,7 @@ class ReactRoles(commands.Cog):
         await data.member.add_roles(*roles, reason='reactroles')
 
   @commands.Cog.listener("on_raw_reaction_remove")
-  async def reactrole_remove(self, data:nextcord.RawReactionActionEvent):
+  async def reactrole_remove(self, data:disnake.RawReactionActionEvent):
     if data.guild_id:
       guild = await self.bot.fetch_guild(data.guild_id)
       member = guild.get_member(data.user_id)

@@ -1,5 +1,5 @@
-import nextcord
-from nextcord.ext import commands
+import disnake
+from disnake.ext import commands
 
 class Meme(commands.Cog):
   """cross promotion for another bot"""

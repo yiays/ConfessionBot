@@ -1,5 +1,5 @@
-import nextcord
-from nextcord.ext import commands
+import disnake
+from disnake.ext import commands
 
 class Error(commands.Cog):
   """user-friendly error reporting"""

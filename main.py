@@ -1,5 +1,5 @@
-import nextcord
-from nextcord.ext import commands 
+import disnake
+from disnake.ext import commands 
 from config import Config
 from babel import Babel
 import sys, time, os
@@ -11,7 +11,7 @@ class merelybot(commands.AutoShardedBot):
 	babel = Babel(config)
 	verbose = False
 
-	intents = nextcord.Intents.none()
+	intents = disnake.Intents.none()
 	intents.guilds = config.getboolean('intents', 'guilds')
 	intents.members = config.getboolean('intents', 'members')
 	intents.bans = config.getboolean('intents', 'bans')
