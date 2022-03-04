@@ -95,7 +95,7 @@ class Babel():
       return langs, dbg_origins
 
   def __call__(self, target:Union[Context, Interaction, Message, User, Member, Guild, tuple], scope:str, key:str, **values):
-    if isinstance(target, Context) or isinstance(target, Interaction) or isinstance(target, Message):
+    if isinstance(target, (Context, Interaction, Message)):
       author_id = target.author.id
       guild_id = target.guild.id if hasattr(target, 'guild') and target.guild else None
     elif isinstance(target, User):
