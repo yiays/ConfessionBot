@@ -63,8 +63,6 @@ class Confessions(commands.Cog):
 		# ensure config file has required data
 		if not bot.config.has_section('confessions'):
 			bot.config.add_section('confessions')
-		if 'starttime' not in bot.config['confessions']:
-			bot.config['confessions']['starttime'] = '?'
 		if 'confession_cooldown' not in bot.config['confessions']:
 			bot.config['confessions']['confession_cooldown'] = 1
 		if 'anonid_generator' not in bot.config['confessions']:
@@ -93,11 +91,6 @@ class Confessions(commands.Cog):
 		vetting = False
 		save = False
 		for channel in member.guild.channels:
-			# Backwards compatibility (v1.x): add server id to confession channel config
-			if '?_'+str(channel.id) in self.bot.config['confessions']:
-				save = True
-				self.bot.config['confessions'][str(member.guild.id)+'_'+str(channel.id)] = self.bot.config['confessions']['?_'+str(channel.id)]
-				self.bot.config.remove_option('confessions', '?_'+str(channel.id))
 			if str(member.guild.id)+'_'+str(channel.id) in self.bot.config['confessions']:
 				chtype = int(self.bot.config['confessions'][str(member.guild.id)+'_'+str(channel.id)])
 				if chtype == CHANNEL_TYPE.vetting:
