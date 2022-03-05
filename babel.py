@@ -52,7 +52,7 @@ class Babel():
     self.langs = {}
     self.load()
 
-  def resolve_lang(self, author_id:int, guild_id:Optional[int], debug=False):
+  def resolve_lang(self, author_id:int, guild_id:Optional[int]=None, debug=False):
     langs = []
     dbg_origins = []
     
