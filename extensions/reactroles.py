@@ -51,7 +51,7 @@ class ReactRoles(commands.Cog):
             roles.append(channel.guild.get_role(roleid))
           except Exception as e:
             print("failed to get role for reactrole: "+str(e))
-        await data.member.send(self.bot.babel((data.member.id, data.guild_id,), 'reactroles', 'role_granted', roles=', '.join([role.name for role in roles])))
+        await data.member.send(self.bot.babel(data.member, 'reactroles', 'role_granted', roles=', '.join([role.name for role in roles])))
         await data.member.add_roles(*roles, reason='reactroles')
 
   @commands.Cog.listener("on_raw_reaction_remove")
@@ -69,7 +69,7 @@ class ReactRoles(commands.Cog):
             roles.append(channel.guild.get_role(roleid))
           except Exception as e:
             print("failed to get role for reactrole: "+str(e))
-        await member.send(self.bot.babel((member.id, data.guild_id,), 'reactroles', 'role_taken', roles=', '.join([role.name for role in roles])))
+        await member.send(self.bot.babel(member, 'reactroles', 'role_taken', roles=', '.join([role.name for role in roles])))
         await member.remove_roles(*roles, reason='reactroles')
   
   async def catchup(self):

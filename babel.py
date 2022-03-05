@@ -1,7 +1,8 @@
 from configparser import ConfigParser
-from typing import Union
-import disnake
-from disnake.ext import commands
+from typing import Optional, Union
+from attr import has
+from disnake import Guild, Message, Interaction, User, Member
+from disnake.ext.commands import Context
 import os, re
 
 class Babel():
@@ -51,18 +52,12 @@ class Babel():
     self.langs = {}
     self.load()
 
-  def resolve_lang(self, ctx:Union[commands.Context, tuple], debug=False):
+  def resolve_lang(self, author_id:int, guild_id:Optional[int]=None, debug=False):
     langs = []
     dbg_origins = []
-    if isinstance(ctx, commands.Context):
-      authorid = ctx.author.id
-      guildid = ctx.guild.id if isinstance(ctx.channel, disnake.abc.GuildChannel) else None
-    else:
-      authorid = ctx[0]
-      guildid = ctx[1] if len(ctx)>1 else None
     
-    if str(authorid) in self.config['language']:
-      nl = self.config.get('language', str(authorid))
+    if str(author_id) in self.config['language']:
+      nl = self.config.get('language', str(author_id))
       if nl not in self.langs and '_' in nl:
         # guess that the non-superset version of the language is what it would've inherited from
         nl = nl.split('_')[1]
@@ -74,8 +69,8 @@ class Babel():
           langs.append(nl)
           if debug: dbg_origins.append('inherit author')
           nl = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
-    if guildid and str(guildid) in self.config['language']:
-      nl = self.config.get('language', str(guildid))
+    if guild_id and str(guild_id) in self.config['language']:
+      nl = self.config.get('language', str(guild_id))
       if nl not in self.langs and '_' in nl:
         nl = nl.split('_')[1]
       if nl not in langs and nl in self.langs:
@@ -99,8 +94,24 @@ class Babel():
     else:
       return langs, dbg_origins
 
-  def __call__(self, ctx:Union[commands.Context, tuple], scope:str, key:str, **values):
-    reqlangs = self.resolve_lang(ctx)
+  def __call__(self, target:Union[Context, Interaction, Message, User, Member, Guild, tuple], scope:str, key:str, **values):
+    if isinstance(target, (Context, Interaction, Message)):
+      author_id = target.author.id
+      guild_id = target.guild.id if hasattr(target, 'guild') and target.guild else None
+    elif isinstance(target, User):
+      author_id = target.id
+      guild_id = None
+    elif isinstance(target, Member):
+      author_id = target.id
+      guild_id = target.guild.id
+    elif isinstance(target, Guild):
+      author_id = None
+      guild_id = target.id
+    else:
+      author_id = target[0]
+      guild_id = target[1] if len(target)>1 else None
+    
+    reqlangs = self.resolve_lang(author_id, guild_id)
 
     match = None
     for reqlang in reqlangs:
@@ -121,8 +132,8 @@ class Babel():
     # Fill in prefixes
     prefixqueries = self.prefixreference.findall(match)
     for prefixquery in prefixqueries:
-      if prefixquery == 'local' and isinstance(ctx.channel, disnake.TextChannel):
-        match = match.replace('{p:'+prefixquery+'}', self.config.get('prefix', str(ctx.guild.id), fallback=self.config['main']['prefix_short']))
+      if prefixquery == 'local' and guild_id:
+        match = match.replace('{p:'+prefixquery+'}', self.config.get('prefix', str(guild_id), fallback=self.config['main']['prefix_short']))
       else:
         match = match.replace('{p:'+prefixquery+'}', self.config['main']['prefix_short'])
     

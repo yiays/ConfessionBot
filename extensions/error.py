@@ -24,11 +24,13 @@ class Error(commands.Cog):
     elif isinstance(error, commands.PrivateMessageOnly):
       await ctx.reply(self.bot.babel(ctx, 'error', 'privatemessageonly'))
     elif isinstance(error, commands.CommandInvokeError):
+      if 'Auth' in self.bot.cogs and isinstance(error.original, self.bot.cogs['Auth'].AuthError):
+        await ctx.reply(str(error.original))
+        return
       await ctx.reply(self.bot.babel(ctx, 'error', 'commanderror'))
     elif isinstance(error, commands.CheckFailure) or\
          isinstance(error, commands.CheckAnyFailure):
       return
-    raise error
 
 def setup(bot):
   bot.add_cog(Error(bot))

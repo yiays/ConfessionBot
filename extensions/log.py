@@ -1,5 +1,6 @@
 import disnake
 from disnake.ext import commands
+from typing import Union, Optional
 
 class Log(commands.Cog):
   def __init__(self, bot:commands.Bot):
@@ -19,20 +20,22 @@ class Log(commands.Cog):
   def truncate(self, string:str, maxlen:int=30):
     return string[:maxlen] + ('...' if len(string) > maxlen else '')
   
-  def wrap(self, message:disnake.Message):
-    if isinstance(message.channel, disnake.TextChannel):
-      return f"[{self.truncate(message.guild.name, 10)}#{self.truncate(message.channel.name)}] {self.truncate(message.author.name, 10)}#{message.author.discriminator}: {self.truncate(message.content)}"
-    elif isinstance(message.channel, disnake.DMChannel):
-      if message.channel.recipient:
-        return f"[DM({self.truncate(message.channel.recipient.name, 10)}#{message.channel.recipient.discriminator})] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
+  def wrap(self, content:str, author:disnake.User, channel:disnake.abc.Messageable):
+    if isinstance(channel, disnake.TextChannel):
+      return f"[{self.truncate(channel.guild.name, 10)}#{self.truncate(channel.name)}] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    elif isinstance(channel, disnake.DMChannel):
+      if channel.recipient:
+        return f"[DM({self.truncate(channel.recipient.name, 10)}#{channel.recipient.discriminator})] {author.name}#{author.discriminator}: {self.truncate(content)}"
       else:
-        return f"[DM] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
-    elif isinstance(message.channel, disnake.Thread):
-      return f"[Thread] {message.author.name}#{message.author.discriminator}: {self.truncate(message.content)}"
+        return f"[DM] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    elif isinstance(channel, disnake.Thread):
+      return f"[Thread] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    else:
+      return f"[Unknown] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
 
   @commands.Cog.listener('on_command')
   async def log_command(self, ctx:commands.Context):
-    logentry = self.wrap(ctx.message)
+    logentry = self.wrap(ctx.message.content, ctx.message.author, ctx.message.channel)
     print(logentry)
     if self.logchannel:
       await self.logchannel.send(logentry, embed=ctx.message.embeds[0] if ctx.message.embeds else None)
@@ -44,17 +47,23 @@ class Log(commands.Cog):
       if msg.author == self.bot.user and msg.reference.message_id == ctx.message.id:
         responses.append(msg)
     for response in responses:
-      logentry = self.wrap(response)
+      logentry = self.wrap(response.content, response.author, response.channel)
       print(logentry)
       if self.logchannel:
         await self.logchannel.send(logentry, embed=response.embeds[0] if response.embeds else None)
   
-  async def log_misc(self, msg:disnake.Message):
+  async def log_misc_message(self, msg:disnake.Message):
     """This version is intended to be called externally from other modules that react to more than just commands."""
-    logentry = self.wrap(msg)
+    logentry = self.wrap(msg.content, msg.author, msg.channel)
     print(logentry)
     if self.logchannel:
       await self.logchannel.send(logentry, embed=msg.embeds[0] if msg.embeds else None)
+  
+  async def log_misc_str(self, ctx:Union[commands.Context, disnake.Interaction], content:str):
+    logentry = self.wrap(content, ctx.author, ctx.channel)
+    print(logentry)
+    if self.logchannel:
+      await self.logchannel.send(logentry)
 
   @commands.Cog.listener('on_command_error')
   async def report_error(self, ctx:commands.Context, error):
