@@ -208,7 +208,7 @@ class Confessions(commands.Cog):
 			self.send_button.label = self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_send')
 		
 		@disnake.ui.select(min_values=1, max_values=1)
-		async def channel_selector(self, select:disnake.ui.Select, inter:disnake.Interaction):
+		async def channel_selector(self, select:disnake.ui.Select, inter:disnake.MessageInteraction):
 			self.send_button.disabled = False
 			channel = await self.confessions.bot.fetch_channel(int(select._selected_values[0]))
 			vetting = self.confessions.findvettingchannel(channel.guild)
@@ -223,7 +223,7 @@ class Confessions(commands.Cog):
 				view=self)
 
 		@disnake.ui.button(disabled=True, style=disnake.ButtonStyle.primary)
-		async def send_button(self, button:disnake.Button, inter:disnake.Interaction):
+		async def send_button(self, button:disnake.Button, inter:disnake.MessageInteraction):
 			channel = await self.confessions.bot.fetch_channel(int(self.channel_selector.values[0]))
 
 			anonid = self.confessions.get_anonid(channel.guild.id, inter.author.id)
@@ -232,6 +232,7 @@ class Confessions(commands.Cog):
 
 			if not self.confessions.check_banned(channel.guild.id, anonid):
 				await inter.response.send_message(self.confessions.bot.babel(inter, 'confessions', 'nosendbanned'))
+				await self.disable(inter)
 				return
 			
 			content = self.origin.content
@@ -239,6 +240,7 @@ class Confessions(commands.Cog):
 			if image:
 				if not self.confessions.check_imagesupport(channel.guild.id, image):
 					await inter.response.send_message(self.confessions.bot.babel(inter, 'confessions', 'nosendimages'))
+					await self.disable(inter)
 					return
 
 			vetting = self.confessions.findvettingchannel(channel.guild)
@@ -266,16 +268,23 @@ class Confessions(commands.Cog):
 					self.confessions.bot.babel(inter, 'confessions', 'confession_vetting', channel=channel.mention),
 					ephemeral=True
 				)
+				await self.disable(inter)
 				return
+			
+			await self.confessions.send_confession(inter, channel, embed)
 
+			self.send_button.label = self.confessions.bot.babel(inter, 'confessions', 'channelprompt_button_sent')
 			self.channel_selector.disabled = True
 			self.send_button.disabled = True
-			self.send_button.label = self.confessions.bot.babel(inter, 'confessions', 'channelprompt_button_sent')
-			await self.confessions.send_confession(inter, channel, embed)
 			await inter.response.edit_message(
 				content=self.confessions.bot.babel(inter, 'confessions', 'confession_sent_channel', channel=channel.mention),
 				view=self
 			)
+
+		async def disable(self, inter:disnake.MessageInteraction):
+			self.channel_selector.disabled = True
+			self.send_button.disabled = True
+			await inter.message.edit(view=self)
 		
 		async def on_timeout(self):
 			async for msg in self.origin.channel.history(after=self.origin):
@@ -304,7 +313,7 @@ class Confessions(commands.Cog):
 			))
 			
 	class ConfessionModal(disnake.ui.Modal):
-		def __init__(self, confessions, origin:disnake.Interaction, image:disnake.Attachment):
+		def __init__(self, confessions, origin:disnake.ModalInteraction, image:disnake.Attachment):
 			super().__init__(
 				title = confessions.bot.babel(origin, 'confessions', 'editor_title'),
 				custom_id = "confession_modal",
