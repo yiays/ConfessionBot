@@ -227,10 +227,8 @@ class Confessions(commands.Cog):
 			channel = await self.confessions.bot.fetch_channel(int(self.channel_selector.values[0]))
 
 			anonid = self.confessions.get_anonid(channel.guild.id, inter.author.id)
-			lead = ""
+			lead = f"**[Anon-*{anonid}*]**"
 			channeltype = self.confessions.bot.config.getint('confessions', f"{channel.guild.id}_{channel.id}")
-			if channeltype != CHANNEL_TYPE.untraceable:
-				lead = f"**[Anon-*{anonid}*]**"
 
 			if not self.confessions.check_banned(channel.guild.id, anonid):
 				await inter.response.send_message(self.confessions.bot.babel(inter, 'confessions', 'nosendbanned'))
@@ -243,9 +241,15 @@ class Confessions(commands.Cog):
 					await inter.response.send_message(self.confessions.bot.babel(inter, 'confessions', 'nosendimages'))
 					return
 
-			embed = self.confessions.generate_confession(anonid, lead, content, image.url if image else None)
+			vetting = self.confessions.findvettingchannel(channel.guild)
+			embed = self.confessions.generate_confession(
+				anonid,
+				lead if vetting or channeltype != CHANNEL_TYPE.untraceable else '',
+				content,
+				image.url if image else None
+			)
 			
-			if (vetting := self.confessions.findvettingchannel(channel.guild)) and channeltype != CHANNEL_TYPE.feedback:
+			if vetting and channeltype != CHANNEL_TYPE.feedback:
 				pendingconfession = PendingConfession(
 					origin=self.origin,
 					targetchannel=channel
@@ -272,6 +276,12 @@ class Confessions(commands.Cog):
 				content=self.confessions.bot.babel(inter, 'confessions', 'confession_sent_channel', channel=channel.mention),
 				view=self
 			)
+		
+		async def on_timeout(self):
+			async for msg in self.origin.channel.history(after=self.origin):
+				if msg.reference.message_id == self.origin.id:
+					await msg.delete()
+					return
 
 	class PendingConfessionView(disnake.ui.View):
 		def __init__(self, confessions, pendingconfession:PendingConfession):
@@ -322,14 +332,18 @@ class Confessions(commands.Cog):
 				return
 			
 			anonid = self.confessions.get_anonid(inter.guild.id, inter.author.id)
-			lead = ""
 			channeltype = self.confessions.bot.config.getint('confessions', f"{inter.guild_id}_{inter.channel_id}")
-			if channeltype != CHANNEL_TYPE.untraceable:
-				lead = f"**[Anon-*{anonid}*]**"
+			lead = f"**[Anon-*{anonid}*]**"
 
-			embed = self.confessions.generate_confession(anonid, lead, inter.text_values['content'], self.image.url if self.image else None)
+			vetting = self.confessions.findvettingchannel(inter.guild)
+			embed = self.confessions.generate_confession(
+				anonid,
+				lead if vetting or channeltype != CHANNEL_TYPE.untraceable else '',
+				inter.text_values['content'],
+				self.image.url if self.image else None
+			)
 			
-			if (vetting := self.confessions.findvettingchannel(inter.guild)) and channeltype != CHANNEL_TYPE.vetting:
+			if vetting and channeltype != CHANNEL_TYPE.vetting:
 				pendingconfession = PendingConfession(
 					origin=self.origin,
 					targetchannel=inter.channel
@@ -375,12 +389,16 @@ class Confessions(commands.Cog):
 			
 			if accepted:
 				anonid = self.get_anonid(inter.guild.id, pendingconfession.origin.author.id)
-				lead = ""
+				lead = f"**[Anon-*{anonid}*]**"
 				channeltype = self.bot.config.getint('confessions', f"{inter.guild.id}_{pendingconfession.targetchannel_id}")
-				if channeltype != CHANNEL_TYPE.untraceable:
-					lead = f"**[Anon-*{anonid}*]**"
 			
-				embed = self.generate_confession(anonid, lead, pendingconfession.content, pendingconfession.image)
+				embed = self.generate_confession(
+					anonid,
+					lead if channeltype != CHANNEL_TYPE.untraceable else '',
+					pendingconfession.content,
+					pendingconfession.image
+				)
+
 				await self.send_confession(pendingconfession.origin.channel, pendingconfession.targetchannel, embed)
 
 			await vetmessage.edit(view=None)
@@ -425,7 +443,9 @@ class Confessions(commands.Cog):
 
 			if not self.bot.is_ready():
 				await msg.channel.send(self.bot.babel(msg, 'confessions', 'cachebuilding'))
-
+				if not matches:
+					return
+			
 			if not matches:
 				await msg.channel.send(self.bot.babel(msg, 'confessions', 'inaccessible'))
 				return
@@ -455,10 +475,8 @@ class Confessions(commands.Cog):
 			return
 		
 		anonid = self.get_anonid(inter.guild_id, inter.author.id)
-		lead = ""
+		lead = f"**[Anon-*{anonid}*]**"
 		channeltype = self.bot.config.getint('confessions', f"{inter.guild_id}_{inter.channel_id}")
-		if channeltype != CHANNEL_TYPE.untraceable:
-			lead = f"**[Anon-*{anonid}*]**"
 
 		if not self.check_banned(inter.guild_id, anonid):
 			await inter.response.send_message(self.bot.babel(inter, 'confessions', 'nosendbanned'), ephemeral=True)
@@ -480,7 +498,13 @@ class Confessions(commands.Cog):
 				await inter.response.send_message(self.bot.babel(inter, 'confessions', 'nospam'), ephemeral=True)
 				return
 			
-			embed = self.generate_confession(anonid, lead, content, image.url if image else None)
+			vetting = self.findvettingchannel(inter.guild)
+			embed = self.generate_confession(
+				anonid,
+				lead if vetting or channeltype != CHANNEL_TYPE.untraceable else '',
+				content,
+				image.url if image else None
+			)
 
 			"""if (vetting := self.findvettingchannel(inter.guild)) and channeltype != CHANNEL_TYPE.feedback:
 				pendingconfession = PendingConfession(
