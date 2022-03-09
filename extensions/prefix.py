@@ -34,23 +34,19 @@ class Prefix(commands.Cog):
     prefix = prefix.strip(' ')
     if guild:
       self.auth.authusers(ctx)
-      self.bot.config['prefix'][str(guild)] = prefix
-    else:
-      self.bot.config['prefix'][str(ctx.guild.id)] = prefix
+    self.bot.config['prefix'][str(guild if guild else ctx.guild.id)] = prefix
     self.bot.config.save()
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'set_success', prefix=prefix))
   @prefix.command(name='unset')
   async def prefix_unset(self, ctx:commands.Context, guild:int=0):
     if guild:
       self.auth.authusers(ctx)
-      self.bot.config.remove_option('prefix', str(guild))
-    else:
-      self.bot.config.remove_option('prefix', str(ctx.guild.id))
+    self.bot.config.remove_option('prefix', str(guild if guild else ctx.guild.id))
     self.bot.config.save()
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'unset_success'))
   @prefix.command(name='get')
-  async def prefix_get(self, ctx:commands.Context):
-    await ctx.reply(self.bot.babel(ctx, 'prefix', 'get', prefix=self.bot.config.get('prefix', str(ctx.guild.id), fallback='')))
+  async def prefix_get(self, ctx:commands.Context, guild:int=0):
+    await ctx.reply(self.bot.babel(ctx, 'prefix', 'get', prefix=self.bot.config.get('prefix', str(guild if guild else ctx.guild.id), fallback='*unset*')))
 
 def setup(bot):
   bot.add_cog(Prefix(bot))
