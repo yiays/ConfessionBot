@@ -200,6 +200,7 @@ class Confessions(commands.Cog):
 			super().__init__(timeout=30)
 			self.origin = origin
 			self.confessions = confessions
+			self.done = False
 			for channel,channeltype in matches:
 				self.channel_selector.append_option(disnake.SelectOption(label=f'{channel.name} (from {channel.guild.name})',
 																						value=str(channel.id),
@@ -276,6 +277,7 @@ class Confessions(commands.Cog):
 			self.send_button.label = self.confessions.bot.babel(inter, 'confessions', 'channelprompt_button_sent')
 			self.channel_selector.disabled = True
 			self.send_button.disabled = True
+			self.done = True
 			await inter.response.edit_message(
 				content=self.confessions.bot.babel(inter, 'confessions', 'confession_sent_channel', channel=channel.mention),
 				view=self
@@ -284,9 +286,12 @@ class Confessions(commands.Cog):
 		async def disable(self, inter:disnake.MessageInteraction):
 			self.channel_selector.disabled = True
 			self.send_button.disabled = True
+			self.done = True
 			await inter.message.edit(view=self)
 		
 		async def on_timeout(self):
+			if not self.done:
+				await self.origin.reply(self.confessions.bot.babel(self.origin.author, 'confessions', 'timeouterror'))
 			async for msg in self.origin.channel.history(after=self.origin):
 				if msg.reference.message_id == self.origin.id:
 					await msg.delete()
