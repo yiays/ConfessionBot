@@ -615,7 +615,7 @@ class Confessions(commands.Cog):
 				await ctx.reply(self.bot.babel(ctx, 'confessions', 'imagesupportdisabled'))
 
 	@commands.guild_only()
-	@commands.command()
+	@commands.command(aliases=['block'])
 	async def ban(self, ctx:commands.Context, anonid:str=None):
 		if str(ctx.author.id) not in self.bot.config.get('confessions', str(ctx.guild.id)+'_promoted', fallback='').split(','):
 			self.bot.cogs['Auth'].mods(ctx)
