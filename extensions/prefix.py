@@ -19,7 +19,9 @@ class Prefix(commands.Cog):
   def check_prefix(self, bot, message:disnake.Message):
     if isinstance(message.channel, disnake.TextChannel):
       if str(message.channel.guild.id) in self.bot.config['prefix'] and len(self.bot.config['prefix'][str(message.channel.guild.id)]):
-        return [self.bot.config['prefix'][str(message.guild.id)]] + commands.when_mentioned(bot, message)
+        if message.content.lower().startswith(self.bot.config['prefix'][str(message.channel.guild.id)].lower()):
+          return [message.content[0:len(self.bot.config['prefix'][str(message.channel.guild.id)])]]
+        return commands.when_mentioned(bot, message)
     return self.fallback_prefix(bot, message)
   
   @commands.group()

@@ -31,8 +31,6 @@ class merelybot(commands.AutoShardedBot):
 	intents.guild_typing = config.getboolean('intents', 'guild_typing')
 	intents.dm_typing = config.getboolean('intents', 'dm_typing')
 
-	case_insensitive = True
-
 	def __init__(self, **kwargs):
 		print(f"""
 		merely framework{' beta' if self.config.getboolean('main', 'beta') else ''} v{self.config['main']['ver']}
@@ -49,17 +47,19 @@ class merelybot(commands.AutoShardedBot):
 		if 'verbose' in kwargs:
 			self.verbose = kwargs['verbose']
 
-		self.case_insensitive = True
-		prefixes = ()
-		if self.config['main']['prefix_short']:
-			prefixes += (self.config['main']['prefix_short']+' ', self.config['main']['prefix_short'])
-		if self.config['main']['prefix_long']: prefixes += (self.config['main']['prefix_long']+' ',)
-
-		super().__init__(command_prefix = commands.when_mentioned_or(*prefixes),
+		super().__init__(command_prefix = self.check_prefix,
 										 help_command = None,
-										 intents = self.intents)
+										 intents = self.intents,
+										 case_insensitive = True)
 
 		self.autoload_extensions()
+	
+	def check_prefix(self, bot, msg:disnake.Message):
+		if bot.config['main']['prefix_short'] and msg.content.lower().startswith(bot.config['main']['prefix_short'].lower()):
+			return [msg.content[0:len(bot.config['main']['prefix_short'])], msg.content[0 : len(bot.config['main']['prefix_short'])] + ' ']
+		if bot.config['main']['prefix_long'] and msg.content.lower().startswith(bot.config['main']['prefix_long'].lower()):
+			return msg.content[0:len(bot.config['main']['prefix_long'])] + ' '
+		return commands.when_mentioned(bot, msg)
 
 	def autoload_extensions(self):
 		# a natural sort is used to make it possible to prioritize extensions by filename
