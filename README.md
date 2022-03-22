@@ -4,7 +4,7 @@
 
 > Demo ConfessionBot on my [discord server](https://discord.gg/wfKx24kDUR)
 
-> [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=562440687363293195&scope=bot&permissions=19456) to your own server
+> [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=952453311703941170&permissions=0&scope=bot%20applications.commands) to your own server
 
 ## News
 Translation tooling for my projects (including ConfessionBot) has launched! contribute translations with the help of this tooling and see your language become available in all sorts of places!
