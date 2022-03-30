@@ -5,7 +5,7 @@
   Recommended cogs: Error
 """
 
-from ctypes import Union
+from typing import Union
 import disnake
 from disnake.ext import commands
 
