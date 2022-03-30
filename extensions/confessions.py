@@ -7,7 +7,7 @@
 """
 
 from array import array
-import asyncio, re, time, os
+import asyncio, re, time
 import base64
 from typing import Optional, Union
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -38,7 +38,6 @@ class ConfessionData:
 		targetchannel:Optional[disnake.TextChannel]=None,
 		embed:Optional[disnake.Embed]=None
 	):
-		
 		# crypto config
 		backend = default_backend()
 		key = base64.decodebytes(bytes(bot.config['confessions']['secret'], encoding='ascii'))
@@ -56,12 +55,11 @@ class ConfessionData:
 			# print('encrypted', encrypted)
 			binary = self.decryptor.update(encrypted) + self.decryptor.finalize()
 			# print('binary', binary)
-			data = binary.decode('utf-8')
 
-			inputs = data.split('_')
-			self.author_id = int(inputs[0])
-			self.origin_id = int(inputs[1])
-			self.targetchannel_id = int(inputs[2])
+			inputs = binary.split(b'_')
+			self.author_id = int.from_bytes(inputs[0], 'big')
+			self.origin_id = int.from_bytes(inputs[1], 'big')
+			self.targetchannel_id = int.from_bytes(inputs[2], 'big')
 		else:
 			self.offline = False
 			self.author = author
@@ -78,11 +76,15 @@ class ConfessionData:
 		""" Encrypt data for secure storage """
 
 		if self.offline:
-			data = f"{self.author_id}_{self.origin_id if self.origin_id else 0}_{self.targetchannel_id}"
+			bauthor = self.author_id.to_bytes(8, 'big')
+			borigin = (self.origin_id if self.origin_id else 0).to_bytes(8, 'big')
+			btarget = self.targetchannel_id.to_bytes(8, 'big')
 		else:
-			data = f"{self.author.id}_{self.origin.id if self.origin else 0}_{self.targetchannel.id}"
+			bauthor = self.author.id.to_bytes(8, 'big')
+			borigin = (self.origin.id if self.origin else 0).to_bytes(8, 'big')
+			btarget = self.targetchannel.id.to_bytes(8, 'big')
 
-		binary = bytes(data, encoding='utf-8')
+		binary = b'_'.join([bauthor, borigin, btarget])
 		# print('binary', binary)
 		encrypted = self.encryptor.update(binary) + self.encryptor.finalize()
 		# print('encrypted', encrypted)
@@ -545,7 +547,7 @@ class Confessions(commands.Cog):
 			if vetting and channeltype != ChannelType.VETTING:
 				pendingconfession = ConfessionData(
 					self.confessions.bot,
-					origin=self.origin,
+					author=inter.author,
 					targetchannel=inter.channel
 				)
 
