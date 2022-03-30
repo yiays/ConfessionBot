@@ -9,7 +9,6 @@ class ReactRoles(commands.Cog):
       raise Exception("'auth' must be enabled to use 'reactroles'")
     if not bot.config.getboolean('extensions', 'help', fallback=False):
       print(Warning("'help' is a recommended extension for 'reactroles'"))
-    self.auth = bot.cogs['Auth']
     # ensure config file has required data
     if not bot.config.has_section('reactroles'):
       bot.config.add_section('reactroles')
@@ -80,7 +79,7 @@ class ReactRoles(commands.Cog):
   @commands.guild_only()
   async def reactrole(self, ctx:commands.Context, *, prompt:str):
     """react role setup interface"""
-    self.auth.admins(ctx)
+    self.bot.cogs['Auth'].admins(ctx.message)
 
     target = await ctx.reply(prompt)
     tmp = None

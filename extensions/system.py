@@ -14,7 +14,7 @@ class System(commands.Cog):
   async def module(self, ctx:commands.Context, module:str=None, action:str=None):
     if not self.bot.config.getboolean('extensions', 'allow_reloading'):
       return
-    self.bot.cogs['Auth'].superusers(ctx)
+    self.bot.cogs['Auth'].superusers(ctx.message)
 
     extensions = [e.replace('extensions.','').strip('_') for e in self.bot.extensions.keys()] + ['config', 'babel']
     if module is None:
@@ -74,7 +74,7 @@ class System(commands.Cog):
   @commands.command()
   @commands.cooldown(1, 1)
   async def die(self, ctx:commands.Context, saveconfig=False):
-    self.bot.cogs['Auth'].superusers(ctx)
+    self.bot.cogs['Auth'].superusers(ctx.message)
     await ctx.reply(self.bot.babel(ctx, 'admin', 'die_success'))
     if saveconfig:
       self.bot.config.save()
