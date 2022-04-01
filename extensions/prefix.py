@@ -1,7 +1,5 @@
 import disnake
 from disnake.ext import commands
-from typing import Dict, Pattern, Union
-import re, asyncio
 
 class Prefix(commands.Cog):
   """a prototype service for commandless bots"""

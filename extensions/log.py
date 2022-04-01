@@ -28,6 +28,7 @@ class Log(commands.Cog):
       self.logchannel = await self.bot.fetch_channel(int(self.bot.config['log']['logchannel']))
 
   def truncate(self, string:str, maxlen:int=30):
+    """ trim a long string and add ellipsis """
     return string[:maxlen] + ('...' if len(string) > maxlen else '')
 
   def wrap(self, content:str, author:disnake.User, channel:disnake.abc.Messageable):
@@ -57,7 +58,7 @@ class Log(commands.Cog):
     """ Record any replies to a command """
     responses = []
     async for msg in ctx.history(after=ctx.message):
-      if msg.author == self.bot.user and msg.reference.message_id == ctx.message.id:
+      if msg.author == self.bot.user and msg.reference and msg.reference.message_id == ctx.message.id:
         responses.append(msg)
     for response in responses:
       logentry = self.wrap(response.content, response.author, response.channel)
