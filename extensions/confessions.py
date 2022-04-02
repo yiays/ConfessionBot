@@ -838,13 +838,14 @@ class Confessions(commands.Cog):
 		local = ('local' if isinstance(inter.author, disnake.Member) else '')
 		# warn users when the channel list isn't complete
 		if not self.bot.is_ready():
-			await inter.send(self.bot.babel(inter,'confessions','cachebuilding'))
+			await inter.send(self.bot.babel(inter,'confessions','cachebuilding'), ephemeral=True)
 		elif len(matches) == 0:
-			await inter.send(self.bot.babel(inter,'confessions','inaccessible' + local))
+			await inter.send(self.bot.babel(inter,'confessions','inaccessible' + local), ephemeral=True)
 		else:
 			await inter.send(
 				self.bot.babel(inter,'confessions','listtitle' + local) + \
-				'\n'+self.generate_list(inter.author, matches, vetting)
+				'\n'+self.generate_list(inter.author, matches, vetting),
+				ephemeral=True
 			)
 
 	@commands.guild_only()
@@ -910,7 +911,7 @@ class Confessions(commands.Cog):
 	):
 		"""
 		Block or unblock anon-ids from confessing
-		
+
 		Parameters
 		----------
 		anonid: The anonymous id found next to any traceable anonymous message

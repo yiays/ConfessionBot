@@ -98,7 +98,7 @@ class Help(commands.Cog):
     matchedcommand = self.find_command(cmd)
     # return usage information for a specific command
     if matchedcommand:
-      for reflang in self.bot.babel.resolve_lang(ctx.author.id, ctx.guild.id):
+      for reflang in self.bot.babel.resolve_lang(ctx.author.id, ctx.guild.id if ctx.guild else None):
         reflang = self.bot.babel.langs[reflang]
         for key in reflang.keys():
           if f'command_{matchedcommand.name}_help' in reflang[key]:

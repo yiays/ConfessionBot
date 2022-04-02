@@ -24,6 +24,9 @@ class Error(commands.Cog):
     if isinstance(error, commands.CommandOnCooldown):
       print("cooldown")
       return
+    kwargs = {}
+    if isinstance(ctx, disnake.ApplicationCommandInteraction):
+      kwargs['ephemeral'] = True
     if isinstance(
       error,
       (commands.CommandNotFound, commands.BadArgument, commands.MissingRequiredArgument)
@@ -34,20 +37,21 @@ class Error(commands.Cog):
           ctx.invoked_with if isinstance(ctx, commands.Context) else ctx.application_command.name
         )
       else:
-        await ctx.send(self.bot.babel(ctx, 'error', 'missingrequiredargument'))
+        await ctx.send(self.bot.babel(ctx, 'error', 'missingrequiredargument'), **kwargs)
       return
     if isinstance(error, commands.NoPrivateMessage):
-      await ctx.send(self.bot.babel(ctx, 'error', 'noprivatemessage'))
+      await ctx.send(self.bot.babel(ctx, 'error', 'noprivatemessage'), **kwargs)
       return
     if isinstance(error, commands.PrivateMessageOnly):
-      await ctx.send(self.bot.babel(ctx, 'error', 'privatemessageonly'))
+      await ctx.send(self.bot.babel(ctx, 'error', 'privatemessageonly'), **kwargs)
       return
-    elif isinstance(error, commands.CommandInvokeError):
+    if isinstance(error, commands.CommandInvokeError):
       if 'Auth' in self.bot.cogs and isinstance(error.original, self.bot.cogs['Auth'].AuthError):
-        await ctx.send(str(error.original))
+        await ctx.send(str(error.original), **kwargs)
         return
       await ctx.send(self.bot.babel(ctx, 'error', 'commanderror'))
-    elif isinstance(error, (commands.CheckFailure, commands.CheckAnyFailure)):
+      raise error
+    elif isinstance(error, (commands.CheckFailure, commands.CheckAnyFailure), **kwargs):
       return
 
 def setup(bot):
