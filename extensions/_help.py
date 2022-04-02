@@ -9,6 +9,8 @@ from typing import Union, Optional
 import disnake
 from disnake.ext import commands
 
+# Autocomplete
+
 def ac_command(inter:disnake.ApplicationCommandInteraction, command:str):
   """ find any commands that contain the provided string """
   matches = []
@@ -96,7 +98,7 @@ class Help(commands.Cog):
     matchedcommand = self.find_command(cmd)
     # return usage information for a specific command
     if matchedcommand:
-      for reflang in self.bot.babel.resolve_lang(ctx):
+      for reflang in self.bot.babel.resolve_lang(ctx.author.id, ctx.guild.id):
         reflang = self.bot.babel.langs[reflang]
         for key in reflang.keys():
           if f'command_{matchedcommand.name}_help' in reflang[key]:
