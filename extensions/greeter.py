@@ -29,7 +29,6 @@ class Greeter(commands.Cog):
       channel = member.guild.get_channel(int(data[0]))
       await channel.send(', '.join(data[1:]).format(f"{member.name}#{member.discriminator}", member.guild.name))
   
-  # TODO: add error handling module with support for commands.errors.NoPrivateMessage
   @commands.group()
   @commands.guild_only()
   async def welcome(self, ctx:commands.Context):

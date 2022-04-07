@@ -718,9 +718,6 @@ class Confessions(commands.Cog):
 		image: An optional image that appears below the text
 		"""
 
-		if content and 'Log' in self.bot.cogs:
-			await self.bot.cogs['Log'].log_misc_str(inter, content + ('*' if image else ''))
-
 		if not self.check_channel(inter.guild_id, inter.channel_id):
 			await inter.send(self.bot.babel(inter, 'confessions', 'nosendchannel'), ephemeral=True)
 			return

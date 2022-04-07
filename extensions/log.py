@@ -5,7 +5,6 @@
 """
 
 import traceback
-from types import TracebackType
 from typing import Union
 import disnake
 from disnake.ext import commands
@@ -27,23 +26,21 @@ class Log(commands.Cog):
     if self.bot.config['log']['logchannel'].isdigit():
       self.logchannel = await self.bot.fetch_channel(int(self.bot.config['log']['logchannel']))
 
-  def truncate(self, string:str, maxlen:int=30):
+  def truncate(self, string:str, maxlen:int=80):
     """ trim a long string and add ellipsis """
     return string[:maxlen] + ('...' if len(string) > maxlen else '')
 
   def wrap(self, content:str, author:disnake.User, channel:disnake.abc.Messageable):
     """ Format log data consistently """
     if isinstance(channel, disnake.TextChannel):
-      return f"[{self.truncate(channel.guild.name, 10)}#{self.truncate(channel.name)}] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
-    elif isinstance(channel, disnake.DMChannel):
+      return f"[{self.truncate(channel.guild.name, 10)}#{self.truncate(channel.name, 20)}] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    if isinstance(channel, disnake.DMChannel):
       if channel.recipient:
         return f"[DM({self.truncate(channel.recipient.name, 10)}#{channel.recipient.discriminator})] {author.name}#{author.discriminator}: {self.truncate(content)}"
-      else:
-        return f"[DM] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
-    elif isinstance(channel, disnake.Thread):
+      return f"[DM] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    if isinstance(channel, disnake.Thread):
       return f"[Thread] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
-    else:
-      return f"[Unknown] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    return f"[Unknown] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
 
   @commands.Cog.listener('on_command')
   async def log_command(self, ctx:commands.Context):
@@ -53,6 +50,20 @@ class Log(commands.Cog):
     if self.logchannel:
       await self.logchannel.send(logentry, embed=ctx.message.embeds[0] if ctx.message.embeds else None)
 
+  @commands.Cog.listener('on_application_command')
+  async def log_slash_command(self, inter:disnake.ApplicationCommandInteraction):
+    """ Record slash command calls """
+    options = [f"{opt.name}:{self.truncate(str(opt.value), 30)}" for opt in inter.data.options]
+    logentry = self.wrap(
+      f"/{inter.data.name} {' '.join(options)}",
+      inter.author,
+      inter.channel
+    )
+    print(logentry)
+    if self.logchannel:
+      await self.logchannel.send(logentry)
+
+  #TODO: research slash command completion
   @commands.Cog.listener('on_command_completion')
   async def log_response(self, ctx:commands.Context):
     """ Record any replies to a command """
