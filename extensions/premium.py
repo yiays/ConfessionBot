@@ -4,6 +4,7 @@ import asyncio
 
 class Premium(commands.Cog):
   def __init__(self, bot:commands.Bot):
+    #TODO: this cog
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('premium'):

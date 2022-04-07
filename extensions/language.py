@@ -131,7 +131,7 @@ class Language(commands.Cog):
           self.bot.babel(inter, 'language', 'contribute_cta')
         )
   @language_set.autocomplete('language')
-  def language_set_ac(self, _:disnake.MessageCommandInteraction, search):
+  def language_set_ac(self, _:disnake.MessageCommandInteraction, search:str):
     """ Suggests languages that are already available """
     matches = []
     prefix = self.bot.config['language']['prefix']
