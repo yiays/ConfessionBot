@@ -32,10 +32,17 @@ class Error(commands.Cog):
       (commands.CommandNotFound, commands.BadArgument, commands.MissingRequiredArgument)
     ):
       if 'Help' in self.bot.cogs:
-        await self.bot.cogs['Help'].help(
-          ctx,
-          ctx.invoked_with if isinstance(ctx, commands.Context) else ctx.application_command.name
-        )
+        if (
+          isinstance(ctx, commands.Context) and isinstance(error, commands.CommandNotFound) and
+          ctx.invoked_with in [cmd.name for cmd in self.bot.slash_commands]
+        ):
+          # Catch when people try to use prefixed commands and nudge them in the right direction
+          await ctx.send(self.bot.babel(ctx, 'error', 'slash_migration'))
+        else:
+          await self.bot.cogs['Help'].help(
+            ctx,
+            ctx.invoked_with if isinstance(ctx, commands.Context) else ctx.application_command.name
+          )
       else:
         await ctx.send(self.bot.babel(ctx, 'error', 'missingrequiredargument'), **kwargs)
       return
