@@ -160,7 +160,7 @@ class Confessions(commands.Cog):
 				f'{self.channel_icons[match[1]]}<#{match[0].id}>' +\
 				(' ('+match[0].guild.name+')' if not isinstance(user, disnake.Member) else '')
 			)
-		vettingwarning = ('\n'+self.bot.babel(user, 'confessions', 'vetting') if vetting else '')
+		vettingwarning = ('\n\n'+self.bot.babel(user, 'confessions', 'vetting') if vetting else '')
 
 		return '\n'.join(targets) + vettingwarning
 
@@ -893,14 +893,21 @@ class Confessions(commands.Cog):
 		matches,vetting = self.listavailablechannels(inter.author)
 		local = ('local' if isinstance(inter.author, disnake.Member) else '')
 		# warn users when the channel list isn't complete
-		if not self.bot.is_ready():
+		if not self.bot.is_ready() and not local:
 			await inter.send(self.bot.babel(inter,'confessions','cachebuilding'), ephemeral=True)
 		elif len(matches) == 0:
 			await inter.send(self.bot.babel(inter,'confessions','inaccessible' + local), ephemeral=True)
-		else:
+		# send the list of channels, complete or not
+		if len(matches) > 0:
 			await inter.send(
-				self.bot.babel(inter,'confessions','listtitle' + local) + \
-				'\n'+self.generate_list(inter.author, matches, vetting),
+				(
+					self.bot.babel(inter,'confessions','listtitle' + local) +
+					'\n'+self.generate_list(inter.author, matches, vetting) +
+					(
+						'\n\n' + self.bot.babel(inter, 'confessions', 'confess_to_feedback')
+						if [match for match in matches if match[1] == ChannelType.feedback] else ''
+					)
+				),
 				ephemeral=True
 			)
 
