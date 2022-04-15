@@ -493,7 +493,13 @@ class Confessions(commands.Cog):
 
 	class ConfessionModal(disnake.ui.Modal):
 		""" Modal for completing an incomplete confession """
-		def __init__(self, confessions, origin:disnake.ModalInteraction, image:disnake.Attachment):
+		def __init__(
+			self,
+			confessions,
+			origin:disnake.ModalInteraction,
+			target:disnake.TextChannel,
+			image:disnake.Attachment
+		):
 			super().__init__(
 				title = confessions.bot.babel(origin, 'confessions', 'editor_title'),
 				custom_id = "confession_modal",
@@ -514,6 +520,7 @@ class Confessions(commands.Cog):
 
 			self.confessions = confessions
 			self.origin = origin
+			self.target = target
 			self.image = image
 
 		async def callback(self, inter:disnake.ModalInteraction):
@@ -574,10 +581,23 @@ class Confessions(commands.Cog):
 				return
 
 			await inter.send(
-				self.confessions.bot.babel(inter, 'confessions', 'confession_sent_below'),
+				(
+					self.confessions.bot.babel(
+						inter,
+						'confessions',
+						'confession_sent_below'
+					)
+					if self.target == inter.channel else
+					self.confessions.bot.babel(
+						inter,
+						'confessions',
+						'confession_sent_channel',
+						channel=self.target.mention
+					)
+				),
 				ephemeral=True
 			)
-			await self.confessions.send_confession(inter, inter.channel, embed)
+			await self.confessions.send_confession(inter, self.target, embed)
 
 	#	Events
 
@@ -702,12 +722,13 @@ class Confessions(commands.Cog):
 	#	Slash commands
 
 	@commands.cooldown(1, 1)
-	@commands.slash_command(description="Send an anonymous message")
+	@commands.slash_command()
 	async def confess(
 		self,
 		inter: disnake.GuildCommandInteraction,
 		content:Optional[str] = None,
-		image:Optional[disnake.Attachment] = None
+		image:Optional[disnake.Attachment] = None,
+		**kwargs
 	):
 		"""
 		Send an anonymous message to this channel
@@ -718,20 +739,24 @@ class Confessions(commands.Cog):
 		image: An optional image that appears below the text
 		"""
 
-		if not self.check_channel(inter.guild_id, inter.channel_id):
+		channel = inter.channel
+		if 'channel' in kwargs:
+			channel = kwargs['channel']
+
+		if not self.check_channel(inter.guild_id, channel.id):
 			await inter.send(self.bot.babel(inter, 'confessions', 'nosendchannel'), ephemeral=True)
 			return
 
 		anonid = self.get_anonid(inter.guild_id, inter.author.id)
 		lead = f"**[Anon-*{anonid}*]**"
-		channeltype = self.bot.config.getint('confessions', f"{inter.guild_id}_{inter.channel_id}")
+		channeltype = self.bot.config.getint('confessions', f"{inter.guild_id}_{channel.id}")
 
 		if not self.check_banned(inter.guild_id, anonid):
 			await inter.send(self.bot.babel(inter, 'confessions', 'nosendbanned'), ephemeral=True)
 			return
 
 		if image:
-			if not self.check_imagesupport(inter.channel_id, image):
+			if not self.check_imagesupport(channel.id, image):
 				await inter.send(self.bot.babel(inter, 'confessions', 'nosendimages'), ephemeral=True)
 				return
 
@@ -758,18 +783,18 @@ class Confessions(commands.Cog):
 				pendingconfession = ConfessionData(
 					self.bot,
 					author=inter.author,
-					targetchannel=inter.channel
+					targetchannel=channel
 				)
 
 				view = self.PendingConfessionView(self, pendingconfession)
 
 				await vetting.send(
-					self.bot.babel(inter.guild, 'confessions', 'vetmessagecta', channel=inter.channel.mention),
+					self.bot.babel(inter.guild, 'confessions', 'vetmessagecta', channel=channel.mention),
 					embed=embed,
 					view=view
 				)
 				await inter.send(
-					self.bot.babel(inter, 'confessions', 'confession_vetting', channel=inter.channel.mention),
+					self.bot.babel(inter, 'confessions', 'confession_vetting', channel=channel.mention),
 					ephemeral=True
 				)
 
@@ -779,14 +804,48 @@ class Confessions(commands.Cog):
 				self.bot.babel(inter, 'confessions', 'confession_sent_below'),
 				ephemeral=True
 			)
-			await self.send_confession(inter, inter.channel, embed)
+			await self.send_confession(inter, channel, embed)
 
 		else:
 			await inter.response.send_modal(
-				modal=self.ConfessionModal(confessions=self, origin=inter, image=image)
+				modal=self.ConfessionModal(confessions=self, origin=inter, target=channel, image=image)
 			)
+		
+	@commands.cooldown(1, 1)
+	@commands.slash_command(name='confess-to')
+	async def confess_to(
+		self,
+		inter:disnake.ApplicationCommandInteraction,
+		channel:str,
+		content:Optional[str] = None,
+		image:Optional[disnake.Attachment] = None
+	):
+		"""
+		Send an anonymous message to a specified channel
 
-	#	Commands
+		Parameters
+		----------
+		channel: The target channel, can include anonymous feedback channels that you can't see
+		content: The text of your anonymous message, leave blank for a paragraph editor
+		image: An optional image that appears below the text
+		"""
+
+		search = re.search(r".*\((\d+)\)$", channel)
+		if search:
+			channel_id = search.groups()[0]
+			await self.confess(inter, content, image, channel=await self.bot.fetch_channel(channel_id))
+		else:
+			raise commands.BadArgument("Channel must be selected from the list")
+	@confess_to.autocomplete('channel')
+	async def channel_ac(self, inter:disnake.ApplicationCommandInteraction, search:str):
+		""" Lists available channels, allows searching by name """
+		results = []
+		matches, _ = self.scanguild(inter.author)
+		for match in matches:
+			if search in match[0].name:
+				results.append(f"{self.channel_icons[match[1]]} {match[0].name} ({match[0].id})")
+		return results
+
 
 	@commands.guild_only()
 	@commands.slash_command()
