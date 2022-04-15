@@ -52,19 +52,19 @@ class System(commands.Cog):
       await inter.send("Reloading of cogs has been disabled in the config.", ephemeral=True)
       return
 
-    extensions = [
+    active_extensions = [
       e.replace('extensions.','').strip('_') for e in self.bot.extensions.keys()
     ] + ['config', 'babel']
     if module is None:
       await inter.send(
-        self.bot.babel(inter, 'main', 'extensions_list', list='\n'.join(extensions)),
+        self.bot.babel(inter, 'main', 'extensions_list', list='\n'.join(active_extensions)),
         ephemeral=True
       )
       return
     module = module.lower()
 
     ext = None
-    if module in extensions or action==Actions.load:
+    if module in active_extensions or action==Actions.load:
       if module=='config':
         self.bot.config.reload()
         await inter.send(
@@ -91,7 +91,7 @@ class System(commands.Cog):
         ]
         if extcandidate:
           ext = extcandidate[0]
-    
+
       if ext:
         if action == Actions.enable:
           self.bot.config['extensions'][module] = 'True'
@@ -136,9 +136,20 @@ class System(commands.Cog):
     else:
       await inter.send(self.bot.babel(inter, 'main', 'extension_not_found'), ephemeral=True)
   @module.autocomplete('module')
-  async def module_ac(self, _:disnake.ApplicationCommandInteraction, search:str):
+  async def module_ac(self, inter:disnake.ApplicationCommandInteraction, search:str):
     """ Suggests modules based on the list in config """
-    return [f[11:-3].strip('_') for f in glob('extensions/*.py') if search in f]
+    extension_list = (f[11:-3].strip('_') for f in glob('extensions/*.py'))
+    if 'action' in inter.filled_options:
+      if inter.filled_options['action'] in [Actions.reload, Actions.unload]:
+        extension_list = (
+          e.replace('extensions.','').strip('_') for e in self.bot.extensions.keys()
+        )
+      elif inter.filled_options['action'] == Actions.list:
+        return []
+    return (
+      [x for x in extension_list if search in x] +
+      [e for e in ['config', 'babel'] if search in e]
+    )
 
   @commands.slash_command()
   @commands.cooldown(1, 1)
