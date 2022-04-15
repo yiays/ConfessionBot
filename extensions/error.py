@@ -37,7 +37,26 @@ class Error(commands.Cog):
           ctx.invoked_with in [cmd.name for cmd in self.bot.slash_commands]
         ):
           # Catch when people try to use prefixed commands and nudge them in the right direction
-          await ctx.send(self.bot.babel(ctx, 'error', 'slash_migration'))
+          embed = disnake.Embed(
+            title = self.bot.babel(ctx, 'error', 'slash_migration_title'),
+            description = self.bot.babel(ctx, 'error', 'slash_migration'),
+            color = int(self.bot.config['main']['themecolor'], 16)
+          )
+          embed.add_field(
+            name = self.bot.babel(ctx, 'error', 'slash_migration_problems_title'),
+            value = self.bot.babel(
+              ctx,
+              'error',
+              'slash_migration_problems',
+              invite=f'https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot%20applications.commands&permissions=0'
+            )
+          )
+          try:
+            await ctx.send(embed=embed)
+          except disnake.Forbidden:
+            await ctx.send(
+              f"**{embed.title}**\n{embed.description}\n*{embed.fields[0].name}*\n{embed.fields[0].value}"
+            )
         else:
           await self.bot.cogs['Help'].help(
             ctx,
