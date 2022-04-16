@@ -815,7 +815,7 @@ class Confessions(commands.Cog):
 	@commands.slash_command(name='confess-to')
 	async def confess_to(
 		self,
-		inter:disnake.ApplicationCommandInteraction,
+		inter:disnake.GuildCommandInteraction,
 		channel:str,
 		content:Optional[str] = None,
 		image:Optional[disnake.Attachment] = None
