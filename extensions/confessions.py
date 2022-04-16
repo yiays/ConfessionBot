@@ -993,10 +993,10 @@ class Confessions(commands.Cog):
 			self.bot.cogs['Auth'].mods(inter)
 
 		banlist = self.bot.config.get('confessions', str(inter.guild.id)+'_banned', fallback='')
-		banlist = banlist.split(',')
+		banlist_split = banlist.split(',')
 		if anonid is None:
-			if banlist:
-				printedlist = '\n```'+'\n'.join(banlist)+'```'
+			if banlist_split:
+				printedlist = '\n```'+'\n'.join(banlist_split)+'```'
 				await inter.send(self.bot.babel(inter, 'confessions', 'banlist') + printedlist)
 			else:
 				await inter.send(self.bot.babel(inter, 'confessions', 'emptybanlist'))
@@ -1010,12 +1010,12 @@ class Confessions(commands.Cog):
 		except ValueError:
 			await inter.send(self.bot.babel(inter, 'confessions', 'invalidanonid'))
 			return
-		if anonid in banlist and not unblock:
+		if anonid in banlist_split and not unblock:
 			await inter.send(self.bot.babel(inter, 'confessions', 'doublebananonid'))
 			return
 
 		if unblock:
-			fullid = [i for i in banlist.split(',') if anonid in i][0]
+			fullid = [i for i in banlist_split if anonid in i][0]
 			self.bot.config['confessions'][str(inter.guild.id)+'_banned'] = banlist.replace(fullid+',','')
 		else:
 			self.bot.config['confessions'][str(inter.guild.id)+'_banned'] = banlist + anonid + ','
