@@ -30,7 +30,6 @@ class Lightbulb(commands.Cog):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
-    self.auth = bot.cogs['Auth']
     # ensure config file has required data
     if not bot.config.has_section('lightbulb'):
       bot.config.add_section('lightbulb')
@@ -92,7 +91,7 @@ class Lightbulb(commands.Cog):
     if ctx.invoked_subcommand is None:
       raise commands.errors.BadArgument
     else:
-      self.auth.admins(ctx)
+      self.bot.cogs['Auth'].admins(ctx.message)
   @lightbulb.command(name='enable')
   async def lightbulb_enable(self, ctx:commands.Context):
     if str(ctx.guild.id) not in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():

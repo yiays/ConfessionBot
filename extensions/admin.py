@@ -38,7 +38,7 @@ class Admin(commands.Cog):
     if ctx.invoked_subcommand is None:
       raise commands.BadArgument
     else:
-      self.bot.cogs['Auth'].admins(ctx)
+      self.bot.cogs['Auth'].admins(ctx.message)
   @janitor.command(name='join')
   async def janitor_join(self, ctx:commands.Context, strict=''):
     self.bot.config['admin'][f'{ctx.channel.id}_janitor'] = '1' if strict else '0'
@@ -57,13 +57,13 @@ class Admin(commands.Cog):
 
     if n_or_id.isdigit():
       n = int(n_or_id)
-      self.bot.cogs['Auth'].mods(ctx)
+      self.bot.cogs['Auth'].mods(ctx.message)
       deleted = await ctx.channel.purge(limit=n, check=lambda m:self.check_delete(m, strict))
       await ctx.reply(self.bot.babel(ctx, 'admin', 'clean_success', n=len(deleted)))
     elif '-' in n_or_id:
       start,end = n_or_id.split('-')
       start,end = int(start),int(end)
-      self.bot.cogs['Auth'].mods(ctx)
+      self.bot.cogs['Auth'].mods(ctx.message)
       if start>end: start,end = end,start
       deleted = await ctx.channel.purge(limit=1000,
                                         check=lambda m: m.id>start and m.id<end and self.check_delete(m, strict),

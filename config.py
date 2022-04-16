@@ -1,10 +1,15 @@
+"""
+  Config - data storage for merely bots
+  Extends configparser with backups, defaults, saving and reloading
+"""
+
 from configparser import ConfigParser
 from shutil import copy
 from os import path,makedirs,remove
 import time
 
 class Config(ConfigParser):
-  """loads the config file automatically and ensures it's in valid shape"""
+  """loads the config file automatically and ensures it's in a valid shape"""
   path = "config/"
   file = "config/config.ini"
   template = "config/config.factory.ini"
@@ -17,8 +22,9 @@ class Config(ConfigParser):
     """
     ConfigParser.__init__(self)
     self.load()
-  
+
   def load(self):
+    """ verify file exists and load it """
     if path.isfile(self.path):
       remove(self.path)
     if not path.exists(self.path):
@@ -109,6 +115,7 @@ class Config(ConfigParser):
     self.save()
 
   def save(self):
+    """ copy existing config to backups, save new config """
     # create a backup of the config (max 1 per hour)
     if self.last_backup < time.time() - (60*60):
       if not path.exists(self.path+'config_history'):
@@ -122,6 +129,7 @@ class Config(ConfigParser):
       ConfigParser.write(self, f)
   
   def reload(self):
+    """ reset config and load it again """
     for section in self.sections():
       self.remove_section(section)
     self.load()

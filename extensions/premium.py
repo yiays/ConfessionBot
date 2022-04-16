@@ -1,9 +1,16 @@
+"""
+  Premium - exclusive functionality for paying users
+  Still rather primitive, prevents usage of an entire command unless a user has a certain role
+  Currently unused until new premium exclusive features are developed
+"""
+
+import asyncio
 import disnake
 from disnake.ext import commands
-import asyncio
 
 class Premium(commands.Cog):
   def __init__(self, bot:commands.Bot):
+    #TODO: this cog
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('premium'):
@@ -76,4 +83,5 @@ class Premium(commands.Cog):
 
 
 def setup(bot):
+  """ Bind this cog to the bot """
   bot.add_cog(Premium(bot))

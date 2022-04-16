@@ -1,7 +1,5 @@
 import disnake
 from disnake.ext import commands
-from typing import Dict, Pattern, Union
-import re, asyncio
 
 class Prefix(commands.Cog):
   """a prototype service for commandless bots"""
@@ -9,7 +7,6 @@ class Prefix(commands.Cog):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
-    self.auth = bot.cogs['Auth']
     # ensure config file has required data
     if not bot.config.has_section('prefix'):
       bot.config.add_section('prefix')
@@ -30,19 +27,19 @@ class Prefix(commands.Cog):
     if ctx.invoked_subcommand is None:
       raise commands.errors.BadArgument
     else:
-      self.auth.admins(ctx)
+      self.bot.cogs['Auth'].admins(ctx.message)
   @prefix.command(name='set')
   async def prefix_set(self, ctx:commands.Context, prefix:str, guild:int=0):
     prefix = prefix.strip(' ')
     if guild:
-      self.auth.authusers(ctx)
+      self.bot.cogs['Auth'].authusers(ctx.message)
     self.bot.config['prefix'][str(guild if guild else ctx.guild.id)] = prefix
     self.bot.config.save()
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'set_success', prefix=prefix))
   @prefix.command(name='unset')
   async def prefix_unset(self, ctx:commands.Context, guild:int=0):
     if guild:
-      self.auth.authusers(ctx)
+      self.bot.cogs['Auth'].authusers(ctx.message)
     self.bot.config.remove_option('prefix', str(guild if guild else ctx.guild.id))
     self.bot.config.save()
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'unset_success'))

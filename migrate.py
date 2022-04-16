@@ -153,9 +153,6 @@ def migrate_translations():
       print("migrated the "+langf.name[:-4]+" translation.")
 
 def migrate_config():
-  """TODO: special sections
-  v1/channels
-  """
   print("migrate_config():")
 
   keymap = {

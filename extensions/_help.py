@@ -1,8 +1,41 @@
+"""
+  Help - User support and documentation
+  Features: data-driven formatting based on config and translation files
+  Recommended cogs: any cogs that have featured commands
+"""
+
+import re
+from typing import Union, Optional
 import disnake
 from disnake.ext import commands
-import asyncio
-import re
-from typing import Union
+
+# Autocomplete
+
+def ac_command(inter:disnake.ApplicationCommandInteraction, command:str):
+  """ find any commands that contain the provided string """
+  matches = []
+  for cmd in inter.bot.slash_commands:
+    if command in cmd.name and cmd.name not in matches:
+      matches.append(cmd.name)
+  for cmd in inter.bot.commands:
+    if command in cmd.name and cmd.name not in matches:
+      matches.append(cmd.name)
+    else:
+      for alias in cmd.aliases:
+        if command in alias and cmd.name not in matches:
+          matches.append(cmd.name)
+  return matches
+
+def ac_version(inter:disnake.ApplicationCommandInteraction, search:str):
+  """ find any matching versions """
+  matches = []
+  iver = '0'
+  for line in inter.bot.config['help']['changelog'].splitlines():
+    if line.startswith('> '):
+      iver = line[2:]
+    if search.lower() in line.lower() and iver not in matches:
+      matches.append(iver)
+  return matches
 
 class Help(commands.Cog):
   """the user-friendly documentation core"""
@@ -31,39 +64,50 @@ class Help(commands.Cog):
       bot.config['help']['obsolete_commands'] = ''
     if 'changelog' not in bot.config['help']:
       bot.config['help']['changes'] = '> '+bot.config['main']['ver']+'\n- No changes yet!'
-    
-    asyncio.ensure_future(self.set_status())
-    
-  @commands.Cog.listener('on_ready')
-  async def set_status(self, status:disnake.Status=None, message:str=None):
-    if self.bot.is_ready():
-      if message is None:
-        if self.bot.config['help']['customstatus']:
-          message = self.bot.config['help']['customstatus']
-        else:
-          message = self.bot.config['main']['prefix_short']+'help'
-      status = disnake.Status.online if status is None else status
-      activity = disnake.Game(message)
-      await self.bot.change_presence(status=status, activity=activity)
-    else:
-      # make the bot appear offline if it isn't ready to handle commands
+
+  @commands.Cog.listener('on_connect')
+  async def on_starting(self):
+    """ make the bot appear offline if it isn't ready to handle commands """
+    if not self.bot.is_ready():
       await self.bot.change_presence(status=disnake.Status.offline)
 
-  def find_command(self, command:str):
+  @commands.Cog.listener('on_ready')
+  async def set_status(self, status:disnake.Status=None, message:str=None):
+    """ appear online and add help command information to the status """
+    if message is None:
+      if self.bot.config['help']['customstatus']:
+        message = self.bot.config['help']['customstatus']
+      else:
+        message = self.bot.config['main']['prefix_short']+'help'
+    status = disnake.Status.online if status is None else status
+    activity = disnake.Game(message)
+    await self.bot.change_presence(status=status, activity=activity)
+
+  def find_command(self, command:str) -> Union[commands.Command, commands.InvokableSlashCommand]:
+    """ search currently enabled commands for an instance of the string """
+    for cmd in self.bot.slash_commands:
+      if command == cmd.name:
+        return cmd
     for cmd in self.bot.commands:
       if command == cmd.name or command in cmd.aliases:
         return cmd
     return None
 
   def get_docs(self, ctx:Union[commands.Context,tuple], cmd:str):
+    """ find documentation for this command in babel """
     matchedcommand = self.find_command(cmd)
     # return usage information for a specific command
     if matchedcommand:
-      for reflang in self.bot.babel.resolve_lang(ctx):
+      for reflang in self.bot.babel.resolve_lang(ctx.author.id, ctx.guild.id if ctx.guild else None):
         reflang = self.bot.babel.langs[reflang]
         for key in reflang.keys():
           if f'command_{matchedcommand.name}_help' in reflang[key]:
-            docsrc = self.bot.babel(ctx, key, f'command_{matchedcommand.name}_help', cmd=cmd).splitlines()
+            docsrc = self.bot.babel(
+              ctx,
+              key,
+              f'command_{matchedcommand.name}_help',
+              cmd=cmd
+            ).splitlines()
             docs = '**'+docsrc[0]+'**'
             if len(docsrc) > 1:
               docs += '\n'+docsrc[1]
@@ -73,54 +117,80 @@ class Help(commands.Cog):
             return docs
     return None
 
+  @commands.slash_command(name='help')
+  async def slash_help(
+    self,
+    inter:disnake.ApplicationCommandInteraction,
+    command:Optional[str] = commands.Param(None, autocomplete=ac_command)
+  ):
+    """
+    Learn how to use this bot
+
+    Parameters
+    ----------
+    command: Search for a specific command's documentation
+    """
+    await self.help(inter, command)
+
   @commands.command(aliases=['?','??'])
-  async def help(self, ctx:commands.Context, command:str=None):
+  async def help(
+    self,
+    ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
+    command:str=None
+  ):
     """finds usage information in babel and sends them
     highlights some commands if command is None"""
-    
+
     if command:
       docs = self.get_docs(ctx, command)
       if docs is not None:
         # we found the documentation
-        await ctx.reply(docs)
+        await ctx.send(docs)
       elif self.find_command(command) is not None:
         # the command definitely exists, but there's no documentation
-        await ctx.reply(self.bot.babel(ctx, 'help', 'no_docs'))
+        await ctx.send(self.bot.babel(ctx, 'help', 'no_docs'))
       else:
         # the command doesn't exist right now, figure out why.
         if command in self.bot.config['help']['future_commands'].split(', '):
           # this command will be coming soon according to config
-          await ctx.reply(self.bot.babel(ctx, 'help', 'future_command'))
+          await ctx.send(self.bot.babel(ctx, 'help', 'future_command'))
         elif command in self.bot.config['help']['obsolete_commands'].split(', '):
           # this command is obsolete according to config
-          await ctx.reply(self.bot.babel(ctx, 'help', 'obsolete_command'))
+          await ctx.send(self.bot.babel(ctx, 'help', 'obsolete_command'))
         elif command in re.split(r', |>', self.bot.config['help']['moved_commands']):
           # this command has been renamed and requires a new syntax
           moves = re.split(r', |>', self.bot.config['help']['moved_commands'])
           target = moves.index(command)
           if target % 2 == 0:
-            await ctx.reply(self.bot.babel(ctx, 'help', 'moved_command', cmd=moves[target + 1]))
+            await ctx.send(self.bot.babel(ctx, 'help', 'moved_command', cmd=moves[target + 1]))
           else:
-            print(f"WARNING: bad config. in help/moved_command: {moves[target-1]} is now {moves[target]} but {moves[target]} doesn't exist.")
-            await ctx.reply(self.bot.babel(ctx, 'help', 'no_command'))
+            print(
+              "WARNING: bad config. in help/moved_command:\n"
+              f"{moves[target-1]} is now {moves[target]} but {moves[target]} doesn't exist."
+            )
+            await ctx.send(self.bot.babel(ctx, 'help', 'no_command'))
         else:
-          await ctx.reply(self.bot.babel(ctx, 'help', 'no_command'))
+          await ctx.send(self.bot.babel(ctx, 'help', 'no_command'))
 
     else:
       # show the generic help embed with a variety of featured commands
-      if str(ctx.author.id if isinstance(ctx.channel, disnake.DMChannel) else ctx.channel.guild.id) in self.bot.config['prefix'] and\
+      if isinstance(ctx.channel, disnake.TextChannel) and\
+         str(ctx.channel.guild.id) in self.bot.config['prefix'] and\
          len(self.bot.config['prefix'][str(ctx.channel.guild.id)]):
         longprefix = None
       else:
         longprefix = self.bot.config['main']['prefix_long']
-      embed = disnake.Embed(title = f"{self.bot.config['main']['botname']} help",
-                            description = self.bot.babel(ctx, 'help', 'introduction',
-                                                         longprefix = longprefix,
-                                                         videoexamples = self.bot.config.getboolean('help','helpurlvideoexamples'),
-                                                         serverinv = self.bot.config['help']['serverinv']),
-                            color = int(self.bot.config['main']['themecolor'], 16),
-                            url = self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else '')
-      
+      embed = disnake.Embed(
+        title = f"{self.bot.config['main']['botname']} help",
+        description = self.bot.babel(
+          ctx, 'help', 'introduction',
+          longprefix = longprefix,
+          videoexamples = self.bot.config.getboolean('help','helpurlvideoexamples'),
+          serverinv = self.bot.config['help']['serverinv']
+        ),
+        color = int(self.bot.config['main']['themecolor'], 16),
+        url = self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else '')
+
       sections = self.bot.config['help']['highlight_sections'].split(', ')
       for section in sections:
         hcmds = []
@@ -133,83 +203,174 @@ class Help(commands.Cog):
 
       embed.set_footer(text = self.bot.babel(ctx, 'help', 'creator_footer'),
                        icon_url = self.bot.user.avatar.url)
-      
-      await ctx.reply(self.bot.babel(ctx, 'help', 'helpurl_cta') if self.bot.config['help']['helpurl'] else "", embed=embed)
 
-  @commands.command(aliases=['info','invite'])
-  async def about(self, ctx:commands.Context):
-    """information about this bot, including an invite link"""
+      await ctx.send(
+        self.bot.babel(ctx, 'help', 'helpurl_cta') if self.bot.config['help']['helpurl'] else "",
+        embed=embed
+      )
 
-    embed = disnake.Embed(title = self.bot.babel(ctx, 'help', 'about_title'),
-                          description = self.bot.babel(ctx, 'help', 'bot_description'),
-                          color = int(self.bot.config['main']['themecolor'], 16),
-                          url = self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else '')
-    
-    embed.add_field(name = self.bot.babel(ctx, 'help', 'about_field1_title'),
-                    value = self.bot.babel(ctx, 'help', 'about_field1_value', cmds=len(self.bot.commands), guilds=len(self.bot.guilds)),
-                    inline = False)
-    embed.add_field(name = self.bot.babel(ctx, 'help', 'about_field2_title'),
-                    value = self.bot.babel(ctx, 'help', 'about_field2_value', longprefix=self.bot.config['main']['prefix_long']),
-                    inline = False)
-    embed.add_field(name = self.bot.babel(ctx, 'help', 'about_field3_title'),
-                    value = self.bot.babel(ctx, 'help', 'about_field3_value', videoexamples=self.bot.config.getboolean('help','helpurlvideoexamples'), serverinv=self.bot.config['help']['serverinv']),
-                    inline = False)
-    embed.add_field(name = self.bot.babel(ctx, 'help', 'about_field4_title'),
-                    value = self.bot.babel(ctx, 'help', 'about_field4_value'),
-                    inline = False)
-    embed.add_field(name = self.bot.babel(ctx, 'help', 'about_field5_title'),
-                    value = self.bot.babel(ctx, 'help', 'about_field5_value', invite=f'https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=0'),
-                    inline = False)
-    
-    embed.set_footer(text = self.bot.babel(ctx, 'help', 'creator_footer'),
-                     icon_url = self.bot.user.avatar.url)
+  @commands.slash_command()
+  async def about(self, inter:disnake.ApplicationCommandInteraction):
+    """
+    General information about this bot, including an invite link
+    """
 
-    await ctx.reply(self.bot.babel(ctx, 'help', 'helpurl_cta') if self.bot.config['help']['helpurl'] else "", embed=embed)
+    embed = disnake.Embed(
+      title = self.bot.babel(inter, 'help', 'about_title'),
+      description = self.bot.babel(inter, 'help', 'bot_description'),
+      color = int(self.bot.config['main']['themecolor'], 16),
+      url = self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else ''
+    )
 
-  @commands.command(aliases=['changelog','change'])
-  async def changes(self, ctx:commands.Context, ver=None):
-    """lists 15 changelog entries from [ver]"""
+    embed.add_field(
+      name = self.bot.babel(inter, 'help', 'about_field1_title'),
+      value = self.bot.babel(
+        inter,
+        'help',
+        'about_field1_value',
+        cmds=len(self.bot.commands),
+        guilds=len(self.bot.guilds)
+      ),
+      inline = False
+    )
+    embed.add_field(
+      name = self.bot.babel(inter, 'help', 'about_field2_title'),
+      value = self.bot.babel(
+        inter,
+        'help',
+        'about_field2_value',
+        longprefix=self.bot.config['main']['prefix_long']
+      ),
+      inline = False
+    )
+    embed.add_field(
+      name = self.bot.babel(inter, 'help', 'about_field3_title'),
+      value = self.bot.babel(
+        inter,
+        'help',
+        'about_field3_value',
+        videoexamples=self.bot.config.getboolean('help','helpurlvideoexamples'),
+        serverinv=self.bot.config['help']['serverinv']
+      ),
+      inline = False
+    )
+    embed.add_field(
+      name = self.bot.babel(inter, 'help', 'about_field4_title'),
+      value = self.bot.babel(inter, 'help', 'about_field4_value'),
+      inline = False
+    )
+    embed.add_field(
+      name = self.bot.babel(inter, 'help', 'about_field5_title'),
+      value = self.bot.babel(
+        inter,
+        'help',
+        'about_field5_value',
+        invite=f'https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot%20applications.commands&permissions=0'
+      ),
+      inline = False
+    )
+
+    embed.set_footer(
+      text = self.bot.babel(inter, 'help', 'creator_footer'),
+      icon_url = self.bot.user.avatar.url
+    )
+
+    await inter.send(
+      self.bot.babel(inter, 'help', 'helpurl_cta') if self.bot.config['help']['helpurl'] else "",
+      embed=embed
+    )
+
+  @commands.slash_command()
+  async def changes(
+    self,
+    inter:disnake.ApplicationCommandInteraction,
+    search:str=commands.Param(None, autocomplete=ac_version)
+  ):
+    """
+    See what's changed in recent updates
+
+    Parameters
+    ----------
+    search: Find the version a change occured in, or search for a version number
+    """
     changes = self.bot.config['help']['changelog'].splitlines()
     fchanges = ["**"+i.replace('> ','')+"**" if i.startswith('> ') else i for i in changes]
     versions = {v.replace('> ',''):i for i,v in enumerate(changes) if v.startswith('> ')}
     versionlist = list(versions.keys())
-    if ver == None or ver.replace('v','') not in versionlist: ver = self.bot.config['main']['ver']
-    if ver not in versionlist: ver = versionlist[-1]
+    if search is None or search.replace('v','') not in versionlist:
+      search = self.bot.config['main']['ver']
+    if search not in versionlist:
+      search = versionlist[-1]
 
-    start = versions[ver]
+    start = versions[search]
     end = start + 15
     changelog = '\n'.join(fchanges[start:end])
-    if end < len(fchanges): changelog += "\n..."
+    if end < len(fchanges):
+      changelog += "\n..."
 
-    logurl = self.bot.config['help']['helpurl']+"changes.html#"+ver.replace('.','') if self.bot.config['help']['helpurl'] else ''
+    logurl = self.bot.config['help']['helpurl']+"changes.html#"+search.replace('.','') if self.bot.config['help']['helpurl'] else ''
 
-    embed = disnake.Embed(title = self.bot.babel(ctx, 'help', 'changelog_title'),
-                          description = self.bot.babel(ctx, 'help', 'changelog_description', ver=ver) +\
-                                        '\n\n' + changelog,
-                          color = int(self.bot.config['main']['themecolor'], 16),
-                          url = logurl)
-    embed.set_footer(text = self.bot.babel(ctx, 'help', 'creator_footer'),
-                     icon_url = self.bot.user.avatar.url)
+    embed = disnake.Embed(
+      title = self.bot.babel(inter, 'help', 'changelog_title'),
+      description = self.bot.babel(inter, 'help', 'changelog_description', ver=search) +\
+        '\n\n' + changelog,
+      color = int(self.bot.config['main']['themecolor'], 16),
+      url = logurl
+    )
+    embed.set_footer(
+      text = self.bot.babel(inter, 'help', 'creator_footer'),
+      icon_url = self.bot.user.avatar.url
+    )
     
-    await ctx.reply(self.bot.babel(ctx, 'help', 'changelog_cta', logurl=logurl) if logurl else None, embed=embed)
+    await inter.send(
+      self.bot.babel(inter, 'help', 'changelog_cta', logurl=logurl) if logurl else None,
+      embed=embed
+    )
 
-  @commands.command()
-  async def feedback(self, ctx:commands.Context, feedback:str):
-    #TODO: add image support for screenshots
+  @commands.slash_command()
+  async def feedback(
+    self,
+    inter:disnake.ApplicationCommandInteraction,
+    feedback:str,
+    screenshot:Optional[disnake.Attachment] = None
+  ):
+    """
+    Send feedback to the developers
+
+    Parameters
+    ----------
+    feedback: Your feedback, sent as a message to the developers of this bot
+    screenshot: Any relevant screenshot or diagram that might communicate your idea
+    """
     if self.bot.config['help']['feedbackchannel']:
       feedbackchannel = await self.bot.fetch_channel(self.bot.config['help']['feedbackchannel'])
       if feedbackchannel:
-        embed = disnake.Embed(title = self.bot.babel(ctx, 'help', 'feedback_title', author=f'{ctx.author.name}#{ctx.author.discriminator}', guild=ctx.guild.name if ctx.guild else ''),
-                              description = feedback,
-                              color = int(self.bot.config['main']['themecolor'], 16))
+        embed = disnake.Embed(
+          title = self.bot.babel(
+            inter,
+            'help',
+            'feedback_title',
+            author=f'{inter.author.name}#{inter.author.discriminator}',
+            guild=inter.guild.name if inter.guild else ''
+          ),
+          description = feedback,
+          color = int(self.bot.config['main']['themecolor'], 16)
+        )
+        if screenshot:
+          embed.set_image(screenshot.url)
         await feedbackchannel.send(embed=embed)
-        await ctx.reply(self.bot.babel(ctx, 'help', 'feedback_success')+\
-                       ('\n' + self.bot.babel(ctx, 'help', 'feedback_cta')) if self.bot.config['help']['serverinv'] else '')
+        await inter.send(
+          self.bot.babel(inter, 'help', 'feedback_success')+\
+          ('\n' + self.bot.babel(inter, 'help', 'feedback_cta')) if self.bot.config['help']['serverinv'] else ''
+        )
       else:
-        await ctx.reply(self.bot.babel(ctx, 'help', 'feedback_failed')+\
-                       ('\n' + self.bot.babel(ctx, 'help', 'feedback_cta')) if self.bot.config['help']['serverinv'] else '')
+        await inter.send(
+          self.bot.babel(inter, 'help', 'feedback_failed')+\
+          ('\n' + self.bot.babel(inter, 'help', 'feedback_cta')) if self.bot.config['help']['serverinv'] else ''
+        )
     else:
-      await ctx.reply(self.bot.babel(ctx, 'help', 'feedback_not_implemented', serverinv = self.bot.config['help']['serverinv']))
+      await inter.send(self.bot.babel(inter, 'help', 'feedback_not_implemented', serverinv = self.bot.config['help']['serverinv']))
 
 def setup(bot):
+  """ Bind this cog to the bot """
   bot.add_cog(Help(bot))

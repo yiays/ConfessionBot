@@ -9,7 +9,6 @@ class Greeter(commands.Cog):
       raise Exception("'auth' must be enabled to use 'greeter'")
     if not bot.config.getboolean('extensions', 'help', fallback=False):
       print(Warning("'help' is a recommended extension for 'greeter'"))
-    self.auth = bot.cogs['Auth']
     # ensure config file has required data
     if not bot.config.has_section('greeter'):
       bot.config.add_section('greeter')
@@ -30,7 +29,6 @@ class Greeter(commands.Cog):
       channel = member.guild.get_channel(int(data[0]))
       await channel.send(', '.join(data[1:]).format(f"{member.name}#{member.discriminator}", member.guild.name))
   
-  # TODO: add error handling module with support for commands.errors.NoPrivateMessage
   @commands.group()
   @commands.guild_only()
   async def welcome(self, ctx:commands.Context):
@@ -46,7 +44,7 @@ class Greeter(commands.Cog):
       await self.welcome_set(ctx)
   @welcome.command(name='set')
   async def welcome_set(self, ctx:commands.Context, *, message:str=''):
-    self.auth.admins(ctx)
+    self.bot.cogs['Auth'].admins(ctx.message)
     if not message:
       await ctx.reply(self.bot.babel(ctx, 'greeter', 'welcome_set_instructions'))
     else:
@@ -55,7 +53,7 @@ class Greeter(commands.Cog):
       await ctx.reply(self.bot.babel(ctx, 'greeter', 'welcome_set_success'))
   @welcome.command(name='clear')
   async def welcome_clear(self, ctx:commands.Context):
-    self.auth.admins(ctx)
+    self.bot.cogs['Auth'].admins(ctx.message)
     if f'{ctx.guild.id}_welcome' in self.bot.config['greeter']:
       self.bot.config.remove_option('greeter', f'{ctx.guild.id}_welcome')
       self.bot.config.save()
@@ -78,7 +76,7 @@ class Greeter(commands.Cog):
       await self.farewell_set(ctx)
   @farewell.command(name='set')
   async def farewell_set(self, ctx:commands.Context, *, message:str=''):
-    self.auth.admins(ctx)
+    self.bot.cogs['Auth'].admins(ctx.message)
     if not message:
       await ctx.reply(self.bot.babel(ctx, 'greeter', 'farewell_set_instructions'))
     else:
@@ -87,7 +85,7 @@ class Greeter(commands.Cog):
       await ctx.reply(self.bot.babel(ctx, 'greeter', 'farewell_set_success'))
   @farewell.command(name='clear')
   async def farewell_clear(self, ctx:commands.Context):
-    self.auth.admins(ctx)
+    self.bot.cogs['Auth'].admins(ctx.message)
     if f'{ctx.guild.id}_farewell' in self.bot.config['greeter']:
       self.bot.config.remove_option('greeter', f'{ctx.guild.id}_farewell')
       self.bot.config.save()
