@@ -9,7 +9,7 @@ from os import path,makedirs,remove
 import time
 
 class Config(ConfigParser):
-  """loads the config file automatically and ensures it's in a valid shape"""
+  """loads the config file automatically and ensures it's in a valid state"""
   path = "config/"
   file = "config/config.ini"
   template = "config/config.factory.ini"

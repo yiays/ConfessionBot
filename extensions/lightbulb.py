@@ -1,13 +1,13 @@
 import disnake
 from disnake.ext import commands
-from typing import Dict, Pattern, Union
+from typing import Dict, Pattern, Optional
 import re, asyncio
 
 class LightbulbDriver():
   """just a simple data class"""
   name:str
   pattern:Pattern
-  action:Union[commands.Command, None]
+  action:Optional[str]
 
   def __init__(self, bot:commands.Bot):
     self.bot = bot
@@ -16,9 +16,9 @@ class LightbulbDriver():
     self.pattern = re.compile(pattern)
   
   def set_action(self, action:str):
-    actions = [cmd for cmd in self.bot.commands if cmd.name == action]
-    if actions:
-      self.action = actions[0]
+    actcmd = action.split()[0]
+    if [cmd for cmd in self.bot.commands if cmd.name == actcmd or actcmd in cmd.aliases]:
+      self.action = action
     else:
       self.action = None
 
@@ -30,6 +30,7 @@ class Lightbulb(commands.Cog):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
+    self.auth = bot.cogs['Auth']
     # ensure config file has required data
     if not bot.config.has_section('lightbulb'):
       bot.config.add_section('lightbulb')
@@ -52,13 +53,14 @@ class Lightbulb(commands.Cog):
     for k in list(self.drivers.keys()):
       if not self.drivers[k].action:
         faileddriver = self.drivers.pop(k)
-        print(f"unable to find command ({faileddriver.action}) for: {faileddriver.name}")
+        print(f"WARN: unable to find command ({v}) for: {faileddriver.name}")
   
   def scan_message(self, message:disnake.Message):
-    for driver in self.drivers.values():
-      match = driver.pattern.search(message.content)
-      if match:
-        return match, driver
+    if not message.author.bot:
+      for driver in self.drivers.values():
+        match = driver.pattern.search(message.content)
+        if match:
+          return match, driver
     return None, None
 
   @commands.Cog.listener('on_message')
@@ -76,13 +78,13 @@ class Lightbulb(commands.Cog):
 
   @commands.Cog.listener('on_reaction_add')
   async def check_reactions(self, reaction:disnake.Reaction, user:disnake.User):
-    if user != self.bot.user and str(reaction.emoji) == '💡' and\
+    if not user.bot and str(reaction.emoji) == '💡' and\
        isinstance(reaction.message.channel, disnake.channel.TextChannel) and\
        str(reaction.message.guild.id) in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():
       match, driver = self.scan_message(reaction.message)
       if match:
         message = reaction.message
-        message.content = self.bot.config['main']['prefix_short']+driver.action.name+' '+' '.join(match.groups())
+        message.content = self.bot.config['main']['prefix_short']+driver.action+' '+' '.join(match.groups())
         await self.bot.process_commands(message)
   
   @commands.group()
@@ -91,7 +93,7 @@ class Lightbulb(commands.Cog):
     if ctx.invoked_subcommand is None:
       raise commands.errors.BadArgument
     else:
-      self.bot.cogs['Auth'].admins(ctx.message)
+      self.auth.admins(ctx)
   @lightbulb.command(name='enable')
   async def lightbulb_enable(self, ctx:commands.Context):
     if str(ctx.guild.id) not in self.bot.config.get('lightbulb', 'opt_in', fallback='').split():
