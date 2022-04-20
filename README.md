@@ -2,7 +2,7 @@
 # ConfessionBot
 **ConfessionBot is the most advanced anonymous messaging bot on Discord, with mod tools, multiple anonymous channel types, image support, and much more!** - Powered by the [merely framework](https://github.com/MerelyServices/Merely-Framework) and [disnake](https://github.com/DisnakeDev/disnake).
 
-> Demo ConfessionBot on my [discord server](https://discord.gg/wfKx24kDUR)
+> Demo ConfessionBot on my [Discord server](https://discord.gg/wfKx24kDUR)
 
 > [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=952453311703941170&permissions=0&scope=bot%20applications.commands) to your own server
 
@@ -20,7 +20,7 @@ Version 2.0 has launched, this rebased the project on the merelybot framework an
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token to continue
  - Give ConfessionBot the token by setting it in the [main] section of the config
  - Write your own secure anon-id generator function and add in the [confessions] section of the config
- - Run it with `python3 main.py`
+ - Run your bot with `python3 main.py`
  - Add your ConfessionBot to your server
 
 ## Contributing

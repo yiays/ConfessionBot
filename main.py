@@ -1,5 +1,5 @@
 import disnake
-from disnake.ext import commands 
+from disnake.ext import commands
 from config import Config
 from babel import Babel
 import sys, time, os
