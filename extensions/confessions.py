@@ -130,6 +130,9 @@ class Confessions(commands.Cog):
 			bot.config.add_section('confessions')
 		if 'confession_cooldown' not in bot.config['confessions']:
 			bot.config['confessions']['confession_cooldown'] = 1
+		if 'secret' not in bot.config['confessions']:
+			bot.config['confessions']['secret'] = ''
+			raise Exception("You must create a cryptographic secret for encryption!")
 		if 'anonid_generator' not in bot.config['confessions']:
 			bot.config['confessions']['anonid_generator'] = '#import\nanonid = hex(uuid)[-6:]'
 			print("""
@@ -457,7 +460,10 @@ class Confessions(commands.Cog):
 					self.confessions.bot.babel(self.origin.author, 'confessions', 'timeouterror')
 				)
 			async for msg in self.origin.channel.history(after=self.origin):
-				if msg.reference.message_id == self.origin.id:
+				if (
+					isinstance(msg.reference, disnake.MessageReference) and
+					msg.reference.message_id == self.origin.id
+				):
 					await msg.delete()
 					return
 
@@ -837,8 +843,11 @@ class Confessions(commands.Cog):
 		else:
 			raise commands.BadArgument("Channel must be selected from the list")
 	@confess_to.autocomplete('channel')
-	async def channel_ac(self, inter:disnake.ApplicationCommandInteraction, search:str):
+	async def channel_ac(self, inter:disnake.GuildCommandInteraction, search:str):
 		""" Lists available channels, allows searching by name """
+		if not isinstance(inter.author, disnake.Member):
+			return [self.bot.babel(inter, 'error', 'noprivatemessage').replace('*','')]
+
 		results = []
 		matches, _ = self.scanguild(inter.author)
 		for match in matches:
@@ -984,10 +993,10 @@ class Confessions(commands.Cog):
 			self.bot.cogs['Auth'].mods(inter)
 
 		banlist = self.bot.config.get('confessions', str(inter.guild.id)+'_banned', fallback='')
-		banlist = banlist.split(',')
+		banlist_split = banlist.split(',')
 		if anonid is None:
-			if banlist:
-				printedlist = '\n```'+'\n'.join(banlist)+'```'
+			if banlist_split:
+				printedlist = '\n```'+'\n'.join(banlist_split)+'```'
 				await inter.send(self.bot.babel(inter, 'confessions', 'banlist') + printedlist)
 			else:
 				await inter.send(self.bot.babel(inter, 'confessions', 'emptybanlist'))
@@ -1001,12 +1010,12 @@ class Confessions(commands.Cog):
 		except ValueError:
 			await inter.send(self.bot.babel(inter, 'confessions', 'invalidanonid'))
 			return
-		if anonid in banlist and not unblock:
+		if anonid in banlist_split and not unblock:
 			await inter.send(self.bot.babel(inter, 'confessions', 'doublebananonid'))
 			return
 
 		if unblock:
-			fullid = [i for i in banlist.split(',') if anonid in i][0]
+			fullid = [i for i in banlist_split if anonid in i][0]
 			self.bot.config['confessions'][str(inter.guild.id)+'_banned'] = banlist.replace(fullid+',','')
 		else:
 			self.bot.config['confessions'][str(inter.guild.id)+'_banned'] = banlist + anonid + ','

@@ -67,9 +67,9 @@ class Help(commands.Cog):
 
   @commands.Cog.listener('on_connect')
   async def on_starting(self):
-    """ make the bot appear offline if it isn't ready to handle commands """
+    """ make the bot appear busy if it isn't ready to handle commands """
     if not self.bot.is_ready():
-      await self.bot.change_presence(status=disnake.Status.offline)
+      await self.bot.change_presence(status=disnake.Status.dnd)
 
   @commands.Cog.listener('on_ready')
   async def set_status(self, status:disnake.Status=None, message:str=None):
