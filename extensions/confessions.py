@@ -186,9 +186,8 @@ class ConfessionData:
 				ctx,
 				'confessions',
 				'confession_sent_below' if ctx.channel == self.targetchannel else 'confession_sent_channel',
-				channel=self.targetchannel.mention,
-				ephemeral=True
-			))
+				channel=self.targetchannel.mention
+			), ephemeral=True)
 
 
 
@@ -710,7 +709,7 @@ class Confessions(commands.Cog):
 		inter: disnake.GuildCommandInteraction,
 		content:Optional[str] = None,
 		image:Optional[disnake.Attachment] = None,
-		*kwargs
+		**kwargs
 	):
 		"""
 		Send an anonymous message to this channel
