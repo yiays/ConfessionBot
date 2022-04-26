@@ -179,7 +179,8 @@ class ConfessionData:
 
 	async def send_confession(self, ctx:Union[disnake.DMChannel, disnake.Interaction], smsg=False):
 		""" Send confession to the destination channel """
-		success = await self.handle_send_errors(ctx, self.targetchannel.send(embed=self.embed))
+		func = self.targetchannel.send(embed=self.embed)
+		success = await self.handle_send_errors(ctx, func)
 
 		if success and smsg:
 			await ctx.send(self.bot.babel(
@@ -299,6 +300,20 @@ class Confessions(commands.Cog):
 				return channel
 		return None
 
+	async def safe_fetch_channel(
+		self,
+		ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
+		channel_id:int
+	):
+		""" Gracefully handles whenever a confession target isn't available """
+		try:
+			return await self.bot.fetch_channel(channel_id)
+		except disnake.Forbidden:
+			await ctx.send(
+				self.bot.babel(ctx, 'confessions', 'missingchannelerr'),
+				**{'ephemeral':True}
+			)
+			return None
 
 	#	Checks
 
@@ -376,7 +391,15 @@ class Confessions(commands.Cog):
 			""" Update the message to preview the selected target """
 
 			self.send_button.disabled = False
-			channel = await self.confessions.bot.fetch_channel(int(select._selected_values[0]))
+			try:
+				channel = await self.confessions.bot.fetch_channel(int(select._selected_values[0]))
+			except disnake.Forbidden:
+				self.send_button.disabled = True
+				await inter.response.edit_message(
+					content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr'),
+					view=self
+				)
+				return
 			vetting = self.confessions.findvettingchannel(channel.guild)
 			channeltype = self.confessions.bot.config.getint(
 				'confessions',
@@ -395,7 +418,10 @@ class Confessions(commands.Cog):
 		async def send_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
 			""" Send the confession """
 
-			channel = await self.confessions.bot.fetch_channel(int(self.channel_selector.values[0]))
+			channel = await self.confessions.safe_fetch_channel(inter, int(self.channel_selector.values[0]))
+			if channel is None:
+				self.disable(inter)
+				return
 
 			anonid = self.confessions.get_anonid(channel.guild.id, inter.author.id)
 			lead = f"**[Anon-*{anonid}*]**"
@@ -644,14 +670,14 @@ class Confessions(commands.Cog):
 				'confessions',
 				'vetaccepted' if accepted else 'vetdenied',
 				user=inter.author.mention,
-				channel=pendingconfession.targetchannel.mention)
-			)
+				channel=f"<#{pendingconfession.targetchannel_id}>"
+			))
 
 			content = self.bot.babel(
 				pendingconfession.author,
 				'confessions',
 				'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
-				channel=pendingconfession.targetchannel.mention
+				channel=f"<#{pendingconfession.targetchannel_id}>"
 			)
 			if isinstance(pendingconfession.origin, disnake.Message):
 				await pendingconfession.origin.reply(content)
@@ -799,7 +825,10 @@ class Confessions(commands.Cog):
 		search = re.search(r".*\((\d+)\)$", channel)
 		if search:
 			channel_id = search.groups()[0]
-			await self.confess(inter, content, image, channel=await self.bot.fetch_channel(channel_id))
+			targetchannel = await self.safe_fetch_channel(inter, channel_id)
+			if targetchannel is None:
+				return
+			await self.confess(inter, content, image, channel=targetchannel)
 		else:
 			raise commands.BadArgument("Channel must be selected from the list")
 	@confess_to.autocomplete('channel')
