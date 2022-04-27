@@ -342,6 +342,7 @@ class Confessions(commands.Cog):
 			if self.bot.config.getboolean('confessions', f"{guild_id}_imagesupport", fallback=True):
 				return True
 			return False
+		raise commands.BadArgument
 
 	def check_spam(self, content:str):
 		""" Verify message doesn't contain spam as defined in [confessions] spam_flags """
