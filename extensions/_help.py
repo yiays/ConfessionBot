@@ -14,15 +14,16 @@ from disnake.ext import commands
 def ac_command(inter:disnake.ApplicationCommandInteraction, command:str):
   """ find any commands that contain the provided string """
   matches = []
+  hide = inter.bot.config.get('help', 'hidden_commands', fallback='').split(', ')
   for cmd in inter.bot.slash_commands:
-    if command in cmd.name and cmd.name not in matches:
+    if command in cmd.name and cmd.name not in matches and cmd.name not in hide:
       matches.append(cmd.name)
   for cmd in inter.bot.commands:
-    if command in cmd.name and cmd.name not in matches:
+    if command in cmd.name and cmd.name not in matches and cmd.name not in hide:
       matches.append(cmd.name)
     else:
       for alias in cmd.aliases:
-        if command in alias and cmd.name not in matches:
+        if command in alias and cmd.name not in matches and cmd.name not in hide:
           matches.append(cmd.name)
   return matches
 
@@ -62,6 +63,8 @@ class Help(commands.Cog):
       bot.config['help']['future_commands'] = ''
     if 'obsolete_commands' not in bot.config['help']:
       bot.config['help']['obsolete_commands'] = ''
+    if 'hidden_commands' not in bot.config['help']:
+      bot.config['help']['hidden_commands'] = ''
     if 'changelog' not in bot.config['help']:
       bot.config['help']['changes'] = '> '+bot.config['main']['ver']+'\n- No changes yet!'
 
@@ -136,7 +139,8 @@ class Help(commands.Cog):
   async def help(
     self,
     ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
-    command:str=None
+    command:str=None,
+    **kwargs
   ):
     """finds usage information in babel and sends them
     highlights some commands if command is None"""
@@ -145,32 +149,35 @@ class Help(commands.Cog):
       docs = self.get_docs(ctx, command)
       if docs is not None:
         # we found the documentation
-        await ctx.send(docs)
+        await ctx.send(docs, **kwargs)
       elif self.find_command(command) is not None:
         # the command definitely exists, but there's no documentation
-        await ctx.send(self.bot.babel(ctx, 'help', 'no_docs'))
+        await ctx.send(self.bot.babel(ctx, 'help', 'no_docs'), **kwargs)
       else:
         # the command doesn't exist right now, figure out why.
         if command in self.bot.config['help']['future_commands'].split(', '):
           # this command will be coming soon according to config
-          await ctx.send(self.bot.babel(ctx, 'help', 'future_command'))
+          await ctx.send(self.bot.babel(ctx, 'help', 'future_command'), **kwargs)
         elif command in self.bot.config['help']['obsolete_commands'].split(', '):
           # this command is obsolete according to config
-          await ctx.send(self.bot.babel(ctx, 'help', 'obsolete_command'))
+          await ctx.send(self.bot.babel(ctx, 'help', 'obsolete_command'), **kwargs)
         elif command in re.split(r', |>', self.bot.config['help']['moved_commands']):
           # this command has been renamed and requires a new syntax
           moves = re.split(r', |>', self.bot.config['help']['moved_commands'])
           target = moves.index(command)
           if target % 2 == 0:
-            await ctx.send(self.bot.babel(ctx, 'help', 'moved_command', cmd=moves[target + 1]))
+            await ctx.send(
+              self.bot.babel(ctx, 'help', 'moved_command', cmd=moves[target + 1]),
+              **kwargs
+            )
           else:
             print(
               "WARNING: bad config. in help/moved_command:\n"
               f"{moves[target-1]} is now {moves[target]} but {moves[target]} doesn't exist."
             )
-            await ctx.send(self.bot.babel(ctx, 'help', 'no_command'))
+            await ctx.send(self.bot.babel(ctx, 'help', 'no_command'), **kwargs)
         else:
-          await ctx.send(self.bot.babel(ctx, 'help', 'no_command'))
+          await ctx.send(self.bot.babel(ctx, 'help', 'no_command'), **kwargs)
 
     else:
       # show the generic help embed with a variety of featured commands
@@ -206,7 +213,8 @@ class Help(commands.Cog):
 
       await ctx.send(
         self.bot.babel(ctx, 'help', 'helpurl_cta') if self.bot.config['help']['helpurl'] else "",
-        embed=embed
+        embed=embed,
+        **kwargs
       )
 
   @commands.slash_command()
