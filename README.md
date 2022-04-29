@@ -14,12 +14,21 @@ Version 2.0 has launched, this rebased the project on the merelybot framework an
 > [see the roadmap for future updates >](https://github.com/yiays/ConfessionBot-2.0/projects/1)
 
 ## Usage
+
+### Terms of use
+You're welcome to clone this source and run your own instance for any purpose, but **please don't copy the branding of ConfessionBot!**
+
+I ask this of you because I don't want to recieve support requests from forks of ConfessionBot that have nothing to do with me. The confusion would waste a lot of people's time.
+
+You can easily rename the bot by changing the botname parameter in `config.ini`. You should also use a different Username and profile picture when creating the bot user.
+
+### Setup Instructions
  - Clone the project to a folder
  - Install python <=3.9
  - Install required python packages with `python3 -m pip install -r requirements.txt`
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token to continue
+    - **[Please don't copy the branding of confessionbot!](#Terms-of-use)**
  - Give ConfessionBot the token by setting it in the [main] section of the config
- - Write your own secure anon-id generator function and add in the [confessions] section of the config
  - Run your bot with `python3 main.py`
  - Add your ConfessionBot to your server
 
