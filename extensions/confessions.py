@@ -6,10 +6,8 @@
 		As a result, this only really suits a singlular purpose bot
 """
 
-from array import array
-import asyncio, re, time
+import os, asyncio, re, time, base64, hashlib
 from enum import Enum
-import base64
 from typing import Optional, Union
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -33,13 +31,52 @@ class Toggle(int, Enum):
 
 class CorruptConfessionDataException(Exception):
 	""" Thrown when decrypted ConfessionData doesn't fit the required format """
-	pass
+
+class Crypto:
+	""" Handles encryption and decryption of sensitive data """
+	_key = None
+
+	@property
+	def key(self) -> str:
+		""" Key getter """
+		return self._key
+
+	@key.setter
+	def key(self, value:str):
+		""" Key setter """
+		self._key = base64.decodebytes(bytes(value, encoding='ascii'))
+
+	def setup(self, nonce:bytes = b'\xae[Et\xcd\n\x01\xf4\x95\x9c|No\x03\x81\x98'):
+		""" Initializes the AES-256 scheme """
+		backend = default_backend()
+		cipher = Cipher(algorithms.AES(self._key), modes.CTR(nonce), backend=backend)
+		return (cipher.encryptor(), cipher.decryptor())
+
+	def keygen(self, length:int = 32) -> str:
+		""" Generates a key for storage """
+		return base64.encodebytes(os.urandom(length)).decode('ascii')
+
+	def encrypt(self, data:bytes) -> bytes:
+		""" Encodes data and returns a base64 string ready for storage """
+		encryptor, _ = self.setup()
+		encrypted = encryptor.update(data) + encryptor.finalize()
+		encodedata = base64.b64encode(encrypted)
+		return encodedata
+
+	def decrypt(self, data:str) -> bytes:
+		""" Read encoded data and return the raw bytes that created it """
+		_, decryptor = self.setup()
+		encrypted = base64.b64decode(data)
+		rawdata = decryptor.update(encrypted) + decryptor.finalize()
+		return rawdata
+
 
 class ConfessionData:
 	""" Dataclass for Confessions """
 	def __init__(
 		self,
 		bot:commands.Bot,
+		crypto:Crypto,
 		rawdata:Optional[str]=None,
 		*,
 		author:Optional[disnake.User]=None,
@@ -47,23 +84,11 @@ class ConfessionData:
 		targetchannel:Optional[disnake.TextChannel]=None,
 		embed:Optional[disnake.Embed]=None
 	):
-		# crypto config
-		backend = default_backend()
-		key = base64.decodebytes(bytes(bot.config['confessions']['secret'], encoding='ascii'))
-		nonce = b'\xae[Et\xcd\n\x01\xf4\x95\x9c|No\x03\x81\x98'
-		cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=backend)
-		self.encryptor = cipher.encryptor()
-		self.decryptor = cipher.decryptor()
 
 		if rawdata:
 			self.offline = True
 
-			# print('==========')
-			# print('rawdata', rawdata)
-			encrypted = base64.b64decode(rawdata)
-			# print('encrypted', encrypted)
-			binary = self.decryptor.update(encrypted) + self.decryptor.finalize()
-			# print('binary', binary)
+			binary = crypto.decrypt(rawdata)
 			if len(binary) != 24:
 				raise CorruptConfessionDataException()
 
@@ -77,6 +102,7 @@ class ConfessionData:
 			self.targetchannel = targetchannel
 
 		self.bot = bot
+		self.crypto = crypto
 		self.embed = embed
 
 		if embed:
@@ -98,13 +124,7 @@ class ConfessionData:
 			btarget = self.targetchannel.id.to_bytes(8, 'big')
 
 		binary = bauthor + borigin + btarget
-		# print('binary', binary)
-		encrypted = self.encryptor.update(binary) + self.encryptor.finalize()
-		# print('encrypted', encrypted)
-		rawdata = base64.b64encode(encrypted)
-		# print('rawdata', rawdata)
-
-		return rawdata.decode('ascii')
+		return self.crypto.encrypt(binary).decode('ascii')
 
 	async def fetch(self):
 		""" Fetches referenced Discord elements for use """
@@ -203,23 +223,22 @@ class Confessions(commands.Cog):
 
 	def __init__(self, bot:commands.Bot):
 		self.bot = bot
+		self.crypto = Crypto()
+
 		if not bot.config.getboolean('extensions', 'auth', fallback=False):
 			raise Exception("'auth' must be enabled to use 'confessions'")
 		# ensure config file has required data
 		if not bot.config.has_section('confessions'):
 			bot.config.add_section('confessions')
 		if 'confession_cooldown' not in bot.config['confessions']:
-			bot.config['confessions']['confession_cooldown'] = 1
-		if 'secret' not in bot.config['confessions']:
-			bot.config['confessions']['secret'] = ''
-			raise Exception("You must create a cryptographic secret for encryption!")
-		if 'anonid_generator' not in bot.config['confessions']:
-			bot.config['confessions']['anonid_generator'] = '#import\nanonid = hex(uuid)[-6:]'
-			print("""
-				WARNING: you should define a more advanced algorithm for hiding user ids.
-				(config[confessions][anonid_generator])
-			""")
-		self.initiated = set()
+			bot.config['confessions']['confession_cooldown'] = '1'
+		if 'secret' not in bot.config['confessions'] or bot.config['confessions'] == '':
+			bot.config['confessions']['secret'] = self.crypto.keygen(32)
+			print("WARNING: Your security key has been regenerated. Old confessions are now incompatible.")
+		
+		self.crypto.key = bot.config['confessions']['secret']
+
+		# self.initiated = set()
 		self.ignore = set()
 		self.confession_cooldown = dict()
 
@@ -227,13 +246,19 @@ class Confessions(commands.Cog):
 
 	def get_anonid(self, guildid:int, userid:int) -> str:
 		""" Calculates the current anon-id for a user """
-
 		offset = self.bot.config.getint('confessions', f"{guildid}_shuffle", fallback=0)
-		loc = {'uuid' : guildid+userid+offset, 'anonid' : None}
-		exec(self.bot.config['confessions']['anonid_generator'], None, loc)
-		return loc['anonid']
+		encrypted = self.crypto.encrypt(
+			guildid.to_bytes(8, 'big') + userid.to_bytes(8, 'big') + offset.to_bytes(2, 'big')
+		)
+		return hashlib.sha256(encrypted).hexdigest()[-6:]
 
-	def generate_list(self, user:disnake.User, matches:array, vetting:bool, enum:bool=False) -> str:
+	def generate_list(
+		self,
+		user:disnake.User,
+		matches:list[tuple],
+		vetting:bool,
+		enum:bool=False
+	) -> str:
 		""" Returns a formatted list of available confession targets """
 
 		targets = []
@@ -438,6 +463,7 @@ class Confessions(commands.Cog):
 
 			pendingconfession = ConfessionData(
 				self.confessions.bot,
+				self.confessions.crypto,
 				author=inter.author,
 				origin=self.origin,
 				targetchannel=channel
@@ -610,13 +636,14 @@ class Confessions(commands.Cog):
 				if inter.data.custom_id.startswith('pendingconfession_approve_'):
 					pendingconfession = ConfessionData(
 						self.bot,
+						self.crypto,
 						inter.data.custom_id[26:],
 						embed=vetmessage.embeds[0]
 					)
 					accepted = True
 
 				elif inter.data.custom_id.startswith('pendingconfession_deny_'):
-					pendingconfession = ConfessionData(self.bot, inter.data.custom_id[23:])
+					pendingconfession = ConfessionData(self.bot, self.crypto, inter.data.custom_id[23:])
 					accepted = False
 				else:
 					print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
@@ -761,6 +788,7 @@ class Confessions(commands.Cog):
 
 		pendingconfession = ConfessionData(
 			self.bot,
+			self.crypto,
 			author=inter.author,
 			targetchannel=channel
 		)
