@@ -919,7 +919,7 @@ class Confessions(commands.Cog):
 		List all anonymous channels available here
 		"""
 		try:
-			matches,_ = self.listavailablechannels(inter.author)
+			matches, vetting = self.listavailablechannels(inter.author)
 		except NoMemberCacheError:
 			await inter.send(self.bot.babel(inter, 'confessions', 'dmconfessiondisabled'))
 			return
