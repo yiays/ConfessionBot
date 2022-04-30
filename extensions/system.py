@@ -4,7 +4,7 @@
 """
 from enum import Enum
 from glob import glob
-import asyncio
+import asyncio, os
 from typing import Optional
 import disnake
 from disnake.ext import commands
@@ -81,9 +81,9 @@ class System(commands.Cog):
         return
 
       if action == Actions.load:
-        for f in glob('extensions/*.py'):
+        for f in glob(os.path.join('extensions', '*.py')):
           if f[11:-3].strip('_') == module:
-            ext = f[:-3].replace('/','.')
+            ext = f[:-3].replace(os.path.sep,'.')
       else:
         extcandidate = [
           ext for ext in self.bot.extensions.keys()
@@ -138,7 +138,7 @@ class System(commands.Cog):
   @module.autocomplete('module')
   async def module_ac(self, inter:disnake.ApplicationCommandInteraction, search:str):
     """ Suggests modules based on the list in config """
-    extension_list = (f[11:-3].strip('_') for f in glob('extensions/*.py'))
+    extension_list = None
     if 'action' in inter.filled_options:
       if inter.filled_options['action'] in [Actions.reload, Actions.unload]:
         extension_list = (
@@ -146,6 +146,8 @@ class System(commands.Cog):
         )
       elif inter.filled_options['action'] == Actions.list:
         return []
+    if extension_list is None:
+      extension_list = (f[11:-3].strip('_') for f in glob(os.path.join('extensions', '*.py')))
     return (
       [x for x in extension_list if search in x] +
       [e for e in ['config', 'babel'] if search in e]

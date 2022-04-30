@@ -13,7 +13,7 @@ from disnake.ext.commands import Context
 
 class Babel():
   """ Stores language data and resolves and formats it for use in Cogs """
-  path = 'babel/'
+  path = 'babel'
   langs = {}
 
   def __init__(self, config:ConfigParser):
@@ -30,7 +30,10 @@ class Babel():
 
     if os.path.isfile(self.path):
       os.remove(self.path)
-    if not os.path.exists(self.path) or not os.path.exists(self.path+self.defaultlang+'.ini'):
+    if (
+      not os.path.exists(self.path) or
+      not os.path.exists(os.path.join(self.path, self.defaultlang+'.ini'))
+    ):
       raise Exception(
         f"The path {self.path} must exist and contain a complete {self.defaultlang}.ini."
       )
@@ -41,11 +44,11 @@ class Babel():
         langname = langfile[:-4]
         self.langs[langname] = ConfigParser(comment_prefixes='@', allow_no_value=True)
         # create a configparser that should preserve comments
-        self.langs[langname].read(self.path+langfile)
+        self.langs[langname].read(os.path.join(self.path, langfile))
         if 'meta' not in self.langs[langname]:
           self.langs[langname].add_section('meta')
         self.langs[langname].set('meta', 'language', langname)
-        with open(self.path+langfile, 'w', encoding='utf-8') as f:
+        with open(os.path.join(self.path, langfile), 'w', encoding='utf-8') as f:
           self.langs[langname].write(f)
 
     # baselang is the root language file that should be considered the most complete.
