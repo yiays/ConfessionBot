@@ -32,6 +32,9 @@ class Toggle(int, Enum):
 class CorruptConfessionDataException(Exception):
 	""" Thrown when decrypted ConfessionData doesn't fit the required format """
 
+class NoMemberCacheError(Exception):
+	""" Unable to continue without a member cache """
+
 class Crypto:
 	""" Handles encryption and decryption of sensitive data """
 	_key = None
@@ -303,6 +306,8 @@ class Confessions(commands.Cog):
 		if isinstance(user, disnake.Member):
 			matches,vetting = self.scanguild(user)
 		else:
+			if not self.bot.intents.members:
+				raise NoMemberCacheError()
 			matches = []
 			vetting = False
 			for guild in self.bot.guilds:
@@ -725,15 +730,19 @@ class Confessions(commands.Cog):
 			if 'Log' in self.bot.cogs:
 				await self.bot.cogs['Log'].log_misc_message(msg)
 
-			matches,_ = self.listavailablechannels(msg.author)
+			try:
+				matches,_ = self.listavailablechannels(msg.author)
+			except NoMemberCacheError:
+				await msg.reply(self.bot.babel(msg, 'confessions', 'dmconfessiondisabled'))
+				return
 
 			if not self.bot.is_ready():
-				await msg.channel.send(self.bot.babel(msg, 'confessions', 'cachebuilding'))
+				await msg.reply(self.bot.babel(msg, 'confessions', 'cachebuilding'))
 				if not matches:
 					return
 
 			if not matches:
-				await msg.channel.send(self.bot.babel(msg, 'confessions', 'inaccessible'))
+				await msg.reply(self.bot.babel(msg, 'confessions', 'inaccessible'))
 				return
 
 			if not self.check_spam(msg.content):
@@ -909,7 +918,12 @@ class Confessions(commands.Cog):
 		"""
 		List all anonymous channels available here
 		"""
-		matches,vetting = self.listavailablechannels(inter.author)
+		try:
+			matches,_ = self.listavailablechannels(inter.author)
+		except NoMemberCacheError:
+			await inter.send(self.bot.babel(inter, 'confessions', 'dmconfessiondisabled'))
+			return
+		
 		local = ('local' if isinstance(inter.author, disnake.Member) else '')
 		# warn users when the channel list isn't complete
 		if not self.bot.is_ready() and not local:
