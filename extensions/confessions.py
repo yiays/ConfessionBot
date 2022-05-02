@@ -791,7 +791,7 @@ class Confessions(commands.Cog):
 			return
 
 		if image:
-			if not self.check_image(channel.id, image):
+			if not self.check_image(inter.guild_id, image):
 				await inter.send(self.bot.babel(inter, 'confessions', 'nosendimages'), ephemeral=True)
 				return
 
@@ -815,7 +815,7 @@ class Confessions(commands.Cog):
 			pendingconfession.generate_embed(
 				anonid,
 				lead if vetting or channeltype != ChannelType.untraceable else '',
-				content, 
+				content,
 				image.url if image else None
 			)
 
