@@ -10,17 +10,18 @@ import time
 
 class Config(ConfigParser):
   """loads the config file automatically and ensures it's in a valid state"""
-  path = "config/"
-  file = "config/config.ini"
-  template = "config/config.factory.ini"
-  last_backup = 0
-
   def __init__(self):
     """
     Custom init for merelybot configparser
     will always return a valid config object, even if the filesystem is broken
     """
     ConfigParser.__init__(self)
+
+    self.path = "config"
+    self.file = path.join(self.path, "config.ini")
+    self.template = path.join(self.path, "config.factory.ini")
+    self.last_backup = 0
+
     self.load()
 
   def load(self):
@@ -118,10 +119,14 @@ class Config(ConfigParser):
     """ copy existing config to backups, save new config """
     # create a backup of the config (max 1 per hour)
     if self.last_backup < time.time() - (60*60):
-      if not path.exists(self.path+'config_history'):
-        makedirs(self.path+'config_history')
+      if not path.exists(path.join(self.path, 'config_history')):
+        makedirs(path.join(self.path, 'config_history'))
       if path.isfile(self.file):
-        copy(self.file, self.path+'config_history/config-'+time.strftime("%d-%m-%y %H:%M.%S")+'.ini')
+        copy(self.file, path.join(
+          self.path,
+          'config_history',
+          'config-'+time.strftime("%d-%m-%y %H:%M.%S")+'.ini'
+        ))
 
       self.last_backup = time.time()
     #TODO: autodelete all but one of each config history

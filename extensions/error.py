@@ -58,7 +58,8 @@ class Error(commands.Cog):
         else:
           await self.bot.cogs['Help'].help(
             ctx,
-            ctx.invoked_with if isinstance(ctx, commands.Context) else ctx.application_command.name
+            ctx.invoked_with if isinstance(ctx, commands.Context) else ctx.application_command.name,
+            **kwargs
           )
       else:
         await ctx.send(self.bot.babel(ctx, 'error', 'missingrequiredargument'), **kwargs)
