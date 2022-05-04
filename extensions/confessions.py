@@ -910,7 +910,8 @@ class Confessions(commands.Cog):
 		)
 		await inter.send(
 			self.bot.babel(inter, 'confessions', modestring) +' '+ \
-			self.bot.babel(inter, 'confessions', 'setundo' if mode>ChannelType.none else 'unsetundo')
+			self.bot.babel(inter, 'confessions', 'setundo' if mode>ChannelType.none else 'unsetundo') + \
+			('\n'+self.bot.babel(inter, 'confessions', 'setcta') if mode>ChannelType.none else '')
 		)
 
 	@commands.slash_command()
