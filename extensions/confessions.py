@@ -238,7 +238,7 @@ class Confessions(commands.Cog):
 		if 'secret' not in bot.config['confessions'] or bot.config['confessions'] == '':
 			bot.config['confessions']['secret'] = self.crypto.keygen(32)
 			print("WARNING: Your security key has been regenerated. Old confessions are now incompatible.")
-		
+
 		self.crypto.key = bot.config['confessions']['secret']
 
 		# self.initiated = set()
@@ -412,7 +412,7 @@ class Confessions(commands.Cog):
 				'channelprompt_button_send'
 			)
 
-			if(len(matches) > 25):
+			if len(matches) > 25:
 				# Add pagination only when needed
 				self.page_decrement_button = disnake.ui.Button(
 					disabled=True,
@@ -549,7 +549,7 @@ class Confessions(commands.Cog):
 			if self.page <= 0:
 				self.page = 0
 				self.page_decrement_button.disabled = True
-			
+
 			self.send_button.disabled = True
 
 			self.update_list()
@@ -572,11 +572,11 @@ class Confessions(commands.Cog):
 			""" Count page up by 1 and handle consequences """
 			self.page += 1
 			self.page_decrement_button.disabled = False
-			
+
 			if self.page >= len(self.matches) // 25:
 				self.page = len(self.matches) // 25
 				self.page_increment_button.disabled = True
-			
+
 			self.send_button.disabled = True
 
 			self.update_list()
@@ -1015,7 +1015,7 @@ class Confessions(commands.Cog):
 		except NoMemberCacheError:
 			await inter.send(self.bot.babel(inter, 'confessions', 'dmconfessiondisabled'))
 			return
-		
+
 		local = ('local' if isinstance(inter.author, disnake.Member) else '')
 		# warn users when the channel list isn't complete
 		if not self.bot.is_ready() and not local:
