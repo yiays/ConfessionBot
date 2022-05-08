@@ -147,7 +147,7 @@ class ConfessionData:
 		if lead:
 			embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+' '+content)
 		else:
-			embed = disnake.Embed(description=content)
+			embed = disnake.Embed(description=content if content else '')
 		if image:
 			embed.set_image(url=image)
 		self.embed = embed
@@ -238,7 +238,7 @@ class Confessions(commands.Cog):
 		if 'secret' not in bot.config['confessions'] or bot.config['confessions'] == '':
 			bot.config['confessions']['secret'] = self.crypto.keygen(32)
 			print("WARNING: Your security key has been regenerated. Old confessions are now incompatible.")
-		
+
 		self.crypto.key = bot.config['confessions']['secret']
 
 		# self.initiated = set()
@@ -397,15 +397,10 @@ class Confessions(commands.Cog):
 			super().__init__(timeout=30)
 			self.origin = origin
 			self.confessions = confessions
+			self.matches = matches
+			self.page = 0
 			self.done = False
-			for channel,channeltype in matches:
-				self.channel_selector.append_option(
-					disnake.SelectOption(
-						label=f'{channel.name} (from {channel.guild.name})',
-						value=str(channel.id),
-						emoji=Confessions.channel_icons[channeltype]
-					)
-				)
+			self.update_list()
 			self.channel_selector.placeholder = self.confessions.bot.babel(
 				origin,
 				'confessions',
@@ -416,6 +411,40 @@ class Confessions(commands.Cog):
 				'confessions',
 				'channelprompt_button_send'
 			)
+
+			if len(matches) > 25:
+				# Add pagination only when needed
+				self.page_decrement_button = disnake.ui.Button(
+					disabled=True,
+					style=disnake.ButtonStyle.secondary,
+					label=self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_prev')
+				)
+				self.page_decrement_button.callback = self.decrement_page
+				self.add_item(self.page_decrement_button)
+
+				self.page_increment_button = disnake.ui.Button(
+					disabled=False,
+					style=disnake.ButtonStyle.secondary,
+					label=self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_next')
+				)
+				self.page_increment_button.callback = self.increment_page
+				self.add_item(self.page_increment_button)
+
+		def update_list(self):
+			"""
+				Fill channel selector with channels
+				Discord limits this to 25 options, so longer lists need pagination
+			"""
+			self.channel_selector.options = []
+			start = self.page*25
+			for channel,channeltype in self.matches[start:start+25]:
+				self.channel_selector.append_option(
+					disnake.SelectOption(
+						label=f'{channel.name} (from {channel.guild.name})',
+						value=str(channel.id),
+						emoji=Confessions.channel_icons[channeltype]
+					)
+				)
 
 		@disnake.ui.select(min_values=1, max_values=1)
 		async def channel_selector(self, select:disnake.ui.Select, inter:disnake.MessageInteraction):
@@ -508,6 +537,60 @@ class Confessions(commands.Cog):
 					'confessions',
 					'confession_sent_channel',
 					channel=channel.mention
+				),
+				view=self
+			)
+
+		async def decrement_page(self, inter:disnake.MessageInteraction):
+			""" Count page down by 1 and handle consequences """
+			self.page -= 1
+			self.page_increment_button.disabled = False
+
+			if self.page <= 0:
+				self.page = 0
+				self.page_decrement_button.disabled = True
+
+			self.send_button.disabled = True
+
+			self.update_list()
+
+			await inter.response.edit_message(
+				content=self.confessions.bot.babel(
+					inter,
+					'confessions',
+					'channelprompt'
+				) +' '+ self.confessions.bot.babel(
+					inter,
+					'confessions',
+					'channelprompt_pager',
+					page=self.page + 1
+				),
+				view=self
+			)
+
+		async def increment_page(self, inter:disnake.MessageInteraction):
+			""" Count page up by 1 and handle consequences """
+			self.page += 1
+			self.page_decrement_button.disabled = False
+
+			if self.page >= len(self.matches) // 25:
+				self.page = len(self.matches) // 25
+				self.page_increment_button.disabled = True
+
+			self.send_button.disabled = True
+
+			self.update_list()
+
+			await inter.response.edit_message(
+				content=self.confessions.bot.babel(
+					inter,
+					'confessions',
+					'channelprompt'
+				) +' '+ self.confessions.bot.babel(
+					inter,
+					'confessions',
+					'channelprompt_pager',
+					page=self.page + 1
 				),
 				view=self
 			)
@@ -750,7 +833,14 @@ class Confessions(commands.Cog):
 				return
 
 			await msg.reply(
-				self.bot.babel(msg, 'confessions', 'channelprompt'),
+				self.bot.babel(
+					msg,
+					'confessions',
+					'channelprompt'
+				) + (
+					' ' + self.bot.babel(msg, 'confessions', 'channelprompt_pager', page=1)
+					if len(matches) > 25 else ''
+				),
 				view=self.ChannelView(msg, self, matches))
 
 
@@ -871,8 +961,10 @@ class Confessions(commands.Cog):
 		matches, _ = self.scanguild(inter.author)
 		for match in matches:
 			if search in match[0].name:
-				results.append(f"{self.channel_icons[match[1]]} {match[0].name} ({match[0].id})")
-		return results
+				results.append(f"#{self.channel_icons[match[1]]} {match[0].name} ({match[0].id})")
+		return results[0:24] + (
+			['this list is incomplete, start typing to use other channels'] if len(results) > 25 else []
+		)
 
 
 	@commands.guild_only()
@@ -924,7 +1016,7 @@ class Confessions(commands.Cog):
 		except NoMemberCacheError:
 			await inter.send(self.bot.babel(inter, 'confessions', 'dmconfessiondisabled'))
 			return
-		
+
 		local = ('local' if isinstance(inter.author, disnake.Member) else '')
 		# warn users when the channel list isn't complete
 		if not self.bot.is_ready() and not local:
