@@ -157,7 +157,7 @@ class ConfessionData:
 		Wraps around functions that send confessions to channels
 		Adds copious amounts of error handling
 		"""
-		kwargs = {'ephemeral':True}
+		kwargs = {'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
 		try:
 			await func
 			return True
@@ -341,7 +341,7 @@ class Confessions(commands.Cog):
 		except disnake.Forbidden:
 			await ctx.send(
 				self.bot.babel(ctx, 'confessions', 'missingchannelerr'),
-				**{'ephemeral':True}
+				**{'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
 			)
 			return None
 

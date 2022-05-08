@@ -24,7 +24,7 @@ class Error(commands.Cog):
     if isinstance(error, commands.CommandOnCooldown):
       print("cooldown")
       return
-    kwargs = {'ephemeral': True}
+    kwargs = {'ephemeral': True} if isinstance(ctx, disnake.Interaction) else {}
     if isinstance(
       error,
       (commands.CommandNotFound, commands.BadArgument, commands.MissingRequiredArgument)
