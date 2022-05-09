@@ -235,7 +235,7 @@ class Confessions(commands.Cog):
 			bot.config.add_section('confessions')
 		if 'confession_cooldown' not in bot.config['confessions']:
 			bot.config['confessions']['confession_cooldown'] = '1'
-		if 'secret' not in bot.config['confessions'] or bot.config['confessions'] == '':
+		if 'secret' not in bot.config['confessions'] or bot.config['confessions']['secret'] == '':
 			bot.config['confessions']['secret'] = self.crypto.keygen(32)
 			print("WARNING: Your security key has been regenerated. Old confessions are now incompatible.")
 
@@ -961,9 +961,9 @@ class Confessions(commands.Cog):
 		matches, _ = self.scanguild(inter.author)
 		for match in matches:
 			if search in match[0].name:
-				results.append(f"#{self.channel_icons[match[1]]} {match[0].name} ({match[0].id})")
+				results.append(f"{self.channel_icons[match[1]]} #{match[0].name} ({match[0].id})")
 		return results[0:24] + (
-			['this list is incomplete, start typing to use other channels'] if len(results) > 25 else []
+			['this list is incomplete, use /list to see all'] if len(results) > 25 else []
 		)
 
 
