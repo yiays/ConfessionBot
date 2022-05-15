@@ -27,8 +27,8 @@ class System(commands.Cog):
 
     guilds = bot.config['auth']['botadmin_guilds']
     botadmin_guilds = [int(guild) for guild in guilds.split(' ')]
-    self.module.guild_ids = botadmin_guilds
-    self.die.guild_ids = botadmin_guilds
+    for cmd in self.get_application_commands():
+      cmd.guild_ids = botadmin_guilds
 
   @commands.slash_command()
   async def module(
