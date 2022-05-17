@@ -864,9 +864,10 @@ class Confessions(commands.Cog):
 		image: An optional image that appears below the text
 		"""
 
-		channel = inter.channel
 		if 'channel' in kwargs:
 			channel = kwargs['channel']
+		else:
+			channel = inter.channel
 
 		if not self.check_channel(inter.guild_id, channel.id):
 			await inter.send(self.bot.babel(inter, 'confessions', 'nosendchannel'), ephemeral=True)
@@ -948,7 +949,9 @@ class Confessions(commands.Cog):
 			targetchannel = await self.safe_fetch_channel(inter, channel_id)
 			if targetchannel is None:
 				return
-			await self.confess(inter, content, image, channel=targetchannel)
+			# workaround for weird disnake issue
+			#TODO: nuke this
+			await self.confess(self, inter, content, image, channel=targetchannel)
 		else:
 			raise commands.BadArgument("Channel must be selected from the list")
 	@confess_to.autocomplete('channel')

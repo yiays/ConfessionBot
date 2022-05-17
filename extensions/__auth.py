@@ -17,7 +17,7 @@ class Auth(commands.Cog):
     if not bot.config.has_section('auth'):
       bot.config.add_section('auth')
     if 'botadmin_guilds' not in bot.config['auth']:
-      bot.config['auth']['botadmin_guilds']
+      bot.config['auth']['botadmin_guilds'] = ''
     if 'superusers' not in bot.config['auth']:
       bot.config['auth']['superusers'] = ''
     if 'authusers' not in bot.config['auth']:
