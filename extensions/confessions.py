@@ -171,9 +171,15 @@ class ConfessionData:
 				))
 				await ctx.send(self.bot.babel(ctx, 'confessions', 'embederr'), **kwargs)
 			except disnake.Forbidden:
-				await ctx.send(self.bot.babel(ctx, 'confessions', 'missingchannelerr'), **kwargs)
+				await ctx.send(
+					self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (403 Forbidden)',
+					**kwargs
+				)
 		except disnake.NotFound:
-			await ctx.send(self.bot.babel(ctx, 'confessions', 'missingchannelerr'), **kwargs)
+			await ctx.send(
+				self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (404 Not Found)',
+				**kwargs
+			)
 		return False
 
 	async def send_vetting(
@@ -340,7 +346,7 @@ class Confessions(commands.Cog):
 			return await self.bot.fetch_channel(channel_id)
 		except disnake.Forbidden:
 			await ctx.send(
-				self.bot.babel(ctx, 'confessions', 'missingchannelerr'),
+				self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (fetch)',
 				**{'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
 			)
 			return None
@@ -456,7 +462,7 @@ class Confessions(commands.Cog):
 			except disnake.Forbidden:
 				self.send_button.disabled = True
 				await inter.response.edit_message(
-					content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr'),
+					content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr') + ' (select)',
 					view=self
 				)
 				return
