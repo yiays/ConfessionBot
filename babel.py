@@ -44,7 +44,7 @@ class Babel():
         langname = langfile[:-4]
         self.langs[langname] = ConfigParser(comment_prefixes='@', allow_no_value=True)
         # create a configparser that should preserve comments
-        self.langs[langname].read(os.path.join(self.path, langfile))
+        self.langs[langname].read(os.path.join(self.path, langfile), encoding='utf-8')
         if 'meta' not in self.langs[langname]:
           self.langs[langname].add_section('meta')
         self.langs[langname].set('meta', 'language', langname)
