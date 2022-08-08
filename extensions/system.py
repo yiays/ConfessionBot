@@ -42,8 +42,8 @@ class System(commands.Cog):
 
     Parameters
     ----------
-    Action: The action you want to perform
-    Module: The target cog which will be affected, leave empty for a list of loaded Cogs
+    action: The action you want to perform
+    module: The target cog which will be affected, leave empty for a list of loaded Cogs
     """
 
     self.bot.cogs['Auth'].superusers(inter)
@@ -152,6 +152,34 @@ class System(commands.Cog):
       [x for x in extension_list if search in x] +
       [e for e in ['config', 'babel'] if search in e]
     )
+
+  @commands.slash_command()
+  async def delete_message(
+    self,
+    inter:disnake.ApplicationCommandInteraction,
+    channel_id:str,
+    message_id:str
+  ):
+    """ Deletes a message """
+    self.bot.cogs['Auth'].superusers(inter)
+
+    try:
+      channel = await self.bot.fetch_channel(int(channel_id))
+      message = await channel.fetch_message(int(message_id))
+    except TypeError:
+      await inter.send("Provided ids are invalid!")
+      return
+    except disnake.NotFound:
+      await inter.send("Message/channel id does not match!")
+      return
+
+    try:
+      await message.delete()
+    except disnake.Forbidden:
+      await inter.send("Bot is missing permissions!")
+      return
+
+    await inter.send("Deleted message successfully!")
 
   @commands.slash_command()
   @commands.cooldown(1, 1)

@@ -955,9 +955,7 @@ class Confessions(commands.Cog):
 			targetchannel = await self.safe_fetch_channel(inter, channel_id)
 			if targetchannel is None:
 				return
-			# workaround for weird disnake issue
-			#TODO: nuke this
-			await self.confess(self, inter, content, image, channel=targetchannel)
+			await self.confess(inter, content, image, channel=targetchannel)
 		else:
 			raise commands.BadArgument("Channel must be selected from the list")
 	@confess_to.autocomplete('channel')
