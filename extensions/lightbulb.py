@@ -111,5 +111,5 @@ class Lightbulb(commands.Cog):
     else:
       await ctx.reply(self.bot.babel(ctx, 'lightbulb', 'already_disabled'))
 
-def setup(bot):
+def setup(bot:commands.Bot):
   bot.add_cog(Lightbulb(bot))

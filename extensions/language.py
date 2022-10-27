@@ -140,6 +140,6 @@ class Language(commands.Cog):
         matches.append(lang.replace(prefix, ''))
     return ['default'] + matches
 
-def setup(bot):
+def setup(bot:commands.Bot):
   """ Bind this cog to the bot """
   bot.add_cog(Language(bot))

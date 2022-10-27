@@ -1,42 +1,50 @@
+"""
+  Emoji - Nitro-like emoji features for all users
+  Allows users to use emoji from other servers by command
+"""
+
 import disnake
 from disnake.ext import commands
-import re, random
 
 class Emoji(commands.Cog):
-  """Emojis from guilds as commands"""
+  """ Emojis from guilds as commands """
   def __init__(self, bot:commands.Bot):
     self.bot = bot
-    # ensure config file has required data
-    if not bot.config.has_section('emoji'):
-      bot.config.add_section('emoji')
-    else:
-      if 'emojicmd_names' in bot.config['emoji']:
-        self.emojicmd.update(aliases=bot.config['emoji']['emojicmd_names'].split(' '))
-  
-  @commands.command()
-  async def emoji(self, ctx:commands.Context, *, emojiname:str):
-    matches = [e for e in self.bot.emojis if emojiname.replace(':','').lower() == e.name.lower()]
-    if matches:
-      await ctx.reply(matches[0])
-    else:
-      await ctx.reply(self.bot.babel(ctx, 'emoji', 'not_found'))
-  
-  @commands.command()
-  async def emojicmd(self, ctx:commands.Context):
-    """posts a random emoji matching a provided template in """
-    if 'emojicmd_names' in self.bot.config['emoji'] and\
-       'emojicmd_templates' in self.bot.config['emoji'] and\
-       'emojicmd_servers' in self.bot.config['emoji']:
-      names = self.bot.config['emoji']['emojicmd_names'].split(' ')
-      templates = self.bot.config['emoji']['emojicmd_templates'].split(' ')
-      servers = self.bot.config['emoji']['emojicmd_servers'].split(' ')
-      if ctx.invoked_with in names:
-        template = templates[names.index(ctx.invoked_with)]
-        server = int(servers[names.index(ctx.invoked_with)])
-        emojipool = [
-          e for e in self.bot.emojis if e.guild_id == server and re.match(template, e.name) and e.is_usable()
-        ]
-        await ctx.reply(random.choice(emojipool))
 
-def setup(bot):
+  @commands.slash_command()
+  async def emoji(self, inter:disnake.ApplicationCommandInteraction, search:str):
+    """
+    Searches emojis from all servers merely is a part of for one to use
+
+    Parameters
+    ----------
+    search: Type to refine your search
+    """
+    emojiname = search.split(' ', maxsplit=1)[0].replace(':','').lower()
+
+    if '(' in search:
+      try:
+        guild = self.bot.get_guild(int(search.split('(')[1][:-1]))
+      except ValueError:
+        matches = []
+      else:
+        matches = [e for e in guild.emojis if emojiname == e.name.lower()] if guild else []
+    else:
+      matches = [e for e in self.bot.emojis if emojiname == e.name.lower()]
+
+    if matches:
+      await inter.send(matches[0])
+    else:
+      await inter.send(self.bot.babel(inter, 'emoji', 'not_found'))
+  @emoji.autocomplete('search')
+  def ac_emoji(self, _:disnake.ApplicationCommandInteraction, search:str):
+    """ Autocomplete for emoji search """
+    results = [
+      f':{e.name}: ({e.guild_id})'
+      for e in self.bot.emojis if search.replace(':','').lower() in e.name.lower()
+    ][:25]
+    return results
+
+def setup(bot:commands.Bot):
+  """ Bind this cog to the bot """
   bot.add_cog(Emoji(bot))

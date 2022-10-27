@@ -100,6 +100,6 @@ class Log(commands.Cog):
     if self.logchannel:
       await self.logchannel.send(logentry)
 
-def setup(bot):
+def setup(bot:commands.Bot):
   """ Bind this cog to the bot """
   bot.add_cog(Log(bot))

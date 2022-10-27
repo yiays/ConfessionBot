@@ -47,5 +47,5 @@ class Prefix(commands.Cog):
   async def prefix_get(self, ctx:commands.Context, guild:int=0):
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'get', prefix=self.bot.config.get('prefix', str(guild if guild else ctx.guild.id), fallback='*unset*')))
 
-def setup(bot):
+def setup(bot:commands.Bot):
   bot.add_cog(Prefix(bot))

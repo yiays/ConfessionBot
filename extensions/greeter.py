@@ -94,5 +94,5 @@ class Greeter(commands.Cog):
       await ctx.reply(self.bot.babel(ctx, 'greeter', 'farewell_clear_failure'))
   
 
-def setup(bot):
+def setup(bot:commands.Bot):
   bot.add_cog(Greeter(bot))

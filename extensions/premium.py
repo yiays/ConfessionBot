@@ -82,6 +82,6 @@ class Premium(commands.Cog):
     await ctx.reply(self.bot.babel(ctx, 'premium', 'cta', link=embed.url), embed=embed)
 
 
-def setup(bot):
+def setup(bot:commands.Bot):
   """ Bind this cog to the bot """
   bot.add_cog(Premium(bot))

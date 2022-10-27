@@ -24,7 +24,7 @@ class Error(commands.Cog):
     if isinstance(error, commands.CommandOnCooldown):
       print("cooldown")
       return
-    kwargs = {'ephemeral': True}
+    kwargs = {'ephemeral': True} if isinstance(ctx, disnake.Interaction) else {}
     if isinstance(
       error,
       (commands.CommandNotFound, commands.BadArgument, commands.MissingRequiredArgument)
@@ -79,6 +79,6 @@ class Error(commands.Cog):
     elif isinstance(error, (commands.CheckFailure, commands.CheckAnyFailure)):
       return
 
-def setup(bot):
+def setup(bot:commands.Bot):
   """ Bind this cog to the bot """
   bot.add_cog(Error(bot))

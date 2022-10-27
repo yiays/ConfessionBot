@@ -236,5 +236,5 @@ class Poll(commands.Cog):
     self.bot.config['poll'][f'{ctx.channel.id}_{pollmsg.id}_expiry'] = str(round(time())+counter)
     self.bot.config.save()
 
-def setup(bot):
+def setup(bot:commands.Bot):
   bot.add_cog(Poll(bot))

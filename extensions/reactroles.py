@@ -137,5 +137,5 @@ class ReactRoles(commands.Cog):
     self.bot.config.save()
 
 
-def setup(bot):
+def setup(bot:commands.Bot):
   bot.add_cog(ReactRoles(bot))

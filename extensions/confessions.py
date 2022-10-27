@@ -157,7 +157,7 @@ class ConfessionData:
 		Wraps around functions that send confessions to channels
 		Adds copious amounts of error handling
 		"""
-		kwargs = {'ephemeral':True}
+		kwargs = {'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
 		try:
 			await func
 			return True
@@ -171,9 +171,15 @@ class ConfessionData:
 				))
 				await ctx.send(self.bot.babel(ctx, 'confessions', 'embederr'), **kwargs)
 			except disnake.Forbidden:
-				await ctx.send(self.bot.babel(ctx, 'confessions', 'missingchannelerr'), **kwargs)
+				await ctx.send(
+					self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (403 Forbidden)',
+					**kwargs
+				)
 		except disnake.NotFound:
-			await ctx.send(self.bot.babel(ctx, 'confessions', 'missingchannelerr'), **kwargs)
+			await ctx.send(
+				self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (404 Not Found)',
+				**kwargs
+			)
 		return False
 
 	async def send_vetting(
@@ -340,8 +346,8 @@ class Confessions(commands.Cog):
 			return await self.bot.fetch_channel(channel_id)
 		except disnake.Forbidden:
 			await ctx.send(
-				self.bot.babel(ctx, 'confessions', 'missingchannelerr'),
-				**{'ephemeral':True}
+				self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (fetch)',
+				**{'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
 			)
 			return None
 
@@ -456,7 +462,7 @@ class Confessions(commands.Cog):
 			except disnake.Forbidden:
 				self.send_button.disabled = True
 				await inter.response.edit_message(
-					content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr'),
+					content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr') + ' (select)',
 					view=self
 				)
 				return
@@ -864,9 +870,10 @@ class Confessions(commands.Cog):
 		image: An optional image that appears below the text
 		"""
 
-		channel = inter.channel
 		if 'channel' in kwargs:
 			channel = kwargs['channel']
+		else:
+			channel = inter.channel
 
 		if not self.check_channel(inter.guild_id, channel.id):
 			await inter.send(self.bot.babel(inter, 'confessions', 'nosendchannel'), ephemeral=True)
@@ -1002,7 +1009,8 @@ class Confessions(commands.Cog):
 		)
 		await inter.send(
 			self.bot.babel(inter, 'confessions', modestring) +' '+ \
-			self.bot.babel(inter, 'confessions', 'setundo' if mode>ChannelType.none else 'unsetundo')
+			self.bot.babel(inter, 'confessions', 'setundo' if mode>ChannelType.none else 'unsetundo') + \
+			('\n'+self.bot.babel(inter, 'confessions', 'setcta') if mode>ChannelType.none else '')
 		)
 
 	@commands.slash_command()
