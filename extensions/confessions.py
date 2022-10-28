@@ -393,7 +393,7 @@ class Confessions(commands.Cog):
 
 		promoted = self.bot.config.get('confessions', str(member.guild.id)+'_promoted', fallback='')
 		promoted = promoted.split(',')
-		return str(member.id) in promoted
+		return str(member.id) in promoted or bool(r for r in member.roles if r.id in promoted)
 
 	#	Views
 
@@ -1154,7 +1154,7 @@ class Confessions(commands.Cog):
 	async def botmod(
 		self,
 		inter:disnake.GuildCommandInteraction,
-		target:Optional[disnake.Member] = None,
+		target:Optional[Union[disnake.Member, disnake.Role]] = None,
 		revoke:Optional[bool] = False
 	):
 		"""
@@ -1162,7 +1162,7 @@ class Confessions(commands.Cog):
 
 		Parameters
 		----------
-		target: The user who will be affected by this command
+		target: The user or role which will be affected by this command
 		revoke: Set to true if you want to revoke botmod powers
 		"""
 		self.bot.cogs['Auth'].admins(inter)
@@ -1175,12 +1175,17 @@ class Confessions(commands.Cog):
 			else:
 				await inter.send(self.bot.babel(inter, 'confessions', 'botmodemptylist'))
 		elif target:
-			if target.bot:
-				await inter.send(self.bot.babel(inter, 'confessions', 'botmodboterr'))
-				return
-			if target.guild_permissions.ban_members:
-				await inter.send(self.bot.babel(inter, 'confessions', 'botmodmoderr'))
-				return
+			if isinstance(target, disnake.Member):
+				if target.bot:
+					await inter.send(self.bot.babel(inter, 'confessions', 'botmodboterr'))
+					return
+				if target.guild_permissions.ban_members:
+					await inter.send(self.bot.babel(inter, 'confessions', 'botmodmoderr'))
+					return
+			else:
+				if target.permissions.ban_members:
+					await inter.send(self.bot.babel(inter, 'confessions', 'botmodmoderr'))
+					return
 
 			if revoke:
 				if str(target.id) in modlist.split(','):
