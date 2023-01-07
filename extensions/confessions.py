@@ -24,6 +24,7 @@ class ChannelType(int, Enum):
 	traceable = 1
 	vetting = 2
 	feedback = 3
+	untraceablefeedback = 4
 
 class Toggle(int, Enum):
 	""" Enable and disable options for imagesupport """
@@ -244,7 +245,8 @@ class Confessions(commands.Cog):
 	channel_icons = {
 		ChannelType.untraceable: '🙈',
 		ChannelType.traceable: '👁',
-		ChannelType.feedback: '📢'
+		ChannelType.feedback: '📢',
+		ChannelType.untraceablefeedback: '🙈📢'
 	}
 
 	def __init__(self, bot:commands.Bot):
@@ -311,7 +313,7 @@ class Confessions(commands.Cog):
 					continue
 				channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
 				channel.guild.name = channel.guild.name[:40] + ('...' if len(channel.guild.name) > 40 else '')
-				if chtype == ChannelType.feedback:
+				if chtype in (ChannelType.feedback, ChannelType.untraceablefeedback):
 					matches.append((channel, chtype))
 					continue
 				if channel.permissions_for(member).read_messages:
@@ -377,7 +379,12 @@ class Confessions(commands.Cog):
 			'confessions', f"{guild_id}_{channel_id}",
 			fallback=ChannelType.none
 		)
-		if channeltype in [ChannelType.traceable, ChannelType.untraceable, ChannelType.feedback]:
+		if channeltype in [
+			ChannelType.traceable,
+			ChannelType.untraceable,
+			ChannelType.feedback,
+			ChannelType.untraceablefeedback
+		]:
 			return True
 		return False
 
@@ -494,7 +501,10 @@ class Confessions(commands.Cog):
 					'confessions',
 					'channelprompted',
 					channel=channel.mention,
-					vetting=vetting and channeltype != ChannelType.feedback),
+					vetting=vetting and channeltype not in (
+						ChannelType.feedback, ChannelType.untraceablefeedback
+					)
+				),
 				view=self)
 
 		@disnake.ui.button(disabled=True, style=disnake.ButtonStyle.primary)
@@ -544,7 +554,7 @@ class Confessions(commands.Cog):
 				image
 			)
 
-			if vetting and channeltype != ChannelType.feedback:
+			if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
 				await pendingconfession.send_vetting(inter, self.confessions, vetting)
 				await self.disable(inter)
 				return
@@ -730,7 +740,9 @@ class Confessions(commands.Cog):
 			vetting = self.confessions.findvettingchannel(inter.guild)
 			await self.pendingconfession.generate_embed(
 				anonid,
-				lead if vetting or channeltype != ChannelType.untraceable else '',
+				lead if vetting or channeltype not in (
+					ChannelType.untraceable, ChannelType.untraceablefeedback
+				) else '',
 				inter.text_values['content']
 			)
 
@@ -793,7 +805,10 @@ class Confessions(commands.Cog):
 
 				await pendingconfession.generate_embed(
 					anonid,
-					lead if channeltype != ChannelType.untraceable else '',
+					lead if channeltype not in (
+						ChannelType.untraceable,
+						ChannelType.untraceablefeedback
+					) else '',
 					pendingconfession.content,
 					pendingconfession.image
 				)
@@ -939,14 +954,17 @@ class Confessions(commands.Cog):
 			
 			await pendingconfession.generate_embed(
 				anonid,
-				lead if vetting or channeltype != ChannelType.untraceable else '',
+				lead if vetting or channeltype not in (
+					ChannelType.untraceable,
+					ChannelType.untraceablefeedback
+				 ) else '',
 				content,
 				image.url if image else None
 			)
 
 			if (
 				(vetting := self.findvettingchannel(inter.guild)) and
-				channeltype != ChannelType.feedback
+				channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback)
 				):
 				await pendingconfession.send_vetting(inter, self, vetting)
 				return
@@ -1066,7 +1084,9 @@ class Confessions(commands.Cog):
 					'\n'+self.generate_list(inter.author, matches, vetting) +
 					(
 						'\n\n' + self.bot.babel(inter, 'confessions', 'confess_to_feedback')
-						if [match for match in matches if match[1] == ChannelType.feedback] else ''
+						if [match for match in matches if match[1] in (
+							ChannelType.feedback, ChannelType.untraceablefeedback
+						)] else ''
 					)
 				),
 				ephemeral=True
