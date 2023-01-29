@@ -93,7 +93,7 @@ class Help(commands.Cog):
 
   @commands.slash_command(name='help')
   async def slash_help(
-    self, inter:disnake.ApplicationCommandInteraction, command:Optional[str]
+    self, inter:disnake.ApplicationCommandInteraction, command:Optional[str]=None
   ):
     """
     Learn how to use this bot
