@@ -72,9 +72,10 @@ class Babel():
 
     if str(user_id) in self.config['language']:
       nl = self.config.get('language', str(user_id))
-      if nl not in self.langs and '_' in nl:
-        # guess that the non-superset version of the language is what it would've inherited from
-        nl = nl.split('_')[1]
+      if nl not in self.langs and nl.startswith(self.config['language']['prefix']):
+        # The target language doesn't exist for this prefix
+        # Guess that the non-prefixed version of the language is what it would've inherited from
+        nl = nl[len(self.config['language']['prefix']):]
       if nl in self.langs:
         langs.append(nl)
         if debug:
@@ -106,7 +107,7 @@ class Babel():
     if self.baselang not in langs:
       langs.append(self.baselang)
       if debug:
-        dbg_origins.append('default')
+        dbg_origins.append('inherit default')
 
     if not debug:
       return langs

@@ -69,13 +69,15 @@ class Language(commands.Cog):
     embeds = []
     backup = False
     for lang, origin in zip(langs, origins):
-      if lang.startswith(self.bot.config['language']['prefix']):
-        embeds.append(disnake.Embed(
-          title = f"{self.bot.babel.langs[lang].get('meta', 'name')} ({lang})",
-          description = self.bot.babel(inter, 'language', 'origin_reason_'+origin, backup=backup),
-          color = int(self.bot.config['main']['themecolor'], 16)
-        ))
-        backup = True
+      #if lang.startswith(self.bot.config['language']['prefix']):
+      if origin.startswith('inherit'):
+        origin='inherit'
+      embeds.append(disnake.Embed(
+        title = f"{self.bot.babel.langs[lang].get('meta', 'name')} ({lang})",
+        description = self.bot.babel(inter, 'language', 'origin_reason_'+origin, backup=backup),
+        color = int(self.bot.config['main']['themecolor'], 16)
+      ))
+      backup = True
 
     await inter.send(embeds=embeds)
 
