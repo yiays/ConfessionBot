@@ -6,13 +6,14 @@
 		As a result, this only really suits a singlular purpose bot
 """
 
-import os, asyncio, re, time, base64, hashlib
+import io, os, asyncio, re, time, base64, hashlib
 from enum import Enum
 from typing import Optional, Union
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import disnake
 from disnake.ext import commands
+import aiohttp
 
 
 class ChannelType(int, Enum):
@@ -23,6 +24,7 @@ class ChannelType(int, Enum):
 	traceable = 1
 	vetting = 2
 	feedback = 3
+	untraceablefeedback = 4
 
 class Toggle(int, Enum):
 	""" Enable and disable options for imagesupport """
@@ -107,6 +109,7 @@ class ConfessionData:
 		self.bot = bot
 		self.crypto = crypto
 		self.embed = embed
+		self.attachment = None
 
 		if embed:
 			self.content = \
@@ -142,14 +145,28 @@ class ConfessionData:
 			self.targetchannel = await self.bot.fetch_channel(self.targetchannel_id)
 			self.offline = False
 
-	def generate_embed(self, anonid:str, lead:str, content:str, image:Optional[str] = None):
+	async def generate_embed(self, anonid:str, lead:str, content:str, image:Optional[str] = None):
 		""" Generate the confession embed """
 		if lead:
 			embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+' '+content)
 		else:
 			embed = disnake.Embed(description=content if content else '')
 		if image:
-			embed.set_image(url=image)
+			async with aiohttp.ClientSession() as session:
+				async with session.get(image) as res:
+					if res.status == 200:
+						filename = 'file.'+res.content_type.replace('image/','')
+						self.attachment = disnake.File(
+							io.BytesIO(await res.read()),
+							filename
+						)
+						embed.set_image(url='attachment://'+filename)
+					else:
+						if 'Log' in self.bot.cogs:
+							await self.bot.cogs['Log'].log_misc_message(
+								f"WARN: Failed to upload embedded image ({res.status})"
+							)
+						embed.set_image(url=image)
 		self.embed = embed
 
 	async def handle_send_errors(self, ctx:Union[disnake.DMChannel, disnake.Interaction], func):
@@ -192,6 +209,7 @@ class ConfessionData:
 		success = await self.handle_send_errors(ctx, vettingchannel.send(
 			self.bot.babel(ctx, 'confessions', 'vetmessagecta', channel=self.targetchannel.mention),
 			embed=self.embed,
+			file=self.attachment,
 			view=confessions.PendingConfessionView(confessions, self)
 		))
 
@@ -208,7 +226,7 @@ class ConfessionData:
 
 	async def send_confession(self, ctx:Union[disnake.DMChannel, disnake.Interaction], smsg=False):
 		""" Send confession to the destination channel """
-		func = self.targetchannel.send(embed=self.embed)
+		func = self.targetchannel.send(embed=self.embed, file=self.attachment)
 		success = await self.handle_send_errors(ctx, func)
 
 		if success and smsg:
@@ -227,7 +245,8 @@ class Confessions(commands.Cog):
 	channel_icons = {
 		ChannelType.untraceable: '🙈',
 		ChannelType.traceable: '👁',
-		ChannelType.feedback: '📢'
+		ChannelType.feedback: '📢',
+		ChannelType.untraceablefeedback: '🙈📢'
 	}
 
 	def __init__(self, bot:commands.Bot):
@@ -294,7 +313,7 @@ class Confessions(commands.Cog):
 					continue
 				channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
 				channel.guild.name = channel.guild.name[:40] + ('...' if len(channel.guild.name) > 40 else '')
-				if chtype == ChannelType.feedback:
+				if chtype in (ChannelType.feedback, ChannelType.untraceablefeedback):
 					matches.append((channel, chtype))
 					continue
 				if channel.permissions_for(member).read_messages:
@@ -360,7 +379,12 @@ class Confessions(commands.Cog):
 			'confessions', f"{guild_id}_{channel_id}",
 			fallback=ChannelType.none
 		)
-		if channeltype in [ChannelType.traceable, ChannelType.untraceable, ChannelType.feedback]:
+		if channeltype in [
+			ChannelType.traceable,
+			ChannelType.untraceable,
+			ChannelType.feedback,
+			ChannelType.untraceablefeedback
+		]:
 			return True
 		return False
 
@@ -374,7 +398,7 @@ class Confessions(commands.Cog):
 	def check_image(self, guild_id:int, image:disnake.Attachment) -> bool:
 		""" Only allow images to be sent if imagesupport is enabled and the image is valid """
 
-		if image and image.content_type.startswith('image'):
+		if image and image.content_type.startswith('image') and image.size < 8_000_000:
 			if self.bot.config.getboolean('confessions', f"{guild_id}_imagesupport", fallback=True):
 				return True
 			return False
@@ -477,7 +501,10 @@ class Confessions(commands.Cog):
 					'confessions',
 					'channelprompted',
 					channel=channel.mention,
-					vetting=vetting and channeltype != ChannelType.feedback),
+					vetting=vetting and channeltype not in (
+						ChannelType.feedback, ChannelType.untraceablefeedback
+					)
+				),
 				view=self)
 
 		@disnake.ui.button(disabled=True, style=disnake.ButtonStyle.primary)
@@ -514,15 +541,20 @@ class Confessions(commands.Cog):
 					await self.disable(inter)
 					return
 
+			image = None
+			if self.origin.attachments:
+				image = self.origin.attachments[0].url
+				await inter.response.defer(ephemeral=True)
+
 			vetting = self.confessions.findvettingchannel(channel.guild)
-			pendingconfession.generate_embed(
+			await pendingconfession.generate_embed(
 				anonid,
 				lead if vetting or channeltype != ChannelType.untraceable else '',
 				self.origin.content,
-				self.origin.attachments[0].url if self.origin.attachments else None
+				image
 			)
 
-			if vetting and channeltype != ChannelType.feedback:
+			if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
 				await pendingconfession.send_vetting(inter, self.confessions, vetting)
 				await self.disable(inter)
 				return
@@ -706,9 +738,11 @@ class Confessions(commands.Cog):
 			lead = f"**[Anon-*{anonid}*]**"
 
 			vetting = self.confessions.findvettingchannel(inter.guild)
-			self.pendingconfession.generate_embed(
+			await self.pendingconfession.generate_embed(
 				anonid,
-				lead if vetting or channeltype != ChannelType.untraceable else '',
+				lead if vetting or channeltype not in (
+					ChannelType.untraceable, ChannelType.untraceablefeedback
+				) else '',
 				inter.text_values['content']
 			)
 
@@ -766,9 +800,15 @@ class Confessions(commands.Cog):
 					f"{inter.guild.id}_{pendingconfession.targetchannel_id}"
 				)
 
-				pendingconfession.generate_embed(
+				if pendingconfession.image:
+					await inter.response.defer(ephemeral=True)
+
+				await pendingconfession.generate_embed(
 					anonid,
-					lead if channeltype != ChannelType.untraceable else '',
+					lead if channeltype not in (
+						ChannelType.untraceable,
+						ChannelType.untraceablefeedback
+					) else '',
 					pendingconfession.content,
 					pendingconfession.image
 				)
@@ -909,16 +949,22 @@ class Confessions(commands.Cog):
 
 			vetting = self.findvettingchannel(inter.guild)
 
-			pendingconfession.generate_embed(
+			if image:
+				await inter.response.defer(ephemeral=True)
+			
+			await pendingconfession.generate_embed(
 				anonid,
-				lead if vetting or channeltype != ChannelType.untraceable else '',
+				lead if vetting or channeltype not in (
+					ChannelType.untraceable,
+					ChannelType.untraceablefeedback
+				 ) else '',
 				content,
 				image.url if image else None
 			)
 
 			if (
 				(vetting := self.findvettingchannel(inter.guild)) and
-				channeltype != ChannelType.feedback
+				channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback)
 				):
 				await pendingconfession.send_vetting(inter, self, vetting)
 				return
@@ -1038,7 +1084,9 @@ class Confessions(commands.Cog):
 					'\n'+self.generate_list(inter.author, matches, vetting) +
 					(
 						'\n\n' + self.bot.babel(inter, 'confessions', 'confess_to_feedback')
-						if [match for match in matches if match[1] == ChannelType.feedback] else ''
+						if [match for match in matches if match[1] in (
+							ChannelType.feedback, ChannelType.untraceablefeedback
+						)] else ''
 					)
 				),
 				ephemeral=True
