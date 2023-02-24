@@ -330,57 +330,6 @@ class Help(commands.Cog):
         matches.append(iver)
     return matches
 
-  @commands.slash_command()
-  async def feedback(
-    self,
-    inter:disnake.ApplicationCommandInteraction,
-    feedback:str,
-    screenshot:Optional[disnake.Attachment] = None
-  ):
-    """
-    Send feedback to the developers
-
-    Parameters
-    ----------
-    feedback: Your feedback, sent as a message to the developers of this bot
-    screenshot: Any relevant screenshot or diagram that might communicate your idea
-    """
-    if self.bot.config['help']['feedbackchannel']:
-      feedbackchannel = await self.bot.fetch_channel(self.bot.config['help']['feedbackchannel'])
-      if feedbackchannel:
-        embed = disnake.Embed(
-          title = self.bot.babel(
-            inter,
-            'help',
-            'feedback_title',
-            author=f'{inter.author.name}#{inter.author.discriminator}',
-            guild=inter.guild.name if inter.guild else ''
-          ),
-          description = feedback,
-          color = int(self.bot.config['main']['themecolor'], 16)
-        )
-        if screenshot:
-          embed.set_image(screenshot.url)
-        await feedbackchannel.send(embed=embed)
-        await inter.send(
-          self.bot.babel(inter, 'help', 'feedback_success') +
-          ('\n' + self.bot.babel(inter, 'help', 'feedback_cta'))
-          if self.bot.config['help']['serverinv'] else ''
-        )
-      else:
-        await inter.send(
-          self.bot.babel(inter, 'help', 'feedback_failed') +
-          ('\n' + self.bot.babel(inter, 'help', 'feedback_cta'))
-          if self.bot.config['help']['serverinv'] else ''
-        )
-    else:
-      await inter.send(self.bot.babel(
-        inter,
-        'help',
-        'feedback_not_implemented',
-        serverinv = self.bot.config['help']['serverinv']
-      ))
-
 def setup(bot:commands.Bot):
   """ Bind this cog to the bot """
   bot.add_cog(Help(bot))
