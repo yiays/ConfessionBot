@@ -74,7 +74,7 @@ class Error(commands.Cog):
       if 'Auth' in self.bot.cogs and isinstance(error.original, self.bot.cogs['Auth'].AuthError):
         await ctx.send(str(error.original), **kwargs)
         return
-      await ctx.send(self.bot.babel(ctx, 'error', 'commanderror'), **kwargs)
+      await ctx.send(self.bot.babel(ctx, 'error', 'commanderror', error=str(error.original)), **kwargs)
       raise error
     elif isinstance(error, (commands.CheckFailure, commands.CheckAnyFailure)):
       return
