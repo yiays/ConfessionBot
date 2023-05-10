@@ -42,8 +42,8 @@ class Emoji(commands.Cog):
     results = [
       f':{e.name}: ({e.guild_id})'
       for e in self.bot.emojis if search.replace(':','').lower() in e.name.lower()
-    ][:25]
-    return results
+    ]
+    return results[:25]
 
 def setup(bot:commands.Bot):
   """ Bind this cog to the bot """

@@ -67,12 +67,12 @@ class Help(commands.Cog):
         return cmd
     return None
 
-  def get_docs(self, ctx:Union[commands.Context,tuple], cmd:str):
+  def get_docs(self, ctx:Union[commands.Context, disnake.ApplicationCommandInteraction], cmd:str):
     """ find documentation for this command in babel """
     matchedcommand = self.find_command(cmd)
     # return usage information for a specific command
     if matchedcommand:
-      for reflang in self.bot.babel.resolve_lang(ctx.author.id, ctx.guild.id if ctx.guild else None):
+      for reflang in self.bot.babel.resolve_lang(ctx.author, ctx.guild, ctx if isinstance(ctx, disnake.Interaction) else None):
         reflang = self.bot.babel.langs[reflang]
         for key in reflang.keys():
           if f'command_{matchedcommand.name}_help' in reflang[key]:
@@ -157,7 +157,7 @@ class Help(commands.Cog):
       else:
         longprefix = self.bot.config['main']['prefix_long']
       embed = disnake.Embed(
-        title = f"{self.bot.config['main']['botname']} help",
+        title = self.bot.babel(ctx, 'help', 'title'),
         description = self.bot.babel(
           ctx, 'help', 'introduction',
           longprefix = longprefix,
@@ -200,7 +200,7 @@ class Help(commands.Cog):
         for alias in cmd.aliases:
           if command in alias and cmd.name not in matches and cmd.name not in hide:
             matches.append(cmd.name)
-    return matches
+    return matches[0:25]
 
   @commands.slash_command()
   async def about(self, inter:disnake.ApplicationCommandInteraction):
@@ -221,7 +221,7 @@ class Help(commands.Cog):
         inter,
         'help',
         'about_field1_value',
-        cmds=len(self.bot.commands),
+        cmds=len(self.bot.application_commands),
         guilds=len(self.bot.guilds)
       ),
       inline = False
@@ -274,7 +274,7 @@ class Help(commands.Cog):
     )
 
   @commands.slash_command()
-  async def changes(self, inter:disnake.ApplicationCommandInteraction, search:str):
+  async def changes(self, inter:disnake.ApplicationCommandInteraction, search:Optional[str]=None):
     """
     See what's changed in recent updates
 
@@ -288,7 +288,7 @@ class Help(commands.Cog):
     versionlist = list(versions.keys())
     if search is None or search.replace('v','') not in versionlist:
       search = self.bot.config['main']['ver']
-    if search not in versionlist:
+    if search not in versionlist: # if config-defined version has no changelog
       search = versionlist[-1]
 
     start = versions[search]
@@ -328,6 +328,9 @@ class Help(commands.Cog):
         iver = line[2:]
       if search.lower() in line.lower() and iver not in matches:
         matches.append(iver)
+
+    if len(matches) > 25:
+      matches = [matches[0], '...'] + matches[len(matches) - 23:]
     return matches
 
 def setup(bot:commands.Bot):

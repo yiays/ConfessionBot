@@ -8,7 +8,7 @@
 import os, re
 from configparser import ConfigParser
 from typing import Optional, Union
-from disnake import Guild, Message, Interaction, User, Member
+from disnake import Locale, Guild, Message, Interaction, User, Member
 from disnake.ext.commands import Context
 
 class Babel():
@@ -27,6 +27,7 @@ class Babel():
     """ Load data from config and babel files """
     self.defaultlang = self.config.get('language', 'default', fallback='en')
     # defaultlang is the requested language to default new users to
+    self.prefix = self.config.get('language', 'prefix', fallback='')
 
     if os.path.isfile(self.path):
       os.remove(self.path)
@@ -65,49 +66,57 @@ class Babel():
     self.langs = {}
     self.load()
 
-  def resolve_lang(self, user_id:int, guild_id:Optional[int]=None, debug=False) -> tuple[list]:
+  def localeconv(self, locale:Locale) -> str:
+    """ Converts a Discord API locale to a babel locale """
+    return self.prefix + str(locale).replace('-US', '').replace('-UK', '')
+
+  def resolve_lang(
+    self,
+    user:Optional[User] = None,
+    guild:Optional[Guild] = None,
+    inter:Optional[Interaction] = None,
+    debug=False
+  ) -> tuple[list]:
     """ Creates a priority list of languages and reasons why they apply to this user or guild """
     langs = []
     dbg_origins = []
 
-    if str(user_id) in self.config['language']:
-      nl = self.config.get('language', str(user_id))
-      if nl not in self.langs and nl.startswith(self.config['language']['prefix']):
-        # The target language doesn't exist for this prefix
-        # Guess that the non-prefixed version of the language is what it would've inherited from
-        nl = nl[len(self.config['language']['prefix']):]
-      if nl in self.langs:
-        langs.append(nl)
-        if debug:
-          dbg_origins.append('author')
-        nl = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
-        while nl and nl not in langs and nl in self.langs:
-          langs.append(nl)
-          if debug: dbg_origins.append('inherit author')
-          nl = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
-    if guild_id and str(guild_id) in self.config['language']:
-      nl = self.config.get('language', str(guild_id))
-      if nl not in self.langs and '_' in nl:
-        nl = nl.split('_')[1]
-      if nl not in langs and nl in self.langs:
-        langs.append(nl)
-        if debug:
-          dbg_origins.append('guild')
-        nl = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
-        while nl and nl not in langs and nl in self.langs:
-          langs.append(nl)
-          if debug:
-            dbg_origins.append('inherit guild')
-          nl = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
+    def resolv(locale, origin):
+      """ Find the specific babel lang struct for this locale """
+      if locale not in self.langs and '_' in locale:
+        # Guess that the non-superset version of the language is what it would've inherited from
+        locale = locale.split('_')[0]
+      if locale in self.langs:
+        # A language file was found
+        langs.append(locale)
+        if debug: dbg_origins.append(origin)
+        # Follow the inheritance chain
+        locale = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
+        # Loop interrupts if this chain has been followed before
+        while locale and locale not in langs and locale in self.langs:
+          langs.append(locale)
+          if debug: dbg_origins.append('inherit '+origin)
+          locale = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
 
+    # Manually set language for user
+    if user and str(user.id) in self.config['language']:
+      locale = self.config.get('language', str(user.id))
+      resolv(locale, 'author')
+    # User locale
+    if inter:
+      locale = self.localeconv(inter.locale)
+      resolv(locale, 'author_locale')
+    # Manually set language for guild
+    if guild and str(guild.id) in self.config['language']:
+      locale = self.config.get('language', str(guild.id))
+      resolv(locale, 'guild')
+    # Guild locale (if it has been set manually)
+    if inter and inter.guild and 'COMMUNITY' in inter.guild.features:
+      locale = self.localeconv(inter.guild_locale)
+      resolv(locale, 'guild_locale')
+    # Default language
     if self.defaultlang not in langs:
-      langs.append(self.defaultlang)
-      if debug:
-        dbg_origins.append('default')
-    if self.baselang not in langs:
-      langs.append(self.baselang)
-      if debug:
-        dbg_origins.append('inherit default')
+      resolv(self.defaultlang, 'default')
 
     if not debug:
       return langs
@@ -120,23 +129,26 @@ class Babel():
     key:str,
     **values
   ):
+    inter = None
     if isinstance(target, (Context, Interaction, Message)):
-      author_id = target.author.id
-      guild_id = target.guild.id if hasattr(target, 'guild') and target.guild else None
+      author = target.author
+      guild = target.guild if hasattr(target, 'guild') and target.guild else None
+      if isinstance(target, Interaction):
+        inter = target
     elif isinstance(target, User):
-      author_id = target.id
-      guild_id = None
+      author = target
+      guild = None
     elif isinstance(target, Member):
-      author_id = target.id
-      guild_id = target.guild.id
+      author = target
+      guild = target.guild
     elif isinstance(target, Guild):
-      author_id = None
-      guild_id = target.id
+      author = None
+      guild = target
     else:
-      author_id = target[0]
-      guild_id = target[1] if len(target)>1 else None
+      author = target[0]
+      guild = target[1] if len(target)>1 else None
 
-    reqlangs = self.resolve_lang(author_id, guild_id)
+    reqlangs = self.resolve_lang(author, guild, inter)
 
     match = None
     for reqlang in reqlangs:
@@ -157,8 +169,8 @@ class Babel():
     # Fill in prefixes
     prefixqueries = self.prefixreference.findall(match)
     for prefixquery in prefixqueries:
-      if prefixquery == 'local' and guild_id:
-        match = match.replace('{p:'+prefixquery+'}', self.config.get('prefix', str(guild_id), fallback=self.config['main']['prefix_short']))
+      if prefixquery == 'local' and guild:
+        match = match.replace('{p:'+prefixquery+'}', self.config.get('prefix', str(guild.id), fallback=self.config['main']['prefix_short']))
       else:
         match = match.replace('{p:'+prefixquery+'}', self.config['main']['prefix_short'])
 

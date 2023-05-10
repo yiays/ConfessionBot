@@ -36,7 +36,7 @@ class MerelyBot(commands.AutoShardedBot):
 		# set intents
 		intents = disnake.Intents.none()
 		intents.guilds = self.config.getboolean('intents', 'guilds')
-		intents.members = self.config.getboolean('intents', 'members')
+		intents.members = self.config.get('intents', 'members') != 'none'
 		intents.bans = self.config.getboolean('intents', 'bans')
 		intents.emojis = self.config.getboolean('intents', 'emojis')
 		intents.integrations = self.config.getboolean('intents', 'integrations')
@@ -45,20 +45,25 @@ class MerelyBot(commands.AutoShardedBot):
 		intents.voice_states = self.config.getboolean('intents', 'voice_states')
 		intents.presences = self.config.getboolean('intents', 'presences')
 		intents.message_content = self.config.getboolean('intents', 'message_content')
-		intents.messages = self.config.getboolean('intents', 'messages')
-		intents.guild_messages = self.config.getboolean('intents', 'guild_messages')
-		intents.dm_messages = self.config.getboolean('intents', 'dm_messages')
-		intents.reactions = self.config.getboolean('intents', 'reactions')
-		intents.guild_reactions = self.config.getboolean('intents', 'guild_reactions')
-		intents.dm_reactions = self.config.getboolean('intents', 'dm_reactions')
-		intents.typing = self.config.getboolean('intents', 'typing')
-		intents.guild_typing = self.config.getboolean('intents', 'guild_typing')
-		intents.dm_typing = self.config.getboolean('intents', 'dm_typing')
+		intents.guild_messages = 'guild' in self.config.get('intents', 'guild_messages')
+		intents.dm_messages = 'dm' in self.config.get('intents', 'dm_messages')
+		intents.messages = intents.guild_messages or intents.dm_messages
+		intents.guild_reactions = 'guild' in self.config.get('intents', 'reactions')
+		intents.dm_reactions = 'dm' in self.config.get('intents', 'reactions')
+		intents.reactions = intents.guild_reactions or intents.dm_reactions
+		intents.guild_typing = 'guild' in self.config.get('intents', 'typing')
+		intents.dm_typing = 'dm' in self.config.get('intents', 'typing')
+		intents.typing = intents.guild_typing or intents.dm_typing
+
+		# set cache policy
+		if self.config.get('intents', 'members') == 'uncached':
+			cachepolicy = disnake.MemberCacheFlags.none()
 
 		super().__init__(
 			command_prefix = self.check_prefix,
 			help_command = None,
 			intents = intents,
+			member_cache_flags = cachepolicy,
 			case_insensitive = True
 		)
 
