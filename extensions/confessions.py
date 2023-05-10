@@ -415,9 +415,9 @@ class Confessions(commands.Cog):
   def check_promoted(self, member:disnake.Member):
     """ Verify provided member has been promoted """
 
-    promoted = self.bot.config.get('confessions', str(member.guild.id)+'_promoted', fallback='')
-    promoted = promoted.split(',')
-    return str(member.id) in promoted or bool(r for r in member.roles if r.id in promoted)
+    promoted_raw = self.bot.config.get('confessions', f'{member.guild.id}_promoted', fallback='')
+    promoted = [int(p) for p in promoted_raw.split(',') if p != '']
+    return member.id in promoted or bool([r for r in member.roles if r.id in promoted])
 
   #	Views
 
@@ -1094,10 +1094,7 @@ class Confessions(commands.Cog):
 
   @commands.guild_only()
   @commands.slash_command()
-  async def shuffle(
-    self,
-    inter:disnake.GuildCommandInteraction
-  ):
+  async def shuffle(self, inter:disnake.GuildCommandInteraction):
     """
     Change all anon-ids on a server
     """
