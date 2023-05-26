@@ -254,7 +254,7 @@ class Confessions(commands.Cog):
     self.crypto = Crypto()
 
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
-      raise Exception("'auth' must be enabled to use 'confessions'")
+      raise AssertionError("'auth' must be enabled to use 'confessions'")
     # ensure config file has required data
     if not bot.config.has_section('confessions'):
       bot.config.add_section('confessions')
@@ -262,7 +262,9 @@ class Confessions(commands.Cog):
       bot.config['confessions']['confession_cooldown'] = '1'
     if 'secret' not in bot.config['confessions'] or bot.config['confessions']['secret'] == '':
       bot.config['confessions']['secret'] = self.crypto.keygen(32)
-      print("WARNING: Your security key has been regenerated. Old confessions are now incompatible.")
+      print(
+        "WARNING: Your security key has been regenerated. Old confessions are now incompatible."
+      )
 
     self.crypto.key = bot.config['confessions']['secret']
 
@@ -312,13 +314,15 @@ class Confessions(commands.Cog):
           vetting = True
           continue
         channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
-        channel.guild.name = channel.guild.name[:40] + ('...' if len(channel.guild.name) > 40 else '')
+        channel.guild.name = channel.guild.name[:40]+('...' if len(channel.guild.name) > 40 else '')
         if chtype in (ChannelType.feedback, ChannelType.untraceablefeedback):
           matches.append((channel, chtype))
           continue
         if channel.permissions_for(member).read_messages:
           matches.append((channel, chtype))
           continue
+
+    matches.sort(key=lambda m: m[0].position)
 
     return matches, vetting
 
