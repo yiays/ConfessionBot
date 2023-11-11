@@ -56,7 +56,8 @@ class MerelyBot(commands.AutoShardedBot):
 		intents.typing = intents.guild_typing or intents.dm_typing
 
 		# set cache policy
-		if self.config.get('intents', 'members') == 'uncached':
+		cachepolicy = disnake.MemberCacheFlags.all()
+		if self.config.get('intents', 'members') in ('uncached', 'False'):
 			cachepolicy = disnake.MemberCacheFlags.none()
 
 		super().__init__(
