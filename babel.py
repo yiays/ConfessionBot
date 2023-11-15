@@ -35,7 +35,7 @@ class Babel():
       not os.path.exists(self.path) or
       not os.path.exists(os.path.join(self.path, self.defaultlang+'.ini'))
     ):
-      raise Exception(
+      raise FileNotFoundError(
         f"The path {self.path} must exist and contain a complete {self.defaultlang}.ini."
       )
 
@@ -49,8 +49,8 @@ class Babel():
         if 'meta' not in self.langs[langname]:
           self.langs[langname].add_section('meta')
         self.langs[langname].set('meta', 'language', langname)
-        with open(os.path.join(self.path, langfile), 'w', encoding='utf-8') as f:
-          self.langs[langname].write(f)
+        with open(os.path.join(self.path, langfile), 'w', encoding='utf-8') as file:
+          self.langs[langname].write(file)
 
     # baselang is the root language file that should be considered the most complete.
     self.baselang = self.defaultlang
@@ -89,13 +89,15 @@ class Babel():
       if locale in self.langs:
         # A language file was found
         langs.append(locale)
-        if debug: dbg_origins.append(origin)
+        if debug:
+          dbg_origins.append(origin)
         # Follow the inheritance chain
         locale = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
         # Loop interrupts if this chain has been followed before
         while locale and locale not in langs and locale in self.langs:
           langs.append(locale)
-          if debug: dbg_origins.append('inherit '+origin)
+          if debug:
+            dbg_origins.append('inherit '+origin)
           locale = self.langs[langs[-1]].get('meta', 'inherit', fallback=None)
 
     # Manually set language for user
@@ -129,6 +131,7 @@ class Babel():
     key:str,
     **values
   ):
+    """ Determine the locale and resolve the closest translated string """
     inter = None
     if isinstance(target, (Context, Interaction, Message)):
       author = target.author
@@ -150,27 +153,29 @@ class Babel():
 
     reqlangs = self.resolve_lang(author, guild, inter)
 
-    match = None
+    match: Optional[str] = None
     for reqlang in reqlangs:
-      if reqlang in self.langs:
-        if scope in self.langs[reqlang]:
-          if key in self.langs[reqlang][scope]:
-            if len(self.langs[reqlang][scope][key]) > 0:
-              match = self.langs[reqlang][scope][key]
-              break
+      try:
+        match = self.langs[reqlang][scope][key]
+        break
+      except (ValueError, KeyError):
+        continue
 
     if match is None:
       return "{MISSING STRING}"
 
     # Fill in values in the string
-    for k,v in values.items():
-      match = match.replace('{'+k+'}', str(v))
+    for key,value in values.items():
+      match = match.replace('{'+key+'}', str(value))
 
     # Fill in prefixes
     prefixqueries = self.prefixreference.findall(match)
     for prefixquery in prefixqueries:
       if prefixquery == 'local' and guild:
-        match = match.replace('{p:'+prefixquery+'}', self.config.get('prefix', str(guild.id), fallback=self.config['main']['prefix_short']))
+        match = match.replace(
+          '{p:'+prefixquery+'}',
+          self.config.get('prefix', str(guild.id), fallback=self.config['main']['prefix_short'])
+        )
       else:
         match = match.replace('{p:'+prefixquery+'}', self.config['main']['prefix_short'])
 
@@ -182,14 +187,23 @@ class Babel():
           replace = conditionalquery[1]
         else:
           replace = conditionalquery[2]
-        match=match.replace('{'+conditionalquery[0]+'?'+conditionalquery[1]+'|'+conditionalquery[2]+'}', replace)
+        match=match.replace(
+          '{'+conditionalquery[0]+'?'+conditionalquery[1]+'|'+conditionalquery[2]+'}',
+          replace
+        )
 
     # Fill in config queries
     configqueries = self.configreference.findall(match)
     for configquery in configqueries:
       if configquery[0] in self.config:
         if configquery[1] in self.config[configquery[0]]:
-          match = match.replace('{c:'+configquery[0]+'/'+configquery[1]+'}', self.config[configquery[0]][configquery[1]])
+          match = match.replace(
+            '{c:'+configquery[0]+'/'+configquery[1]+'}',
+            self.config[configquery[0]][configquery[1]]
+          )
+    
+    # Handle \n
+    match = match.replace('\\n', '\n')
 
     return match
 
@@ -199,7 +213,8 @@ class Babel():
     inheritlang = lang
     while inheritlang and inheritlang in self.langs:
       for scope in self.langs[inheritlang].keys():
-        if scope == 'meta': continue
+        if scope == 'meta':
+          continue
         for key, value in self.langs[inheritlang][scope].items():
           if value:
             pairs.add(f'{scope}/{key}')

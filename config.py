@@ -29,7 +29,10 @@ class Config(ConfigParser):
     if path.isfile(self.path):
       remove(self.path)
     if not path.exists(self.path):
-      print(f"WARNING: {self.path} missing - creating folder and generating bare-minimum defaults, you should consider downloading and including ./{self.template}")
+      print(
+        f"WARNING: {self.path} missing - creating folder and generating bare-minimum defaults,",
+        "you should consider downloading and including ./{self.template}"
+      )
       makedirs(self.path)
     if not path.exists(self.file):
       if path.exists(self.template):
@@ -42,7 +45,7 @@ class Config(ConfigParser):
       if ini.endswith('\n\n'):
         ConfigParser.read_string(self, ini)
       else:
-        raise Exception(f"FATAL: {self.file} appears to be incomplete!")
+        raise AssertionError(f"FATAL: {self.file} appears to be incomplete!")
 
     # Ensure required sections exist and provide sane defaults
     if 'main' not in self.sections():
@@ -69,8 +72,8 @@ class Config(ConfigParser):
       self['intents']['guilds'] = 'False'
     if 'members' not in self['intents']:
       self['intents']['members'] = 'False'
-    if 'bans' not in self['intents']:
-      self['intents']['bans'] = 'False'
+    if 'moderation' not in self['intents']:
+      self['intents']['moderation'] = 'False'
     if 'emojis' not in self['intents']:
       self['intents']['emojis'] = 'False'
     if 'integrations' not in self['intents']:
@@ -85,22 +88,10 @@ class Config(ConfigParser):
       self['intents']['presences'] = 'False'
     if 'messages' not in self['intents']:
       self['intents']['messages'] = 'False'
-    if 'guild_messages' not in self['intents']:
-      self['intents']['guild_messages'] = 'False'
-    if 'dm_messages' not in self['intents']:
-      self['intents']['dm_messages'] = 'False'
     if 'reactions' not in self['intents']:
       self['intents']['reactions'] = 'False'
-    if 'guild_reactions' not in self['intents']:
-      self['intents']['guild_reactions'] = 'False'
-    if 'dm_reactions' not in self['intents']:
-      self['intents']['dm_reactions'] = 'False'
     if 'typing' not in self['intents']:
       self['intents']['typing'] = 'False'
-    if 'guild_typing' not in self['intents']:
-      self['intents']['guild_typing'] = 'False'
-    if 'dm_typing' not in self['intents']:
-      self['intents']['dm_typing'] = 'False'
     if 'extensions' not in self.sections():
       self.add_section('extensions')
     if 'allow_reloading' not in self['extensions']:
@@ -132,7 +123,7 @@ class Config(ConfigParser):
     #TODO: autodelete all but one of each config history
     with open(self.file, 'w', encoding='utf-8') as f:
       ConfigParser.write(self, f)
-  
+
   def reload(self):
     """ reset config and load it again """
     for section in self.sections():

@@ -32,34 +32,33 @@ class Premium(commands.Cog):
       raise Exception("You must provide a reference to a guild and at least one role in order for premium to work!")
     if not bot.config.get('help', 'serverinv', fallback=''):
       raise Exception("You must have an invite to the support server with the supporter role in config[help][serverinv]!")
-    bot.add_check(self.check_premium_command)
 
   #TODO: fetch the premium guild on ready
 
-  def check_premium(self, user:disnake.User):
+  async def check_premium(self, user:disnake.User):
     premiumguild = self.bot.get_guild(self.bot.config.getint('premium', 'premium_role_guild'))
     premiumroles = [premiumguild.get_role(int(i)) for i in self.bot.config.get('premium', 'premium_roles').split(' ')]
     if not premiumroles:
       raise Exception("The designated premium role was not found!")
     
-    member = premiumguild.get_member(user.id)
+    member = await premiumguild.fetch_member(user.id)
     if isinstance(member, disnake.Member):
       return list(set(premiumroles) & set(member.roles))
     else:
       return False
 
-  def check_premium_command(self, ctx:commands.Context):
+  @commands.check
+  async def check_premium_command(self, ctx:commands.Context):
     if ctx.command.name in self.bot.config['premium']['restricted_commands'].split(' '):
-      if self.check_premium(ctx.author):
+      if await self.check_premium(ctx.author):
         return True # user is premium
-      else:
-        embed = disnake.Embed(title=self.bot.babel(ctx, 'premium', 'required_title'),
-                              description=self.bot.babel(ctx, 'premium', 'required_error'))
-        embed.url = self.bot.config['premium']['patreon'] if self.bot.config['premium']['patreon'] else self.bot.config['premium']['other']
-        embed.set_thumbnail(url=self.bot.config['premium']['icon'])
+      embed = disnake.Embed(title=self.bot.babel(ctx, 'premium', 'required_title'),
+                            description=self.bot.babel(ctx, 'premium', 'required_error'))
+      embed.url = self.bot.config['premium']['patreon'] if self.bot.config['premium']['patreon'] else self.bot.config['premium']['other']
+      embed.set_thumbnail(url=self.bot.config['premium']['icon'])
 
-        asyncio.ensure_future(ctx.reply(embed=embed))
-        return False # user is not premium
+      await ctx.reply(embed=embed)
+      return False # user is not premium
     return True # command is not restricted
   
   @commands.command(aliases=['support'])
