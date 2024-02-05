@@ -24,7 +24,7 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
 
 ### Setup Instructions
  - Clone the project to a folder
- - Install python <=3.9
+ - Install python <=3.10
  - Install required python packages with `python3 -m pip install -r requirements.txt`
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token to continue
     - **[Please don't copy the branding of confessionbot!](#Terms-of-use)**
