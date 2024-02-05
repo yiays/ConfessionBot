@@ -4,21 +4,24 @@
   Dependancies: Auth
 """
 
+import asyncio
 from enum import Enum
 from typing import Optional
-import disnake, asyncio
+import disnake
 from disnake.ext import commands
 
-class JanitorAction(int, Enum):
-  enable = 0
-  disable = 1
+class JanitorMode(int, Enum):
+  """ Actions users can take to configure the janitor """
+  DELETE_BOT = 0
+  DELETE_ALL = 1
+  DISABLED = -1
 
 class Admin(commands.Cog):
   """ Admin tools """
   def __init__(self, bot:commands.Bot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
-      raise Exception("'auth' must be enabled to use 'admin'")
+      raise AssertionError("'auth' must be enabled to use 'admin'")
     # ensure config file has required data
     if not bot.config.has_section('admin'):
       bot.config.add_section('admin')
@@ -26,16 +29,19 @@ class Admin(commands.Cog):
   def check_delete(self, message:disnake.Message, strict:bool=False):
     """ Criteria for message deletion """
     return (
-      strict or
+      not message.flags.ephemeral and
       (
-        message.author==self.bot.user or
-        message.content.startswith('<@'+str(self.bot.user.id)+'>') or
-        message.type == disnake.MessageType.pins_add
+        strict or
+        (
+          message.author==self.bot.user or
+          message.content.startswith('<@'+str(self.bot.user.id)+'>') or
+          message.type == disnake.MessageType.pins_add
+        )
       )
     )
 
   @commands.Cog.listener("on_message")
-  async def janitor_autodelete(self, message):
+  async def janitor_autodelete(self, message:disnake.Message):
     """janitor service, deletes messages after 30 seconds"""
     if f"{message.channel.id}_janitor" in self.bot.config['admin']:
       strict = self.bot.config.getint('admin', f"{message.channel.id}_janitor")
@@ -44,24 +50,23 @@ class Admin(commands.Cog):
         await message.delete()
 
   @commands.slash_command()
-  async def janitor(self, inter:disnake.GuildCommandInteraction, action:JanitorAction, strict:bool=False):
+  async def janitor(
+    self, inter:disnake.GuildCommandInteraction, mode:JanitorMode
+  ):
     """
       Add or remove janitor from this channel. Janitor deletes messages after 30 seconds
 
       Parameters:
       -----------
-      action: Choose whether to have janitor enabled or disabled in this channel
-      strict: A strict janitor, when enabled, deletes all messages by all users
+      mode: Choose whether to have janitor enabled or disabled in this channel
     """
-
     self.bot.cogs['Auth'].admins(inter)
 
-    if action == JanitorAction.enable:
-      self.bot.config['admin'][f'{inter.channel.id}_janitor'] = '1' if strict else '0'
+    if mode != JanitorMode.DISABLED:
+      self.bot.config['admin'][f'{inter.channel.id}_janitor'] = str(int(mode))
       self.bot.config.save()
       await inter.send(self.bot.babel(inter, 'admin', 'janitor_set_success'))
-      
-    if action == JanitorAction.disable:
+    else:
       self.bot.config.remove_option('admin', f'{inter.channel.id}_janitor')
       self.bot.config.save()
       await inter.send(self.bot.babel(inter, 'admin', 'janitor_unset_success'))

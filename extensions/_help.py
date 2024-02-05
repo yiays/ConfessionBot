@@ -20,6 +20,8 @@ class Help(commands.Cog):
       bot.config['help']['customstatus'] = ''
     if 'helpurl' not in bot.config['help']:
       bot.config['help']['helpurl'] = ''
+    if 'codeurl' not in bot.config['help']:
+      bot.config['help']['codeurl'] = ''
     if 'helpurlvideoexamples' not in bot.config['help']:
       bot.config['help']['helpurlvideoexamples'] = ''
     if 'serverinv' not in bot.config['help']:
@@ -150,12 +152,12 @@ class Help(commands.Cog):
 
     else:
       # show the generic help embed with a variety of featured commands
-      if isinstance(ctx.channel, disnake.TextChannel) and\
-         str(ctx.channel.guild.id) in self.bot.config['prefix'] and\
-         len(self.bot.config['prefix'][str(ctx.channel.guild.id)]):
-        longprefix = None
-      else:
-        longprefix = self.bot.config['main']['prefix_long']
+      longprefix = self.bot.config['main']['prefix_long']
+      if 'Prefix' in self.bot.cogs:
+        if isinstance(ctx.channel, disnake.TextChannel) and\
+          str(ctx.channel.guild.id) in self.bot.config['prefix'] and\
+          len(self.bot.config['prefix'][str(ctx.channel.guild.id)]):
+          longprefix = None
       embed = disnake.Embed(
         title = self.bot.babel(ctx, 'help', 'title'),
         description = self.bot.babel(

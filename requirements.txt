@@ -1,2 +1,2 @@
 cryptography
-disnake==2.7.0
+disnake==2.8.1

@@ -37,7 +37,7 @@ class MerelyBot(commands.AutoShardedBot):
 		intents = disnake.Intents.none()
 		intents.guilds = self.config.getboolean('intents', 'guilds')
 		intents.members = self.config.get('intents', 'members') != 'none'
-		intents.bans = self.config.getboolean('intents', 'bans')
+		intents.moderation = self.config.getboolean('intents', 'moderation')
 		intents.emojis = self.config.getboolean('intents', 'emojis')
 		intents.integrations = self.config.getboolean('intents', 'integrations')
 		intents.webhooks = self.config.getboolean('intents', 'webhooks')

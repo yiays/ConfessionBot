@@ -1,4 +1,5 @@
-import disnake, asyncio
+import asyncio
+import disnake
 from disnake.ext import commands
 
 class ReactRoles(commands.Cog):
@@ -6,7 +7,7 @@ class ReactRoles(commands.Cog):
   def __init__(self, bot:commands.Bot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
-      raise Exception("'auth' must be enabled to use 'reactroles'")
+      raise AssertionError("'auth' must be enabled to use 'reactroles'")
     if not bot.config.getboolean('extensions', 'help', fallback=False):
       print(Warning("'help' is a recommended extension for 'reactroles'"))
     # ensure config file has required data
@@ -14,12 +15,13 @@ class ReactRoles(commands.Cog):
       bot.config.add_section('reactroles')
     msglist = 'list[disnake.abc.Messageable]'
     self.watching:msglist = []
-  
+
   #TODO: make it possible for admins to add more reaction roles or delete them later
   #TODO: notice if the rr prompt is deleted during setup
 
   @commands.Cog.listener("on_ready")
   async def fetch_tracking_messages(self):
+    """ Request the message once so we'll be notified if reactions change """
     search = [k for k in self.bot.config['reactroles'].keys()]
     for chid,msgid in set([(rr.split('_')[0], rr.split('_')[1]) for rr in search]):
       try:
@@ -32,13 +34,18 @@ class ReactRoles(commands.Cog):
 
   @commands.Cog.listener("on_message_delete")
   async def revoke_tracking_message(self, message):
+    """ Remove message from config so it won't attempt to load it again """
     if message in self.watching:
-      matches = [k for k in self.bot.config['reactroles'].keys() if k.split('_')[1] == str(message.id)]
-      [self.bot.config.remove_option('reactroles',k) for k in matches]
+      matches = [
+        k for k in self.bot.config['reactroles'].keys() if k.split('_')[1] == str(message.id)
+      ]
+      for k in matches:
+        self.bot.config.remove_option('reactroles',k)
       #TODO: (low priority) maybe remove deleted message from self.watching?
 
   @commands.Cog.listener("on_raw_reaction_add")
   async def reactrole_add(self, data:disnake.RawReactionActionEvent):
+    """ Grant the user their role """
     if isinstance(data.member, disnake.Member):
       emojiid = data.emoji if data.emoji.is_unicode_emoji() else data.emoji.id
       if f"{data.channel_id}_{data.message_id}_{emojiid}_roles" in self.bot.config['reactroles']:
@@ -55,9 +62,10 @@ class ReactRoles(commands.Cog):
 
   @commands.Cog.listener("on_raw_reaction_remove")
   async def reactrole_remove(self, data:disnake.RawReactionActionEvent):
+    """ Take back roles """
     if data.guild_id:
       guild = await self.bot.fetch_guild(data.guild_id)
-      member = guild.get_member(data.user_id)
+      member = await guild.fetch_member(data.user_id)
       emojiid = data.emoji if data.emoji.is_unicode_emoji() else data.emoji.id
       if f"{data.channel_id}_{data.message_id}_{emojiid}_roles" in self.bot.config['reactroles']:
         channel = await self.bot.fetch_channel(data.channel_id)
