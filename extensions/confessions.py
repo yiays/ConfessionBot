@@ -207,7 +207,7 @@ class ConfessionData:
   ):
     """ Send confession to a vetting channel for approval """
     success = await self.handle_send_errors(ctx, vettingchannel.send(
-      self.bot.babel(ctx, 'confessions', 'vetmessagecta', channel=self.targetchannel.mention),
+      self.bot.babel(vettingchannel.guild, 'confessions', 'vetmessagecta', channel=self.targetchannel.mention),
       embed=self.embed,
       file=self.attachment,
       view=confessions.PendingConfessionView(confessions, self)
