@@ -437,15 +437,25 @@ class Confessions(commands.Cog):
 
   #	Views
 
-  class ChannelView(disnake.ui.View):
+  class ChannelSelectView(disnake.ui.View):
     """ View for selecting a target interactively """
-    def __init__(self, origin:disnake.Message, confessions, matches):
+    origin: disnake.Message
+    confessions: Confessions
+    matches: tuple[disnake.TextChannel]
+    page: int = 0
+    selection: Optional[disnake.TextChannel] = None
+    done: bool = False
+
+    def __init__(
+        self,
+        origin:disnake.Message,
+        confessions: Confessions,
+        matches: tuple[disnake.TextChannel]
+      ):
       super().__init__(timeout=30)
       self.origin = origin
       self.confessions = confessions
       self.matches = matches
-      self.page = 0
-      self.done = False
       self.update_list()
       self.channel_selector.placeholder = self.confessions.bot.babel(
         origin,
@@ -465,7 +475,7 @@ class Confessions(commands.Cog):
           style=disnake.ButtonStyle.secondary,
           label=self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_prev')
         )
-        self.page_decrement_button.callback = self.decrement_page
+        self.page_decrement_button.callback = self.change_page(-1); 
         self.add_item(self.page_decrement_button)
 
         self.page_increment_button = disnake.ui.Button(
@@ -473,7 +483,7 @@ class Confessions(commands.Cog):
           style=disnake.ButtonStyle.secondary,
           label=self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_next')
         )
-        self.page_increment_button.callback = self.increment_page
+        self.page_increment_button.callback = self.change_page(1)
         self.add_item(self.page_increment_button)
 
     def update_list(self):
@@ -481,42 +491,40 @@ class Confessions(commands.Cog):
         Fill channel selector with channels
         Discord limits this to 25 options, so longer lists need pagination
       """
-      self.channel_selector.options = []
       start = self.page*25
-      for channel,channeltype in self.matches[start:start+25]:
-        self.channel_selector.append_option(
-          disnake.SelectOption(
-            label=f'{channel.name} (from {channel.guild.name})',
-            value=str(channel.id),
-            emoji=Confessions.channel_icons[channeltype]
-          )
-        )
+      self.channel_selector.options = [
+        disnake.SelectOption(
+          label=f'{channel.name} (from {channel.guild.name})',
+          value=str(channel.id),
+          emoji=Confessions.channel_icons[channeltype]
+        ) for channel,channeltype in self.matches[start:start+25]
+      ]
 
     @disnake.ui.select(min_values=1, max_values=1)
-    async def channel_selector(self, select:disnake.ui.Select, inter:disnake.MessageInteraction):
+    async def channel_selector(self, _:disnake.ui.Select, inter:disnake.MessageInteraction):
       """ Update the message to preview the selected target """
 
       self.send_button.disabled = False
       try:
-        channel = await self.confessions.bot.fetch_channel(int(select._selected_values[0]))
+        self.selection = await self.confessions.bot.fetch_channel(int(inter.values[0]))
       except disnake.Forbidden:
         self.send_button.disabled = True
         await inter.response.edit_message(
-          content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr') + ' (select)',
+          content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr')+' (select)',
           view=self
         )
         return
-      vetting = self.confessions.findvettingchannel(channel.guild)
+      vetting = self.confessions.findvettingchannel(self.selection.guild)
       channeltype = self.confessions.bot.config.getint(
         'confessions',
-        f"{channel.guild.id}_{channel.id}"
+        f"{self.selection.guild.id}_{self.selection.id}"
       )
       await inter.response.edit_message(
         content=self.confessions.bot.babel(
           inter,
           'confessions',
           'channelprompted',
-          channel=channel.mention,
+          channel=self.selection.mention,
           vetting=vetting and channeltype not in (
             ChannelType.feedback, ChannelType.untraceablefeedback
           )
@@ -527,19 +535,18 @@ class Confessions(commands.Cog):
     async def send_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
       """ Send the confession """
 
-      channel = await self.confessions.safe_fetch_channel(inter, int(self.channel_selector.values[0]))
-      if channel is None:
+      if self.selection is None:
         self.disable(inter)
         return
 
-      anonid = self.confessions.get_anonid(channel.guild.id, inter.author.id)
+      anonid = self.confessions.get_anonid(self.selection.guild.id, inter.author.id)
       lead = f"**[Anon-*{anonid}*]**"
       channeltype = self.confessions.bot.config.getint(
         'confessions',
-        f"{channel.guild.id}_{channel.id}"
+        f"{self.selection.guild.id}_{self.selection.id}"
       )
 
-      if not self.confessions.check_banned(channel.guild.id, anonid):
+      if not self.confessions.check_banned(self.selection.guild.id, anonid):
         await inter.send(self.confessions.bot.babel(inter, 'confessions', 'nosendbanned'))
         await self.disable(inter)
         return
@@ -549,10 +556,10 @@ class Confessions(commands.Cog):
         self.confessions.crypto,
         author=inter.author,
         origin=self.origin,
-        targetchannel=channel
+        targetchannel=self.selection
       )
       if self.origin.attachments:
-        if not self.confessions.check_image(channel.guild.id, self.origin.attachments[0]):
+        if not self.confessions.check_image(self.selection.guild.id, self.origin.attachments[0]):
           await inter.send(self.confessions.bot.babel(inter, 'confessions', 'nosendimages'))
           await self.disable(inter)
           return
@@ -562,7 +569,7 @@ class Confessions(commands.Cog):
         image = self.origin.attachments[0].url
         await inter.response.defer(ephemeral=True)
 
-      vetting = self.confessions.findvettingchannel(channel.guild)
+      vetting = self.confessions.findvettingchannel(self.selection.guild)
       await pendingconfession.generate_embed(
         anonid,
         lead if vetting or channeltype != ChannelType.untraceable else '',
@@ -590,46 +597,31 @@ class Confessions(commands.Cog):
           inter,
           'confessions',
           'confession_sent_channel',
-          channel=channel.mention
+          channel=self.selection.mention
         ),
         view=self
       )
 
-    async def decrement_page(self, inter:disnake.MessageInteraction):
-      """ Count page down by 1 and handle consequences """
-      self.page -= 1
-      self.page_increment_button.disabled = False
+    def change_page(self, pagediff:int):
+      """ Add or remove pagediff to self.page and trigger on_page_change event """
+      async def action(inter):
+        self.page += pagediff
+        await self.on_page_change(inter)
+      return action
 
+    async def on_page_change(self, inter:disnake.MessageInteraction):
+      """ Update view based on current page number """
       if self.page <= 0:
         self.page = 0
         self.page_decrement_button.disabled = True
-
-      self.send_button.disabled = True
-
-      self.update_list()
-
-      await inter.response.edit_message(
-        content=self.confessions.bot.babel(
-          inter,
-          'confessions',
-          'channelprompt'
-        ) +' '+ self.confessions.bot.babel(
-          inter,
-          'confessions',
-          'channelprompt_pager',
-          page=self.page + 1
-        ),
-        view=self
-      )
-
-    async def increment_page(self, inter:disnake.MessageInteraction):
-      """ Count page up by 1 and handle consequences """
-      self.page += 1
-      self.page_decrement_button.disabled = False
+      else:
+        self.page_decrement_button.disabled = False
 
       if self.page >= len(self.matches) // 25:
         self.page = len(self.matches) // 25
         self.page_increment_button.disabled = True
+      else:
+        self.page_increment_button.disabled = False
 
       self.send_button.disabled = True
 
@@ -903,7 +895,7 @@ class Confessions(commands.Cog):
           ' ' + self.bot.babel(msg, 'confessions', 'channelprompt_pager', page=1)
           if len(matches) > 25 else ''
         ),
-        view=self.ChannelView(msg, self, matches))
+        view=self.ChannelSelectView(msg, self, matches))
 
   # Clear config when the bot is removed from a guild
   @commands.Cog.listener('on_guild_leave')
