@@ -67,11 +67,17 @@ class MerelyBot(commands.AutoShardedBot):
 			cachepolicy = disnake.MemberCacheFlags.none()
 			self.member_cache = False
 
+		# set sync policy
+		syncflags = commands.CommandSyncFlags.default()
+		if self.verbose:
+			syncflags.sync_commands_debug = True
+
 		super().__init__(
 			command_prefix = self.check_prefix if intents.message_content else None,
 			help_command = None,
 			intents = intents,
 			member_cache_flags = cachepolicy,
+			command_sync_flags = syncflags,
 			case_insensitive = True
 		)
 
