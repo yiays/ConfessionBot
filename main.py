@@ -12,10 +12,16 @@ from config import Config
 from babel import Babel
 
 class MerelyBot(commands.AutoShardedBot):
-	"""this is the core of the merely framework."""
+	"""
+		An extension of disnake.commands.AutoShardedBot with added features
+
+		This includes a babel module for localised strings, a config module, automatic extension
+		loading, config-defined intents, config-defined prefixes, and logging.
+	"""
 	config = Config()
 	babel = Babel(config)
 	verbose = False
+	member_cache = True
 
 	def __init__(self, **kwargs):
 		print(f"""
@@ -59,9 +65,10 @@ class MerelyBot(commands.AutoShardedBot):
 		cachepolicy = disnake.MemberCacheFlags.from_intents(intents)
 		if self.config.get('intents', 'members') in ('uncached', 'False'):
 			cachepolicy = disnake.MemberCacheFlags.none()
+			self.member_cache = False
 
 		super().__init__(
-			command_prefix = self.check_prefix,
+			command_prefix = self.check_prefix if intents.message_content else None,
 			help_command = None,
 			intents = intents,
 			member_cache_flags = cachepolicy,
@@ -133,6 +140,7 @@ class Logger(object):
 		with open(fname, "a", encoding='utf-8') as log:
 			log.write(message)
 	def flush(self):
+		""" This is here just to keep the writable requirement of stdout and stderr happy """
 		return self
 
 if __name__ == '__main__':
