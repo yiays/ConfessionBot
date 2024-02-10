@@ -6,15 +6,19 @@
     As a result, this only really suits a singlular purpose bot
 """
 
+from __future__ import annotations
+
 import io, os, asyncio, re, time, base64, hashlib
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import disnake
 from disnake.ext import commands
 import aiohttp
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
 
 class ChannelType(int, Enum):
   """ Channel Types as they are stored """
@@ -207,7 +211,12 @@ class ConfessionData:
   ):
     """ Send confession to a vetting channel for approval """
     success = await self.handle_send_errors(ctx, vettingchannel.send(
-      self.bot.babel(vettingchannel.guild, 'confessions', 'vetmessagecta', channel=self.targetchannel.mention),
+      self.bot.babel(
+        vettingchannel.guild,
+        'confessions',
+        'vetmessagecta',
+        channel=self.targetchannel.mention
+      ),
       embed=self.embed,
       file=self.attachment,
       view=confessions.PendingConfessionView(confessions, self)
@@ -249,7 +258,7 @@ class Confessions(commands.Cog):
     ChannelType.untraceablefeedback: '🙈📢'
   }
 
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     self.crypto = Crypto()
 
@@ -265,6 +274,8 @@ class Confessions(commands.Cog):
       print(
         "WARNING: Your security key has been regenerated. Old confessions are now incompatible."
       )
+    if 'spam_flags' not in bot.config['confessions']:
+      bot.config['confessions']['spam_flags'] = ''
 
     self.crypto.key = bot.config['confessions']['secret']
 
@@ -302,7 +313,7 @@ class Confessions(commands.Cog):
 
     return '\n'.join(targets) + vettingwarning
 
-  def scanguild(self, member:disnake.Member) -> tuple:
+  def scanguild(self, member:disnake.Member) -> tuple[disnake.TextChannel]:
     """ Scans a guild for any targets that a member can use for confessions """
 
     matches = []
@@ -326,7 +337,8 @@ class Confessions(commands.Cog):
 
     return matches, vetting
 
-  def listavailablechannels(self, user:Union[disnake.User, disnake.Member]) -> tuple:
+  def listavailablechannels(self, user:Union[disnake.User, disnake.Member])\
+      -> tuple[disnake.TextChannel]:
     """
       List all available targets on a server for a member
       List all available targets on all mutual servers for a user
@@ -363,7 +375,7 @@ class Confessions(commands.Cog):
     self,
     ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
     channel_id:int
-  ):
+  ) -> Optional[disnake.TextChannel]:
     """ Gracefully handles whenever a confession target isn't available """
     try:
       return await self.bot.fetch_channel(channel_id)
@@ -696,7 +708,7 @@ class Confessions(commands.Cog):
     def __init__(
       self,
       confessions:"Confessions",
-      origin:disnake.ModalInteraction,
+      origin:disnake.Interaction,
       pendingconfession:ConfessionData
     ):
       super().__init__(
@@ -850,11 +862,12 @@ class Confessions(commands.Cog):
     if ctx.prefix is not None:
       return
     if isinstance(msg.channel, disnake.DMChannel) and\
-        msg.author != self.bot.user:
+       msg.author != self.bot.user:
       if msg.channel in self.ignore:
         self.ignore.remove(msg.channel)
         return
-      if msg.author in self.confession_cooldown and self.confession_cooldown[msg.author] > time.time():
+      if msg.author in self.confession_cooldown and\
+         self.confession_cooldown[msg.author] > time.time():
         return
       else:
         self.confession_cooldown[msg.author] = time.time() +\
@@ -863,11 +876,10 @@ class Confessions(commands.Cog):
       if 'Log' in self.bot.cogs:
         await self.bot.cogs['Log'].log_misc_message(msg)
 
-      try:
-        matches,_ = self.listavailablechannels(msg.author)
-      except NoMemberCacheError:
+      if not self.bot.member_cache:
         await msg.reply(self.bot.babel(msg, 'confessions', 'dmconfessiondisabled'))
         return
+      matches,_ = self.listavailablechannels(msg.author)
 
       if not self.bot.is_ready():
         await msg.reply(self.bot.babel(msg, 'confessions', 'cachebuilding'))
@@ -893,6 +905,36 @@ class Confessions(commands.Cog):
         ),
         view=self.ChannelView(msg, self, matches))
 
+  # Clear config when the bot is removed from a guild
+  @commands.Cog.listener('on_guild_leave')
+  async def guild_cleanup(self, guild:disnake.Guild):
+    """ Automatically remove data related to a guild on removal """
+    for option in self.bot.config['confessions']:
+      if option.startswith(str(guild.id)+'_'):
+        self.bot.config.remove_option('confessions', option)
+    self.bot.config.save()
+
+  # Clear config when a channel is deleted
+  @commands.Cog.listener('on_guild_channel_delete')
+  async def channel_cleanup(self, channel:disnake.TextChannel):
+    """ Automatically remove data related to a channel on delete """
+    for option in self.bot.config['confessions']:
+      if option == str(channel.guild.id)+'_'+str(channel.id):
+        self.bot.config.remove_option('confessions', option)
+        break
+    self.bot.config.save()
+
+  # Context menu commands
+
+  @commands.cooldown(1, 60)
+  @commands.user_command()
+  async def report(self, inter:disnake.UserCommandInteraction):
+    """ Reports a message to the bot owners """
+    message: disnake.InteractionMessage = await inter.original_message
+    if message.author != self.bot.user:
+      inter.response.send_message(self.bot.babel(inter, 'confessions', 'report_invalid_message'))
+      return
+    inter.response.send_modal(self.ReportModal(self, await inter.original_message, inter))
 
   #	Slash commands
 
@@ -955,7 +997,7 @@ class Confessions(commands.Cog):
 
       if image:
         await inter.response.defer(ephemeral=True)
-      
+
       await pendingconfession.generate_embed(
         anonid,
         lead if vetting or channeltype not in (
@@ -977,7 +1019,7 @@ class Confessions(commands.Cog):
 
     else:
       await inter.response.send_modal(
-        modal=self.ConfessionModal(confessions=self, origin=inter, pendingconfession=pendingconfession)
+        modal=self.ConfessionModal(self, inter, pendingconfession)
       )
 
   @commands.cooldown(1, 1)
@@ -1109,7 +1151,9 @@ class Confessions(commands.Cog):
         self.bot.babel(inter, 'confessions', 'shufflebanresetwarning')
       )
       def check(m):
-        return m.channel == inter.channel and m.author == inter.author and m.content.lower() == 'yes'
+        return m.channel == inter.channel and\
+               m.author == inter.author and\
+               m.content.lower() == 'yes'
       try:
         await self.bot.wait_for('message', check=check, timeout=30)
       except asyncio.TimeoutError:
@@ -1256,25 +1300,6 @@ class Confessions(commands.Cog):
           await inter.send(self.bot.babel(inter, 'confessions', 'rebotmoderr'))
     else:
       raise commands.BadArgument()
-
-  #	Cleanup
-
-  @commands.Cog.listener('on_guild_leave')
-  async def guild_cleanup(self, guild:disnake.Guild):
-    """ Automatically remove data related to a guild on removal """
-    for option in self.bot.config['confessions']:
-      if option.startswith(str(guild.id)+'_'):
-        self.bot.config.remove_option('confessions', option)
-    self.bot.config.save()
-
-  @commands.Cog.listener('on_guild_channel_delete')
-  async def channel_cleanup(self, channel:disnake.TextChannel):
-    """ Automatically remove data related to a channel on delete """
-    for option in self.bot.config['confessions']:
-      if option == str(channel.guild.id)+'_'+str(channel.id):
-        self.bot.config.remove_option('confessions', option)
-        break
-    self.bot.config.save()
 
 def setup(bot) -> None:
   """ Bind this cog to the bot """
