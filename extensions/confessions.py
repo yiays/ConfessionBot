@@ -247,7 +247,6 @@ class ConfessionData:
       ), ephemeral=True)
 
 
-
 class Confessions(commands.Cog):
   """ Enable anonymous messaging with moderation on your server """
 
@@ -1025,6 +1024,12 @@ class Confessions(commands.Cog):
       self.bot.babel(inter, 'confessions', 'report_invalid_message'),
       ephemeral=True
     )
+
+  @commands.cooldown(1, 1)
+  @commands.message_command(name="Confess here", dm_permission=False)
+  async def confess_message(self, inter:disnake.MessageCommandInteraction):
+    """ Shorthand to start a confession modal in this channel """
+    await self.confess(inter)
 
   #	Slash commands
 
