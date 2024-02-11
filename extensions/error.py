@@ -14,7 +14,7 @@ class Error(commands.Cog):
     self.bot = bot
 
   @commands.Cog.listener('on_user_command_error')
-  @commands.Cog.listener('on_messsage_command_error')
+  @commands.Cog.listener('on_message_command_error')
   @commands.Cog.listener('on_slash_command_error')
   @commands.Cog.listener('on_command_error')
   async def handle_error(
@@ -23,10 +23,13 @@ class Error(commands.Cog):
     error:commands.CommandError
   ):
     """ Report to the user what went wrong """
-    #TODO: on_message_command_error doesn't seem to be firing
+    print("error detected")
     if isinstance(error, commands.CommandOnCooldown):
-      if error.cooldown.get_retry_after > 5:
-        await ctx.send(self.bot.babel(ctx, 'error', 'cooldown', t=error.cooldown.get_retry_after))
+      if error.cooldown.get_retry_after() > 5:
+        await ctx.send(
+          self.bot.babel(ctx, 'error', 'cooldown', t=int(error.cooldown.get_retry_after())),
+          ephemeral=True
+        )
         return
       print("cooldown")
       return
