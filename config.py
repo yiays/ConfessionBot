@@ -60,6 +60,8 @@ class Config(ConfigParser):
       self['main']['themecolor'] = '0x0'
     if 'voteurl' not in self['main']:
       self['main']['voteurl'] = ''
+    if 'tos_url' not in self['main']:
+      self['main']['tos_url'] = ''
     if 'beta' not in self['main']:
       self['main']['beta'] = 'False'
     if 'ver' not in self['main']:

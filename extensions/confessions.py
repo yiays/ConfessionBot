@@ -269,6 +269,8 @@ class Confessions(commands.Cog):
       bot.config.add_section('confessions')
     if 'confession_cooldown' not in bot.config['confessions']:
       bot.config['confessions']['confession_cooldown'] = '1'
+    if 'report_channel' not in bot.config['confessions']:
+      bot.config['confessions']['report_channel'] = ''
     if 'secret' not in bot.config['confessions'] or bot.config['confessions']['secret'] == '':
       bot.config['confessions']['secret'] = self.crypto.keygen(32)
       print(
@@ -695,6 +697,92 @@ class Confessions(commands.Cog):
         custom_id = f"pendingconfession_deny_{data}"
       ))
 
+  class ReportView(disnake.ui.View):
+    """ Provides all the guidance needed before a user reports a confession """
+    def __init__(
+        self, 
+        confessions:"Confessions",
+        message: disnake.Message,
+        origin: disnake.Interaction
+    ):
+      super().__init__(timeout=300)
+
+      self.confessions = confessions
+      self.message = message
+      self.origin = origin
+
+      self.report_button.label = confessions.bot.babel(origin, 'confessions', 'report_button')
+
+      asyncio.ensure_future(self.enable_button())
+
+    async def enable_button(self):
+      await asyncio.sleep(5)
+      self.report_button.disabled = False
+      await self.origin.edit_original_message(view=self, suppress_embeds=True)
+
+    @disnake.ui.button(disabled=True, style=disnake.ButtonStyle.gray, emoji='➡️')
+    async def report_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
+      """ On click of continue button """
+      await inter.response.send_modal(
+        self.confessions.ReportModal(self.confessions, self.message, self.origin)
+      )
+      await inter.delete_original_response()
+
+  # Modals
+
+  class ReportModal(disnake.ui.Modal):
+    """ Confirm user input before sending a report """
+    def __init__(
+        self,
+        confessions:"Confessions",
+        message: disnake.Message,
+        origin: disnake.Interaction
+    ):
+      super().__init__(
+        title = confessions.bot.babel(origin, 'confessions', 'report_title'),
+        custom_id=f'report_{message.id}',
+        components=[
+          disnake.ui.TextInput(
+            label = confessions.bot.babel(origin, 'confessions', 'report_field'),
+            placeholder = confessions.bot.babel(origin, 'confessions', 'report_placeholder'),
+            custom_id = 'report_reason',
+            style = disnake.TextInputStyle.paragraph,
+            min_length = 1
+          )
+        ],
+        timeout=600
+      )
+
+      self.confessions = confessions
+      self.message = message
+      self.origin = origin
+
+    async def callback(self, inter: disnake.ModalInteraction):
+      """ Send report to mod channel as configured """
+      if self.confessions.bot.config['confessions']['report_channel']:
+        reportchannel = await self.confessions.safe_fetch_channel(
+          inter, self.confessions.bot.config.getint('confessions', 'report_channel')
+        )
+        if reportchannel is None:
+          await inter.response.send_message(
+            self.confessions.bot.babel(inter, 'confessions', 'report_failed')
+          )
+          return
+        await reportchannel.send(
+          self.confessions.bot.babel(
+            reportchannel.guild,
+            'confessions',
+            'new_report',
+            server=f'{inter.guild.name} ({inter.guild.id})',
+            user=f'{inter.author.mention} ({inter.author.name}#{inter.author.discriminator})',
+            reason=inter.text_values['report_reason']
+          ),
+          embed=self.message.embeds[0],
+        )
+        await inter.response.send_message(
+          self.confessions.bot.babel(inter, 'confessions', 'report_success')
+        )
+
   class ConfessionModal(disnake.ui.Modal):
     """ Modal for completing an incomplete confession """
     def __init__(
@@ -919,14 +1007,24 @@ class Confessions(commands.Cog):
   # Context menu commands
 
   @commands.cooldown(1, 60)
-  @commands.user_command()
-  async def report(self, inter:disnake.UserCommandInteraction):
-    """ Reports a message to the bot owners """
-    message: disnake.InteractionMessage = await inter.original_message
-    if message.author != self.bot.user:
-      inter.response.send_message(self.bot.babel(inter, 'confessions', 'report_invalid_message'))
+  @commands.message_command(name="Report confession", dm_permission=False)
+  async def report(self, inter:disnake.MessageCommandInteraction):
+    """ Reports a confession to the bot owners """
+    if inter.target.author == self.bot.user and\
+       len(inter.target.embeds) > 0 and\
+       inter.target.embeds[0].title is None:
+      await inter.response.send_message(
+        content=self.bot.babel(inter, 'confessions', 'report_prep', msgurl=inter.target.jump_url),
+        view=self.ReportView(self, inter.target, inter),
+        ephemeral=True,
+        suppress_embeds=True
+      )
       return
-    inter.response.send_modal(self.ReportModal(self, await inter.original_message, inter))
+
+    await inter.response.send_message(
+      self.bot.babel(inter, 'confessions', 'report_invalid_message'),
+      ephemeral=True
+    )
 
   #	Slash commands
 
@@ -1058,8 +1156,7 @@ class Confessions(commands.Cog):
     )
 
 
-  @commands.guild_only()
-  @commands.slash_command()
+  @commands.slash_command(dm_permission=False)
   async def set(
     self,
     inter:disnake.GuildCommandInteraction,
@@ -1130,8 +1227,7 @@ class Confessions(commands.Cog):
         ephemeral=True
       )
 
-  @commands.guild_only()
-  @commands.slash_command()
+  @commands.slash_command(dm_permission=False)
   async def shuffle(self, inter:disnake.GuildCommandInteraction):
     """
     Change all anon-ids on a server
@@ -1159,8 +1255,7 @@ class Confessions(commands.Cog):
 
     await inter.send(self.bot.babel(inter, 'confessions', 'shufflesuccess'))
 
-  @commands.guild_only()
-  @commands.slash_command()
+  @commands.slash_command(dm_permission=False)
   async def imagesupport(self, inter:disnake.GuildCommandInteraction, toggle:Toggle):
     """
     Enable or disable images in confessions
@@ -1182,8 +1277,7 @@ class Confessions(commands.Cog):
         self.bot.config.save()
         await inter.send(self.bot.babel(inter, 'confessions', 'imagesupportdisabled'))
 
-  @commands.guild_only()
-  @commands.slash_command(aliases=['ban'])
+  @commands.slash_command(aliases=['ban'], dm_permission=False)
   async def block(
     self,
     inter:disnake.GuildCommandInteraction,
@@ -1234,8 +1328,7 @@ class Confessions(commands.Cog):
       self.bot.babel(inter, 'confessions', ('un' if unblock else '')+'bansuccess', user=anonid)
     )
 
-  @commands.guild_only()
-  @commands.slash_command()
+  @commands.slash_command(dm_permission=False)
   async def botmod(
     self,
     inter:disnake.GuildCommandInteraction,
