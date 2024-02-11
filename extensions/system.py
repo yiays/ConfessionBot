@@ -73,7 +73,7 @@ class System(commands.Cog):
         )
         return
       elif module=='babel':
-        self.bot.babel.reload()
+        self.bot.babel.load()
         await inter.send(
           self.bot.babel(inter, 'main', 'extension_reload_success', extension=module),
           ephemeral=True
