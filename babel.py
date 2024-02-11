@@ -162,11 +162,12 @@ class Babel():
         continue
 
     if match is None:
-      return "{MISSING STRING}"
+      variables = ', '.join(k+'={'+k+'}' for k in values)
+      match = "{"+ key.upper() + (': '+variables if variables else '') +"}"
 
-    # Fill in values in the string
-    for key,value in values.items():
-      match = match.replace('{'+key+'}', str(value))
+    # Fill in variables in the string
+    for varname,varval in values.items():
+      match = match.replace('{'+varname+'}', str(varval))
 
     # Fill in prefixes
     prefixqueries = self.prefixreference.findall(match)
