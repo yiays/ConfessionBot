@@ -13,15 +13,21 @@ class Error(commands.Cog):
   def __init__(self, bot:commands.Bot):
     self.bot = bot
 
-  @commands.Cog.listener("on_slash_command_error")
-  @commands.Cog.listener("on_command_error")
+  @commands.Cog.listener('on_user_command_error')
+  @commands.Cog.listener('on_messsage_command_error')
+  @commands.Cog.listener('on_slash_command_error')
+  @commands.Cog.listener('on_command_error')
   async def handle_error(
     self,
-    ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
+    ctx:Union[commands.Context, disnake.Interaction],
     error:commands.CommandError
   ):
     """ Report to the user what went wrong """
+    #TODO: on_message_command_error doesn't seem to be firing
     if isinstance(error, commands.CommandOnCooldown):
+      if error.cooldown.get_retry_after > 5:
+        await ctx.send(self.bot.babel(ctx, 'error', 'cooldown', t=error.cooldown.get_retry_after))
+        return
       print("cooldown")
       return
     kwargs = {'ephemeral': True} if isinstance(ctx, disnake.Interaction) else {}
