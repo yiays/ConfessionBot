@@ -3,12 +3,18 @@
   Allows users to use emoji from other servers by command
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class Emoji(commands.Cog):
   """ Emojis from guilds as commands """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
 
   @commands.slash_command()
@@ -45,6 +51,6 @@ class Emoji(commands.Cog):
     ]
     return results[:25]
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Emoji(bot))

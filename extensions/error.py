@@ -4,13 +4,18 @@
   Recommended cogs: Help
 """
 
-from typing import Union
+from __future__ import annotations
+
+from typing import Union, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class Error(commands.Cog):
   """user-friendly error reporting"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
 
   @commands.Cog.listener('on_user_command_error')
@@ -88,6 +93,6 @@ class Error(commands.Cog):
     elif isinstance(error, (commands.CheckFailure, commands.CheckAnyFailure)):
       return
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Error(bot))

@@ -4,11 +4,16 @@
   Dependancies: Auth
 """
 
+from __future__ import annotations
+
 import asyncio
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
 
 class JanitorMode(int, Enum):
   """ Actions users can take to configure the janitor """
@@ -18,7 +23,7 @@ class JanitorMode(int, Enum):
 
 class Admin(commands.Cog):
   """ Admin tools """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise AssertionError("'auth' must be enabled to use 'admin'")
@@ -110,6 +115,6 @@ class Admin(commands.Cog):
     except disnake.errors.Forbidden:
       await inter.send(self.bot.babel(inter, 'admin', 'clean_failed'))
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Admin(bot))

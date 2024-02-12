@@ -1,18 +1,38 @@
-import asyncio
-import disnake
-from disnake.ext import tasks, commands
+"""
+  Poll - Hold community polls
+  Features: Tracks time before, during, and after a poll. Recovers from restarts.
+  Recommended cogs: Help, Error
+"""
+
+from __future__ import annotations
+
 from time import time
 import re
+import asyncio
+from typing import Union, TYPE_CHECKING
+import disnake
+from disnake.ext import tasks, commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
 
 from disnake.raw_models import RawReactionActionEvent, RawReactionClearEvent
 
 class Poll(commands.Cog):
-  """poll is an almost stateless poll extension for discord bots
-  this improved poll handles votes even if the bot goes offline and keeps the countdown timer up to date for a week after expiry"""
+  """
+    Poll is an almost stateless poll extension for discord bots
+    This improved poll handles votes even if the bot goes offline
+    Also keeps the countdown timer up to date for a week after expiry
+  """
+
+  #TODO: partial rewrite needed in order to support babel
 
   emojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
+  current_poll_timer: tasks.Loop
+  old_poll_timer: tasks.Loop
+  ancient_poll_timer: tasks.Loop
 
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     self.current_poll_timer.start()
     self.old_poll_timer.start()
@@ -236,5 +256,7 @@ class Poll(commands.Cog):
     self.bot.config['poll'][f'{ctx.channel.id}_{pollmsg.id}_expiry'] = str(round(time())+counter)
     self.bot.config.save()
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
+  """ Bind this cog to the bot """
   bot.add_cog(Poll(bot))

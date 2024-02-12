@@ -4,13 +4,19 @@
   Related: https://github.com/yiays/Babel-Translator
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 import re
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class Language(commands.Cog):
   """ Enables per-user and per-guild string translation of the bot """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('language'):
@@ -19,7 +25,7 @@ class Language(commands.Cog):
   @commands.slash_command()
   async def language(self, inter:disnake.ApplicationCommandInteraction):
     """
-    Manage internationalisation settings for interactions with this account or any servers you manage
+    Changes the language this bot speaks to you, or to a server you administrate
     """
 
   @language.sub_command(name='list')
@@ -30,7 +36,10 @@ class Language(commands.Cog):
     embed = disnake.Embed(
       title = self.bot.babel(inter, 'language', 'list_title'),
       description = self.bot.babel(inter, 'language', 'set_howto')+\
-      '\n'+self.bot.babel(inter, 'language', 'contribute_cta') if self.bot.config['language']['contribute_url'] else '',
+      '\n' + (
+        self.bot.babel(inter, 'language', 'contribute_cta') if\
+        self.bot.config['language']['contribute_url'] else ''
+      ),
       color = int(self.bot.config['main']['themecolor'], 16)
     )
 
@@ -144,6 +153,6 @@ class Language(commands.Cog):
       matches = matches[:23] + ['...']
     return (['default'] if 'default'.startswith(search) else []) + matches
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Language(bot))

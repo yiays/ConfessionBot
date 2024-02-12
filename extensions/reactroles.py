@@ -1,10 +1,21 @@
+"""
+  ReactRoles - Adds and takes roles based on a reaction to a message
+  In the process of being replaced by EventMsg
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 import asyncio
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class ReactRoles(commands.Cog):
   """allows admins to set up messages where reacting grants users roles"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise AssertionError("'auth' must be enabled to use 'reactroles'")
@@ -145,5 +156,5 @@ class ReactRoles(commands.Cog):
     self.bot.config.save()
 
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   bot.add_cog(ReactRoles(bot))

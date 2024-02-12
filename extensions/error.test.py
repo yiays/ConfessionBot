@@ -1,13 +1,18 @@
 """
-  Example - Simple extension for Merely Framework
+  Error Test - A test module for the error module, makes it easy to ensure error handling is working
 """
 
-import disnake
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from disnake.ext import commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
 
 class Test(commands.Cog):
   """ Adds an echo command and logs new members """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
 
   @commands.user_command(name='throw_error')
@@ -30,6 +35,6 @@ class Test(commands.Cog):
     """ Throws an error for testing """
     raise Exception("Command failed successfully")
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Test(bot))

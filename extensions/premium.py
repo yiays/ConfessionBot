@@ -4,12 +4,17 @@
   Currently unused until new premium exclusive features are developed
 """
 
-import asyncio
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class Premium(commands.Cog):
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     #TODO: this cog
     self.bot = bot
     # ensure config file has required data
@@ -81,6 +86,6 @@ class Premium(commands.Cog):
     await ctx.reply(self.bot.babel(ctx, 'premium', 'cta', link=embed.url), embed=embed)
 
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Premium(bot))

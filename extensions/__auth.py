@@ -5,13 +5,18 @@
   Recommended cogs: Error
 """
 
-from typing import Union
+from __future__ import annotations
+
+from typing import Union, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class Auth(commands.Cog):
   """custom auth rules for merely framework"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('auth'):
@@ -64,6 +69,6 @@ class Auth(commands.Cog):
       return True
     raise self.AuthError(self.bot.babel(msg, 'auth', 'not_authuser'))
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Auth(bot))

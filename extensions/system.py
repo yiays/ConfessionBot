@@ -1,13 +1,19 @@
 """
   System - Bot management commands
-  Dependancies: Auth
+  Dependencies: Auth
 """
+
+from __future__ import annotations
+
 from enum import Enum
 from glob import glob
 import asyncio, os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
 
 class Actions(int, Enum):
   """ Actions that can be performed on an option """
@@ -20,7 +26,7 @@ class Actions(int, Enum):
 
 class System(commands.Cog):
   """commands involved in working with a discord bot"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
@@ -197,6 +203,6 @@ class System(commands.Cog):
       self.bot.config.save()
     await self.bot.close()
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(System(bot))

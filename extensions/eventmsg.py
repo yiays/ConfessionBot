@@ -4,11 +4,16 @@
   Dependancies: Auth
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Union, Callable
+from typing import Optional, Union, Callable, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
 
 getdatecomponent = [
   {
@@ -177,7 +182,7 @@ class Date(datetime):
 
 class EventMsg(commands.Cog):
   """ Setup custom messages to send on an event """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise AssertionError("'auth' must be enabled to use 'eventmsg'")
@@ -500,6 +505,6 @@ class EventMsg(commands.Cog):
       await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'farewell_clear_failure'))
 
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(EventMsg(bot))

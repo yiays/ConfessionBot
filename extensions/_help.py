@@ -4,14 +4,19 @@
   Recommended cogs: any cogs that have featured commands
 """
 
+from __future__ import annotations
+
 import re
-from typing import Union, Optional
+from typing import Union, Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 class Help(commands.Cog):
   """the user-friendly documentation core"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('help'):
@@ -74,7 +79,10 @@ class Help(commands.Cog):
     matchedcommand = self.find_command(cmd)
     # return usage information for a specific command
     if matchedcommand:
-      for reflang in self.bot.babel.resolve_lang(ctx.author, ctx.guild, ctx if isinstance(ctx, disnake.Interaction) else None):
+      for reflang in\
+          self.bot.babel.resolve_lang(
+            ctx.author, ctx.guild, ctx if isinstance(ctx, disnake.Interaction) else None
+          ):
         reflang = self.bot.babel.langs[reflang]
         for key in reflang.keys():
           if f'command_{matchedcommand.name}_help' in reflang[key]:
@@ -335,6 +343,6 @@ class Help(commands.Cog):
       matches = [matches[0], '...'] + matches[len(matches) - 23:]
     return matches
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Help(bot))

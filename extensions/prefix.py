@@ -1,9 +1,21 @@
+"""
+  Prefix - change the activation prefix in text mode
+  Mostly useless now as Discord heavily encourages using slash commands instead
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
+
 class Prefix(commands.Cog):
   """a prototype service for commandless bots"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
@@ -47,5 +59,5 @@ class Prefix(commands.Cog):
   async def prefix_get(self, ctx:commands.Context, guild:int=0):
     await ctx.reply(self.bot.babel(ctx, 'prefix', 'get', prefix=self.bot.config.get('prefix', str(guild if guild else ctx.guild.id), fallback='*unset*')))
 
-def setup(bot:commands.Bot):
+def setup(bot:MerelyBot):
   bot.add_cog(Prefix(bot))
