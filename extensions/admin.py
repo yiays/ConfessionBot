@@ -4,11 +4,17 @@
   Dependancies: Auth
 """
 
+from __future__ import annotations
+
 import asyncio
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 
 class JanitorMode(int, Enum):
   """ Actions users can take to configure the janitor """
@@ -16,9 +22,10 @@ class JanitorMode(int, Enum):
   DELETE_ALL = 1
   DISABLED = -1
 
+
 class Admin(commands.Cog):
   """ Admin tools """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise AssertionError("'auth' must be enabled to use 'admin'")
@@ -26,14 +33,14 @@ class Admin(commands.Cog):
     if not bot.config.has_section('admin'):
       bot.config.add_section('admin')
 
-  def check_delete(self, message:disnake.Message, strict:bool=False):
+  def check_delete(self, message:disnake.Message, strict:bool = False):
     """ Criteria for message deletion """
     return (
       not message.flags.ephemeral and
       (
         strict or
         (
-          message.author==self.bot.user or
+          message.author == self.bot.user or
           message.content.startswith('<@'+str(self.bot.user.id)+'>') or
           message.type == disnake.MessageType.pins_add
         )
@@ -75,9 +82,9 @@ class Admin(commands.Cog):
   async def clean(
     self,
     inter:disnake.GuildCommandInteraction,
-    number:Optional[int]=commands.Param(None, gt=0, le=10000),
-    clean_to:Optional[disnake.Message]=None,
-    strict:bool=False
+    number:Optional[int] = commands.Param(None, gt=0, le=10000),
+    clean_to:Optional[disnake.Message] = None,
+    strict:bool = False
   ):
     """
       Clean messages from this channel. By default, this only deletes messages to and from this bot.
@@ -110,6 +117,7 @@ class Admin(commands.Cog):
     except disnake.errors.Forbidden:
       await inter.send(self.bot.babel(inter, 'admin', 'clean_failed'))
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Admin(bot))

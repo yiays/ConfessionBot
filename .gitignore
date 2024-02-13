@@ -3,7 +3,3 @@ __pycache__
 /config/config_history
 /config/config.ini
 /logs
-/babel/v1.x/*
-/babel/v2.0/*
-/config/v1.x/*
-/config/v2.0/*

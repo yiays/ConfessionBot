@@ -11,45 +11,64 @@ from typing import Optional, Union
 from disnake import Locale, Guild, Message, Interaction, User, Member
 from disnake.ext.commands import Context
 
+
 class Babel():
   """ Stores language data and resolves and formats it for use in Cogs """
-  path = 'babel'
-  langs = {}
+  PATH = 'babel'
+  config: ConfigParser
+  langs: dict
+  scope_key_cache: dict
+
+  # Regex patterns
+  filter_conditional: re.Pattern
+  filter_configreference: re.Pattern
+  filter_prefixreference: re.Pattern
+
+  @property
+  def defaultlang(self) -> str:
+    """ The default language which should have all strings """
+    return self.config.get('language', 'default', fallback='en')
+
+  @property
+  def prefix(self) -> str:
+    """ The default bot prefix """
+    return self.config.get('language', 'prefix', fallback='')
 
   def __init__(self, config:ConfigParser):
+    """ Called once on import """
     self.config = config
-    self.conditional = re.compile(r'{([a-z]*?)\?(.*?)\|(.*?)}')
-    self.configreference = re.compile(r'{c\:([a-z_]*?)\/([a-z_]*?)}')
-    self.prefixreference = re.compile(r'{p\:(local|global)}')
+    self.filter_conditional = re.compile(r'{([a-z]*?)\?(.*?)\|(.*?)}')
+    self.filter_configreference = re.compile(r'{c\:([a-z_]*?)\/([a-z_]*?)}')
+    self.filter_prefixreference = re.compile(r'{p\:(local|global)}')
     self.load()
 
   def load(self):
-    """ Load data from config and babel files """
-    self.defaultlang = self.config.get('language', 'default', fallback='en')
-    # defaultlang is the requested language to default new users to
-    self.prefix = self.config.get('language', 'prefix', fallback='')
+    """ Load data from config and babel files, called upon reload """
+    # Reset cache
+    self.langs = {}
+    self.scope_key_cache = {}
 
-    if os.path.isfile(self.path):
-      os.remove(self.path)
+    if os.path.isfile(self.PATH):
+      os.remove(self.PATH)
     if (
-      not os.path.exists(self.path) or
-      not os.path.exists(os.path.join(self.path, self.defaultlang+'.ini'))
+      not os.path.exists(self.PATH) or
+      not os.path.exists(os.path.join(self.PATH, self.defaultlang+'.ini'))
     ):
       raise FileNotFoundError(
-        f"The path {self.path} must exist and contain a complete {self.defaultlang}.ini."
+        f"The path {self.PATH} must exist and contain a complete {self.defaultlang}.ini."
       )
 
-    for langfile in os.scandir(self.path):
+    for langfile in os.scandir(self.PATH):
       langfile = langfile.name
       if langfile[-4:] == '.ini':
         langname = langfile[:-4]
         self.langs[langname] = ConfigParser(comment_prefixes='@', allow_no_value=True)
         # create a configparser that should preserve comments
-        self.langs[langname].read(os.path.join(self.path, langfile), encoding='utf-8')
+        self.langs[langname].read(os.path.join(self.PATH, langfile), encoding='utf-8')
         if 'meta' not in self.langs[langname]:
           self.langs[langname].add_section('meta')
         self.langs[langname].set('meta', 'language', langname)
-        with open(os.path.join(self.path, langfile), 'w', encoding='utf-8') as file:
+        with open(os.path.join(self.PATH, langfile), 'w', encoding='utf-8') as file:
           self.langs[langname].write(file)
 
     # baselang is the root language file that should be considered the most complete.
@@ -60,11 +79,6 @@ class Babel():
         self.baselang = newbaselang
       else:
         print("WARNING: unable to resolve language dependancy chain.")
-
-  def reload(self):
-    """ Reset data and load again """
-    self.langs = {}
-    self.load()
 
   def localeconv(self, locale:Locale) -> str:
     """ Converts a Discord API locale to a babel locale """
@@ -149,7 +163,7 @@ class Babel():
       guild = target
     else:
       author = target[0]
-      guild = target[1] if len(target)>1 else None
+      guild = target[1] if len(target) > 1 else None
 
     reqlangs = self.resolve_lang(author, guild, inter)
 
@@ -162,14 +176,15 @@ class Babel():
         continue
 
     if match is None:
-      return "{MISSING STRING}"
+      variables = ', '.join(k+'={'+k+'}' for k in values)
+      match = "{" + key.upper() + (': '+variables if variables else '') + "}"
 
-    # Fill in values in the string
-    for key,value in values.items():
-      match = match.replace('{'+key+'}', str(value))
+    # Fill in variables in the string
+    for varname,varval in values.items():
+      match = match.replace('{'+varname+'}', str(varval))
 
     # Fill in prefixes
-    prefixqueries = self.prefixreference.findall(match)
+    prefixqueries = self.filter_prefixreference.findall(match)
     for prefixquery in prefixqueries:
       if prefixquery == 'local' and guild:
         match = match.replace(
@@ -180,20 +195,20 @@ class Babel():
         match = match.replace('{p:'+prefixquery+'}', self.config['main']['prefix_short'])
 
     # Fill in conditionals
-    conditionalqueries = self.conditional.findall(match)
+    conditionalqueries = self.filter_conditional.findall(match)
     for conditionalquery in conditionalqueries:
       if conditionalquery[0] in values:
         if values[conditionalquery[0]]:
           replace = conditionalquery[1]
         else:
           replace = conditionalquery[2]
-        match=match.replace(
+        match = match.replace(
           '{'+conditionalquery[0]+'?'+conditionalquery[1]+'|'+conditionalquery[2]+'}',
           replace
         )
 
     # Fill in config queries
-    configqueries = self.configreference.findall(match)
+    configqueries = self.filter_configreference.findall(match)
     for configquery in configqueries:
       if configquery[0] in self.config:
         if configquery[1] in self.config[configquery[0]]:
@@ -201,7 +216,7 @@ class Babel():
             '{c:'+configquery[0]+'/'+configquery[1]+'}',
             self.config[configquery[0]][configquery[1]]
           )
-    
+
     # Handle \n
     match = match.replace('\\n', '\n')
 
@@ -209,6 +224,11 @@ class Babel():
 
   def list_scope_key_pairs(self, lang):
     """ Breaks down the structure of a babel file for evaluation """
+    # Check cache first
+    if lang in self.scope_key_cache:
+      return self.scope_key_cache[lang]
+
+    # List all scope key pairs in this language and any it inherits from
     pairs = set()
     inheritlang = lang
     while inheritlang and inheritlang in self.langs:
@@ -219,11 +239,14 @@ class Babel():
           if value:
             pairs.add(f'{scope}/{key}')
       inheritlang = self.langs[inheritlang].get('meta', 'inherit', fallback='')
+
+    # Store result in cache
+    self.scope_key_cache[lang] = pairs
     return pairs
 
   def calculate_coverage(self, lang:str):
     """ Compares the number of strings between a language and the baselang """
     langvals = self.list_scope_key_pairs(lang)
-    basevals = self.list_scope_key_pairs(self.defaultlang) #TODO: don't run this every time.
+    basevals = self.list_scope_key_pairs(self.defaultlang)
 
     return int((len(langvals) / max(len(basevals), 1)) * 100)

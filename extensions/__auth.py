@@ -5,13 +5,19 @@
   Recommended cogs: Error
 """
 
-from typing import Union
+from __future__ import annotations
+
+from typing import Union, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
+
 class Auth(commands.Cog):
   """custom auth rules for merely framework"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('auth'):
@@ -29,25 +35,25 @@ class Auth(commands.Cog):
   def owners(self, msg:Union[disnake.Message, disnake.GuildCommandInteraction]):
     """ Verify this user owns this guild """
     if msg.author == msg.guild.owner or\
-        str(str(msg.author.id)) in self.bot.config['auth']['superusers']:
+       str(str(msg.author.id)) in self.bot.config['auth']['superusers']:
       return True
     raise self.AuthError(self.bot.babel(msg, 'auth', 'unauthorized'))
 
   def admins(self, msg:Union[disnake.Message, disnake.GuildCommandInteraction]):
     """ Verify this user is an admin """
     if msg.author == msg.guild.owner or\
-        msg.channel.permissions_for(msg.author).administrator or\
-        str(msg.author.id) in self.bot.config['auth']['superusers']:
+       msg.channel.permissions_for(msg.author).administrator or\
+       str(msg.author.id) in self.bot.config['auth']['superusers']:
       return True
     raise self.AuthError(self.bot.babel(msg, 'auth', 'not_admin'))
 
   def mods(self, msg:Union[disnake.Message, disnake.GuildCommandInteraction]):
     """ Verify this user is a moderator """
     if msg.author == msg.guild.owner or\
-      msg.channel.permissions_for(msg.author).administrator or\
-      msg.channel.permissions_for(msg.author).ban_members or\
-      str(msg.author.id) in self.bot.config['auth']['superusers'] or\
-      str(msg.author.id) in self.bot.config['auth']['authusers']:
+       msg.channel.permissions_for(msg.author).administrator or\
+       msg.channel.permissions_for(msg.author).ban_members or\
+       str(msg.author.id) in self.bot.config['auth']['superusers'] or\
+       str(msg.author.id) in self.bot.config['auth']['authusers']:
       return True
     raise self.AuthError(self.bot.babel(msg, 'auth', 'not_mod'))
 
@@ -60,10 +66,11 @@ class Auth(commands.Cog):
   def authusers(self, msg:Union[disnake.Message, disnake.ApplicationCommandInteraction]):
     """ Verify this user is an authuser """
     if str(msg.author.id) in self.bot.config['auth']['superusers'] or\
-        str(msg.author.id) in self.bot.config['auth']['authusers']:
+       str(msg.author.id) in self.bot.config['auth']['authusers']:
       return True
     raise self.AuthError(self.bot.babel(msg, 'auth', 'not_authuser'))
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Auth(bot))

@@ -2,17 +2,24 @@
   Dice - Random Number Generation
 """
 
+from __future__ import annotations
+
 import random
+from typing import TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
+
 class Dice(commands.Cog):
   """simple dice rolling command extension, could be treated like another example"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
 
   @commands.slash_command()
-  async def dice(self, inter:disnake.ApplicationCommandInteraction, sides:str=6):
+  async def dice(self, inter:disnake.ApplicationCommandInteraction, sides:str = 6):
     """
     Roll an n-sided dice
 
@@ -32,6 +39,7 @@ class Dice(commands.Cog):
 
     await inter.send('\n'.join(result))
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Dice(bot))

@@ -1,0 +1,18 @@
+[flake8]
+max-line-length = 102
+
+extend-ignore = 
+  # indentation is not a multiple of 4
+  #  - codebase was built from the start with 2 spaces now we're sticking with it
+  E111,E114,
+  # block comment should start with #
+  #  - wants a space between # and TODO:
+  E265,
+  # missing whitespace after ':'
+  #  - I just personally like compact type hinting
+  E231
+  # at least two spaces before inline comment
+  #  - This would make the lines too long
+  E261
+  # multiple imports on one line
+  E401

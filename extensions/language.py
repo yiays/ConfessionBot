@@ -4,13 +4,20 @@
   Related: https://github.com/yiays/Babel-Translator
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 import re
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
+
 class Language(commands.Cog):
   """ Enables per-user and per-guild string translation of the bot """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('language'):
@@ -19,7 +26,7 @@ class Language(commands.Cog):
   @commands.slash_command()
   async def language(self, inter:disnake.ApplicationCommandInteraction):
     """
-    Manage internationalisation settings for interactions with this account or any servers you manage
+    Changes the language this bot speaks to you, or to a server you administrate
     """
 
   @language.sub_command(name='list')
@@ -28,10 +35,13 @@ class Language(commands.Cog):
     Lists all available languages this bot can be translated to
     """
     embed = disnake.Embed(
-      title = self.bot.babel(inter, 'language', 'list_title'),
-      description = self.bot.babel(inter, 'language', 'set_howto')+\
-      '\n'+self.bot.babel(inter, 'language', 'contribute_cta') if self.bot.config['language']['contribute_url'] else '',
-      color = int(self.bot.config['main']['themecolor'], 16)
+      title=self.bot.babel(inter, 'language', 'list_title'),
+      description=self.bot.babel(inter, 'language', 'set_howto') +
+      '\n' + (
+        self.bot.babel(inter, 'language', 'contribute_cta') if
+        self.bot.config['language']['contribute_url'] else ''
+      ),
+      color=int(self.bot.config['main']['themecolor'], 16)
     )
 
     for langcode,language in self.bot.babel.langs.items():
@@ -44,12 +54,12 @@ class Language(commands.Cog):
           'meta',
           'contributors',
           fallback=self.bot.babel(inter, 'language', 'unknown_contributors')
-        ) + '\n' +\
+        ) + '\n' +
         self.bot.babel(
           inter,
           'language',
           'coverage_label',
-          coverage = self.bot.babel.calculate_coverage(langcode)
+          coverage=self.bot.babel.calculate_coverage(langcode)
         )
       )
 
@@ -71,11 +81,11 @@ class Language(commands.Cog):
     backup = False
     for lang, origin in zip(langs, origins):
       if origin.startswith('inherit'):
-        origin='inherit'
+        origin = 'inherit'
       embeds.append(disnake.Embed(
-        title = f"{self.bot.babel.langs[lang].get('meta', 'name')} ({lang})",
-        description = self.bot.babel(inter, 'language', 'origin_reason_'+origin, backup=backup),
-        color = int(self.bot.config['main']['themecolor'], 16)
+        title=f"{self.bot.babel.langs[lang].get('meta', 'name')} ({lang})",
+        description=self.bot.babel(inter, 'language', 'origin_reason_'+origin, backup=backup),
+        color=int(self.bot.config['main']['themecolor'], 16)
       ))
       backup = True
 
@@ -120,18 +130,19 @@ class Language(commands.Cog):
           inter,
           'language',
           'unset_success' if language == 'default' else 'set_success',
-          language = (
+          language=(
             self.bot.babel.langs[self.bot.babel.defaultlang].get('meta', 'name')
             if language == 'default' else
             self.bot.babel.langs[language].get('meta', 'name')
           ),
-          usermode = usermode)
+          usermode=usermode)
         )
       else:
         await inter.send(
-          self.bot.babel(inter, 'language', 'set_warning_no_match')+'\n'+\
+          self.bot.babel(inter, 'language', 'set_warning_no_match')+'\n' +
           self.bot.babel(inter, 'language', 'contribute_cta')
         )
+
   @language_set.autocomplete('language')
   def language_set_ac(self, _:disnake.MessageCommandInteraction, search:str):
     """ Suggests languages that are already available """
@@ -144,6 +155,7 @@ class Language(commands.Cog):
       matches = matches[:23] + ['...']
     return (['default'] if 'default'.startswith(search) else []) + matches
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Language(bot))

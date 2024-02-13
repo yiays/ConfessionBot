@@ -1,13 +1,20 @@
 """
   System - Bot management commands
-  Dependancies: Auth
+  Dependencies: Auth
 """
+
+from __future__ import annotations
+
 from enum import Enum
 from glob import glob
 import asyncio, os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
+
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
 
 class Actions(int, Enum):
   """ Actions that can be performed on an option """
@@ -18,9 +25,10 @@ class Actions(int, Enum):
   enable = 4
   disable = 5
 
+
 class System(commands.Cog):
   """commands involved in working with a discord bot"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise Exception("'auth' must be enabled to use 'admin'")
@@ -64,16 +72,16 @@ class System(commands.Cog):
     module = module.lower()
 
     ext = None
-    if module in active_extensions or action==Actions.load:
-      if module=='config':
+    if module in active_extensions or action == Actions.load:
+      if module == 'config':
         self.bot.config.reload()
         await inter.send(
           self.bot.babel(inter, 'main', 'extension_reload_success', extension=module),
           ephemeral=True
         )
         return
-      elif module=='babel':
-        self.bot.babel.reload()
+      elif module == 'babel':
+        self.bot.babel.load()
         await inter.send(
           self.bot.babel(inter, 'main', 'extension_reload_success', extension=module),
           ephemeral=True
@@ -135,6 +143,7 @@ class System(commands.Cog):
         await inter.send(self.bot.babel(inter, 'main', 'extension_file_missing'), ephemeral=True)
     else:
       await inter.send(self.bot.babel(inter, 'main', 'extension_not_found'), ephemeral=True)
+
   @module.autocomplete('module')
   async def module_ac(self, inter:disnake.ApplicationCommandInteraction, search:str):
     """ Suggests modules based on the list in config """
@@ -183,7 +192,7 @@ class System(commands.Cog):
 
   @commands.slash_command()
   @commands.cooldown(1, 1)
-  async def die(self, inter:disnake.ApplicationCommandInteraction, saveconfig:bool=False):
+  async def die(self, inter:disnake.ApplicationCommandInteraction, saveconfig:bool = False):
     """
     Log out and shut down
 
@@ -197,6 +206,7 @@ class System(commands.Cog):
       self.bot.config.save()
     await self.bot.close()
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(System(bot))

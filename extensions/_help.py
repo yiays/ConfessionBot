@@ -4,14 +4,20 @@
   Recommended cogs: any cogs that have featured commands
 """
 
+from __future__ import annotations
+
 import re
-from typing import Union, Optional
+from typing import Union, Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
+
 class Help(commands.Cog):
   """the user-friendly documentation core"""
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     # ensure config file has required data
     if not bot.config.has_section('help'):
@@ -48,7 +54,7 @@ class Help(commands.Cog):
       await self.bot.change_presence(status=disnake.Status.dnd)
 
   @commands.Cog.listener('on_ready')
-  async def set_status(self, status:disnake.Status=None, message:str=None):
+  async def set_status(self, status:disnake.Status = None, message:str = None):
     """ appear online and add help command information to the status """
     if message is None:
       if self.bot.config['help']['customstatus']:
@@ -74,7 +80,10 @@ class Help(commands.Cog):
     matchedcommand = self.find_command(cmd)
     # return usage information for a specific command
     if matchedcommand:
-      for reflang in self.bot.babel.resolve_lang(ctx.author, ctx.guild, ctx if isinstance(ctx, disnake.Interaction) else None):
+      reslang = self.bot.babel.resolve_lang(
+        ctx.author, ctx.guild, ctx if isinstance(ctx, disnake.Interaction) else None
+      )
+      for reflang in reslang:
         reflang = self.bot.babel.langs[reflang]
         for key in reflang.keys():
           if f'command_{matchedcommand.name}_help' in reflang[key]:
@@ -95,7 +104,7 @@ class Help(commands.Cog):
 
   @commands.slash_command(name='help')
   async def slash_help(
-    self, inter:disnake.ApplicationCommandInteraction, command:Optional[str]=None
+    self, inter:disnake.ApplicationCommandInteraction, command:Optional[str] = None
   ):
     """
     Learn how to use this bot
@@ -110,7 +119,7 @@ class Help(commands.Cog):
   async def help(
     self,
     ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
-    command:Optional[str]=None,
+    command:Optional[str] = None,
     **kwargs
   ):
     """finds usage information in babel and sends them
@@ -159,15 +168,15 @@ class Help(commands.Cog):
           len(self.bot.config['prefix'][str(ctx.channel.guild.id)]):
           longprefix = None
       embed = disnake.Embed(
-        title = self.bot.babel(ctx, 'help', 'title'),
-        description = self.bot.babel(
+        title=self.bot.babel(ctx, 'help', 'title'),
+        description=self.bot.babel(
           ctx, 'help', 'introduction',
-          longprefix = longprefix,
-          videoexamples = self.bot.config.getboolean('help','helpurlvideoexamples'),
-          serverinv = self.bot.config['help']['serverinv']
+          longprefix=longprefix,
+          videoexamples=self.bot.config.getboolean('help','helpurlvideoexamples'),
+          serverinv=self.bot.config['help']['serverinv']
         ),
-        color = int(self.bot.config['main']['themecolor'], 16),
-        url = self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else '')
+        color=int(self.bot.config['main']['themecolor'], 16),
+        url=self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else '')
 
       sections = self.bot.config['help']['highlight_sections'].split(', ')
       for section in sections:
@@ -177,16 +186,17 @@ class Help(commands.Cog):
             hcmds.append(hcmd)
           else:
             hcmds.append(hcmd+'❌')
-        embed.add_field(name = section, value = '```'+', '.join(hcmds)+'```', inline = False)
+        embed.add_field(name=section, value='```'+', '.join(hcmds)+'```', inline=False)
 
-      embed.set_footer(text = self.bot.babel(ctx, 'help', 'creator_footer'),
-                       icon_url = self.bot.user.avatar.url)
+      embed.set_footer(text=self.bot.babel(ctx, 'help', 'creator_footer'),
+                       icon_url=self.bot.user.avatar.url)
 
       await ctx.send(
         self.bot.babel(ctx, 'help', 'helpurl_cta') if self.bot.config['help']['helpurl'] else "",
         embed=embed,
         **kwargs
       )
+
   @slash_help.autocomplete('command')
   def ac_command(self, _:disnake.ApplicationCommandInteraction, command:str):
     """ find any commands that contain the provided string """
@@ -211,63 +221,67 @@ class Help(commands.Cog):
     """
 
     embed = disnake.Embed(
-      title = self.bot.babel(inter, 'help', 'about_title'),
-      description = self.bot.babel(inter, 'help', 'bot_description'),
-      color = int(self.bot.config['main']['themecolor'], 16),
-      url = self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else ''
+      title=self.bot.babel(inter, 'help', 'about_title'),
+      description=self.bot.babel(inter, 'help', 'bot_description'),
+      color=int(self.bot.config['main']['themecolor'], 16),
+      url=self.bot.config['help']['helpurl'] if self.bot.config['help']['helpurl'] else ''
     )
 
     embed.add_field(
-      name = self.bot.babel(inter, 'help', 'about_field1_title'),
-      value = self.bot.babel(
+      name=self.bot.babel(inter, 'help', 'about_field1_title'),
+      value=self.bot.babel(
         inter,
         'help',
         'about_field1_value',
         cmds=len(self.bot.application_commands),
         guilds=len(self.bot.guilds)
       ),
-      inline = False
+      inline=False
     )
     embed.add_field(
-      name = self.bot.babel(inter, 'help', 'about_field2_title'),
-      value = self.bot.babel(
+      name=self.bot.babel(inter, 'help', 'about_field2_title'),
+      value=self.bot.babel(
         inter,
         'help',
         'about_field2_value',
         longprefix=self.bot.config['main']['prefix_long']
       ),
-      inline = False
+      inline=False
     )
     embed.add_field(
-      name = self.bot.babel(inter, 'help', 'about_field3_title'),
-      value = self.bot.babel(
+      name=self.bot.babel(inter, 'help', 'about_field3_title'),
+      value=self.bot.babel(
         inter,
         'help',
         'about_field3_value',
         videoexamples=self.bot.config.getboolean('help','helpurlvideoexamples'),
         serverinv=self.bot.config['help']['serverinv']
       ),
-      inline = False
+      inline=False
     )
     embed.add_field(
-      name = self.bot.babel(inter, 'help', 'about_field4_title'),
-      value = self.bot.babel(inter, 'help', 'about_field4_value'),
-      inline = False
+      name=self.bot.babel(inter, 'help', 'about_field4_title'),
+      value=self.bot.babel(inter, 'help', 'about_field4_value'),
+      inline=False
     )
     embed.add_field(
-      name = self.bot.babel(inter, 'help', 'about_field5_title'),
-      value = self.bot.babel(
+      name=self.bot.babel(inter, 'help', 'about_field5_title'),
+      value=self.bot.babel(
         inter,
         'help',
         'about_field5_value',
-        invite=f'https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot%20applications.commands&permissions=0'
+        invite=(
+          'https://discord.com/oauth2/authorize?client_id=' +
+          self.bot.user.id +
+          '&scope=bot%20applications.commands&permissions=0'
+        )
       ),
-      inline = False
+      inline=False
     )
 
     embed.set_footer(
-      text = self.bot.babel(inter, 'help', 'creator_footer'),
-      icon_url = self.bot.user.avatar.url
+      text=self.bot.babel(inter, 'help', 'creator_footer'),
+      icon_url=self.bot.user.avatar.url
     )
 
     await inter.send(
@@ -276,7 +290,7 @@ class Help(commands.Cog):
     )
 
   @commands.slash_command()
-  async def changes(self, inter:disnake.ApplicationCommandInteraction, search:Optional[str]=None):
+  async def changes(self, inter:disnake.ApplicationCommandInteraction, search:Optional[str] = None):
     """
     See what's changed in recent updates
 
@@ -305,21 +319,24 @@ class Help(commands.Cog):
     )
 
     embed = disnake.Embed(
-      title = self.bot.babel(inter, 'help', 'changelog_title'),
-      description = self.bot.babel(inter, 'help', 'changelog_description', ver=search) +\
-        '\n\n' + changelog,
-      color = int(self.bot.config['main']['themecolor'], 16),
-      url = logurl
+      title=self.bot.babel(inter, 'help', 'changelog_title'),
+      description=(
+        self.bot.babel(inter, 'help', 'changelog_description', ver=search) +
+        '\n\n' + changelog
+      ),
+      color=int(self.bot.config['main']['themecolor'], 16),
+      url=logurl
     )
     embed.set_footer(
-      text = self.bot.babel(inter, 'help', 'creator_footer'),
-      icon_url = self.bot.user.avatar.url
+      text=self.bot.babel(inter, 'help', 'creator_footer'),
+      icon_url=self.bot.user.avatar.url
     )
 
     await inter.send(
       self.bot.babel(inter, 'help', 'changelog_cta', logurl=logurl) if logurl else None,
       embed=embed
     )
+
   @changes.autocomplete('search')
   def ac_version(self, _:disnake.ApplicationCommandInteraction, search:str):
     """ find any matching versions """
@@ -335,6 +352,7 @@ class Help(commands.Cog):
       matches = [matches[0], '...'] + matches[len(matches) - 23:]
     return matches
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Help(bot))

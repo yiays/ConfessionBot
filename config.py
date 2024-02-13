@@ -8,6 +8,7 @@ from shutil import copy
 from os import path,makedirs,remove
 import time
 
+
 class Config(ConfigParser):
   """loads the config file automatically and ensures it's in a valid state"""
   def __init__(self):
@@ -60,6 +61,8 @@ class Config(ConfigParser):
       self['main']['themecolor'] = '0x0'
     if 'voteurl' not in self['main']:
       self['main']['voteurl'] = ''
+    if 'tos_url' not in self['main']:
+      self['main']['tos_url'] = ''
     if 'beta' not in self['main']:
       self['main']['beta'] = 'False'
     if 'ver' not in self['main']:

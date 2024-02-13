@@ -4,14 +4,20 @@
   Recommended cogs: Error
 """
 
+from __future__ import annotations
+
 import traceback
-from typing import Union
+from typing import Union, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
+if TYPE_CHECKING:
+  from ..main import MerelyBot
+
+
 class Log(commands.Cog):
   """ Record messages, commands and errors to file or a discord channel """
-  def __init__(self, bot:commands.Bot):
+  def __init__(self, bot:MerelyBot):
     self.bot = bot
     self.logchannel = None
     # ensure config file has required data
@@ -26,21 +32,34 @@ class Log(commands.Cog):
     if self.bot.config['log']['logchannel'].isdigit():
       self.logchannel = await self.bot.fetch_channel(int(self.bot.config['log']['logchannel']))
 
-  def truncate(self, string:str, maxlen:int=80):
+  def truncate(self, string:str, maxlen:int = 80):
     """ trim a long string and add ellipsis """
     return string[:maxlen] + ('...' if len(string) > maxlen else '')
 
   def wrap(self, content:str, author:disnake.User, channel:disnake.abc.Messageable):
     """ Format log data consistently """
     if isinstance(channel, disnake.TextChannel):
-      return f"[{self.truncate(channel.guild.name, 10)}#{self.truncate(channel.name, 20)}] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+      return ' '.join((
+        f"[{self.truncate(channel.guild.name, 10)}#{self.truncate(channel.name, 20)}]",
+        f"{self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+      ))
     if isinstance(channel, disnake.DMChannel):
       if channel.recipient:
-        return f"[DM({self.truncate(channel.recipient.name, 10)}#{channel.recipient.discriminator})] {author.name}#{author.discriminator}: {self.truncate(content)}"
-      return f"[DM] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+        return ' '.join((
+          f"[DM({self.truncate(channel.recipient.name, 10)}#{channel.recipient.discriminator})]",
+          f"{author.name}#{author.discriminator}: {self.truncate(content)}"
+        ))
+      return (
+        f"[DM] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+      )
     if isinstance(channel, disnake.Thread):
-      return f"[Thread] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
-    return f"[Unknown] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+      return ' '.join((
+        f"[Thread] {self.truncate(author.name, 10)}#{author.discriminator}:",
+        f"{self.truncate(content)}"
+      ))
+    return (
+      f"[Unknown] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    )
 
   @commands.Cog.listener('on_command')
   async def log_command(self, ctx:commands.Context):
@@ -48,7 +67,10 @@ class Log(commands.Cog):
     logentry = self.wrap(ctx.message.content, ctx.message.author, ctx.message.channel)
     print(logentry)
     if self.logchannel:
-      await self.logchannel.send(logentry, embed=ctx.message.embeds[0] if ctx.message.embeds else None)
+      await self.logchannel.send(
+        logentry,
+        embed=ctx.message.embeds[0] if ctx.message.embeds else None
+      )
 
   @commands.Cog.listener('on_application_command')
   async def log_slash_command(self, inter:disnake.ApplicationCommandInteraction):
@@ -63,13 +85,14 @@ class Log(commands.Cog):
     if self.logchannel:
       await self.logchannel.send(logentry)
 
-  #TODO: research slash command completion
   @commands.Cog.listener('on_command_completion')
   async def log_response(self, ctx:commands.Context):
     """ Record any replies to a command """
     responses = []
     async for msg in ctx.history(after=ctx.message):
-      if msg.author == self.bot.user and msg.reference and msg.reference.message_id == ctx.message.id:
+      if msg.author == self.bot.user and\
+         msg.reference and\
+         msg.reference.message_id == ctx.message.id:
         responses.append(msg)
     for response in responses:
       logentry = self.wrap(response.content, response.author, response.channel)
@@ -100,6 +123,7 @@ class Log(commands.Cog):
     if self.logchannel:
       await self.logchannel.send(logentry)
 
-def setup(bot:commands.Bot):
+
+def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
   bot.add_cog(Log(bot))
