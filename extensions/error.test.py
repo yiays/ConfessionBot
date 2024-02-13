@@ -10,6 +10,7 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class Test(commands.Cog):
   """ Adds an echo command and logs new members """
   def __init__(self, bot:MerelyBot):
@@ -34,6 +35,7 @@ class Test(commands.Cog):
   async def throw_error_text(self, _):
     """ Throws an error for testing """
     raise Exception("Command failed successfully")
+
 
 def setup(bot:MerelyBot):
   """ Bind this cog to the bot """

@@ -15,6 +15,7 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class Actions(int, Enum):
   """ Actions that can be performed on an option """
   list = 0
@@ -23,6 +24,7 @@ class Actions(int, Enum):
   reload = 3
   enable = 4
   disable = 5
+
 
 class System(commands.Cog):
   """commands involved in working with a discord bot"""
@@ -70,15 +72,15 @@ class System(commands.Cog):
     module = module.lower()
 
     ext = None
-    if module in active_extensions or action==Actions.load:
-      if module=='config':
+    if module in active_extensions or action == Actions.load:
+      if module == 'config':
         self.bot.config.reload()
         await inter.send(
           self.bot.babel(inter, 'main', 'extension_reload_success', extension=module),
           ephemeral=True
         )
         return
-      elif module=='babel':
+      elif module == 'babel':
         self.bot.babel.load()
         await inter.send(
           self.bot.babel(inter, 'main', 'extension_reload_success', extension=module),
@@ -141,6 +143,7 @@ class System(commands.Cog):
         await inter.send(self.bot.babel(inter, 'main', 'extension_file_missing'), ephemeral=True)
     else:
       await inter.send(self.bot.babel(inter, 'main', 'extension_not_found'), ephemeral=True)
+
   @module.autocomplete('module')
   async def module_ac(self, inter:disnake.ApplicationCommandInteraction, search:str):
     """ Suggests modules based on the list in config """
@@ -189,7 +192,7 @@ class System(commands.Cog):
 
   @commands.slash_command()
   @commands.cooldown(1, 1)
-  async def die(self, inter:disnake.ApplicationCommandInteraction, saveconfig:bool=False):
+  async def die(self, inter:disnake.ApplicationCommandInteraction, saveconfig:bool = False):
     """
     Log out and shut down
 
@@ -202,6 +205,7 @@ class System(commands.Cog):
     if saveconfig:
       self.bot.config.save()
     await self.bot.close()
+
 
 def setup(bot:MerelyBot):
   """ Bind this cog to the bot """

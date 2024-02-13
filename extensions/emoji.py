@@ -12,6 +12,7 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class Emoji(commands.Cog):
   """ Emojis from guilds as commands """
   def __init__(self, bot:MerelyBot):
@@ -42,6 +43,7 @@ class Emoji(commands.Cog):
       await inter.send(matches[0])
     else:
       await inter.send(self.bot.babel(inter, 'emoji', 'not_found'))
+
   @emoji.autocomplete('search')
   def ac_emoji(self, _:disnake.ApplicationCommandInteraction, search:str):
     """ Autocomplete for emoji search """
@@ -50,6 +52,7 @@ class Emoji(commands.Cog):
       for e in self.bot.emojis if search.replace(':','').lower() in e.name.lower()
     ]
     return results[:25]
+
 
 def setup(bot:MerelyBot):
   """ Bind this cog to the bot """

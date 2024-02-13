@@ -24,6 +24,7 @@ getdatecomponent = [
   }
 ]
 
+
 class Event():
   """
     The conditions of an event which the bot should watch for
@@ -59,12 +60,13 @@ class Event():
     name:str,
     usage:str,
     variables:tuple[str],
-    components:Optional[list[dict[str]]]=None
+    components:Optional[list[dict[str]]] = None
   ) -> None:
     self.name = name
     self.example = usage
     self.variables = variables
     self.components = components # Additional custom components for this event
+
 
 Events = {
   # Built-in disnake events, most require members scope
@@ -152,12 +154,14 @@ Events = {
   )
 }
 
+
 class Action(Enum):
   """ Actions that can be performed on an event """
   NOTHING = 0
   SEND_MESSAGE = 1
   EDIT_MESSAGE = 2
   GRANT_XP = 3
+
 
 class Date(datetime):
   """
@@ -167,18 +171,22 @@ class Date(datetime):
   def date(self) -> str:
     """ Override for date, returns D/MM/YYYY """
     return f"<t:{round(self.timestamp())}:d>"
+
   @property
   def week(self) -> int:
     """ Week number (0-52) """
     return int(self.strftime('%W'))
+
   @property
   def quarter(self) -> int:
     """ Quarter number (1-4) as in Q422 """
     return {1:1, 2:1, 3:1, 4:2, 5:2, 6:2, 7:3, 8:3, 9:3, 10:4, 11:4, 12:4}[self.month]
+
   @property
   def shortyear(self) -> int:
     """ 2 digit representaion of the current year (0-99) """
     return self.year % 100
+
 
 class EventMsg(commands.Cog):
   """ Setup custom messages to send on an event """
@@ -352,12 +360,12 @@ class EventMsg(commands.Cog):
       )
 
       submitbtn:disnake.Button = [
-        child for child in self.children if child.custom_id==f'{self.eid}_submit'
+        child for child in self.children if child.custom_id == f'{self.eid}_submit'
       ][0]
       if self.message:
-        submitbtn.disabled=False
+        submitbtn.disabled = False
       else:
-        submitbtn.disabled=True
+        submitbtn.disabled = True
 
       await inter.response.edit_message(state, components=self.children)
 
@@ -403,7 +411,7 @@ class EventMsg(commands.Cog):
     # Default state
     usage = ''
     message = ''
-    xp=0
+    xp = 0
     if action in (Action.SEND_MESSAGE, Action.EDIT_MESSAGE):
       message = event.example
       usage = self.pop_msg_var(
@@ -417,7 +425,7 @@ class EventMsg(commands.Cog):
         date=Date(2023, 10, 28) # example date shows month and day numbers clearly
       ).replace('[[', '{').replace(']]', '}')
     elif action is Action.GRANT_XP:
-      xp=0
+      xp = 0
     elif action is Action.NOTHING:
       #TODO: remove saved eventmessage
       pass
@@ -446,15 +454,23 @@ class EventMsg(commands.Cog):
     """welcome setter / getter"""
     if ctx.invoked_subcommand is None:
       raise commands.BadArgument
+
   @welcome.command(name='get')
   async def welcome_get(self, ctx:commands.Context):
     if f'{ctx.guild.id}_welcome' in self.bot.config['eventmsg']:
       data = self.bot.config['eventmsg'][f"{ctx.guild.id}_welcome"].split(', ')
-      await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'greeting_preview', channel=ctx.guild.get_channel(int(data[0])).mention, message=', '.join(data[1:]).format('@USER', ctx.guild.name)))
+      await ctx.reply(self.bot.babel(
+        ctx,
+        'eventmsg',
+        'greeting_preview',
+        channel=ctx.guild.get_channel(int(data[0])).mention,
+        message=', '.join(data[1:]).format('@USER', ctx.guild.name)
+      ))
     else:
       await self.welcome_set(ctx)
+
   @welcome.command(name='set')
-  async def welcome_set(self, ctx:commands.Context, *, message:str=''):
+  async def welcome_set(self, ctx:commands.Context, *, message:str = ''):
     self.bot.cogs['Auth'].admins(ctx.message)
     if not message:
       await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'welcome_set_instructions'))
@@ -462,6 +478,7 @@ class EventMsg(commands.Cog):
       self.bot.config['eventmsg'][f'{ctx.guild.id}_welcome'] = f"{ctx.channel.id}, {message}"
       self.bot.config.save()
       await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'welcome_set_success'))
+
   @welcome.command(name='clear')
   async def welcome_clear(self, ctx:commands.Context):
     self.bot.cogs['Auth'].admins(ctx.message)
@@ -478,15 +495,23 @@ class EventMsg(commands.Cog):
     """getter / setter for farewell"""
     if ctx.invoked_subcommand is None:
       raise commands.BadArgument
+
   @farewell.command(name='get')
   async def farewell_get(self, ctx:commands.Context):
     if f'{ctx.guild.id}_farewell' in self.bot.config['eventmsg']:
       data = self.bot.config['eventmsg'][f"{ctx.guild.id}_farewell"].split(', ')
-      await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'greeting_preview', channel=ctx.guild.get_channel(int(data[0])).mention, message=', '.join(data[1:]).format('USER#1234', ctx.guild.name)))
+      await ctx.reply(self.bot.babel(
+        ctx,
+        'eventmsg',
+        'greeting_preview',
+        channel=ctx.guild.get_channel(int(data[0])).mention,
+        message=', '.join(data[1:]).format('USER#1234', ctx.guild.name)
+      ))
     else:
       await self.farewell_set(ctx)
+
   @farewell.command(name='set')
-  async def farewell_set(self, ctx:commands.Context, *, message:str=''):
+  async def farewell_set(self, ctx:commands.Context, *, message:str = ''):
     self.bot.cogs['Auth'].admins(ctx.message)
     if not message:
       await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'farewell_set_instructions'))
@@ -494,6 +519,7 @@ class EventMsg(commands.Cog):
       self.bot.config['eventmsg'][f'{ctx.guild.id}_farewell'] = f"{ctx.channel.id}, {message}"
       self.bot.config.save()
       await ctx.reply(self.bot.babel(ctx, 'eventmsg', 'farewell_set_success'))
+
   @farewell.command(name='clear')
   async def farewell_clear(self, ctx:commands.Context):
     self.bot.cogs['Auth'].admins(ctx.message)

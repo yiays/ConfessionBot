@@ -8,6 +8,7 @@ from shutil import copy
 from os import path,makedirs,remove
 import time
 
+
 class Config(ConfigParser):
   """loads the config file automatically and ensures it's in a valid state"""
   def __init__(self):

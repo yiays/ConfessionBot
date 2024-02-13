@@ -13,6 +13,7 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class ReactRoles(commands.Cog):
   """allows admins to set up messages where reacting grants users roles"""
   def __init__(self, bot:MerelyBot):
@@ -59,16 +60,19 @@ class ReactRoles(commands.Cog):
     """ Grant the user their role """
     if isinstance(data.member, disnake.Member):
       emojiid = data.emoji if data.emoji.is_unicode_emoji() else data.emoji.id
-      if f"{data.channel_id}_{data.message_id}_{emojiid}_roles" in self.bot.config['reactroles']:
+      roleconfid = f"{data.channel_id}_{data.message_id}_{emojiid}_roles"
+      if roleconfid in self.bot.config['reactroles']:
         channel = await self.bot.fetch_channel(data.channel_id)
-        roleids = [int(r) for r in self.bot.config['reactroles'][f"{data.channel_id}_{data.message_id}_{emojiid}_roles"].split(' ')]
+        roleids = [int(r) for r in self.bot.config['reactroles'][roleconfid].split(' ')]
         roles = []
         for roleid in roleids:
           try:
             roles.append(channel.guild.get_role(roleid))
           except Exception as e:
             print("failed to get role for reactrole: "+str(e))
-        await data.member.send(self.bot.babel(data.member, 'reactroles', 'role_granted', roles=', '.join([role.name for role in roles])))
+        await data.member.send(self.bot.babel(
+          data.member, 'reactroles', 'role_granted', roles=', '.join([role.name for role in roles])
+        ))
         await data.member.add_roles(*roles, reason='reactroles')
 
   @commands.Cog.listener("on_raw_reaction_remove")
@@ -78,18 +82,25 @@ class ReactRoles(commands.Cog):
       guild = await self.bot.fetch_guild(data.guild_id)
       member = await guild.fetch_member(data.user_id)
       emojiid = data.emoji if data.emoji.is_unicode_emoji() else data.emoji.id
-      if f"{data.channel_id}_{data.message_id}_{emojiid}_roles" in self.bot.config['reactroles']:
+      roleconfid = f"{data.channel_id}_{data.message_id}_{emojiid}_roles"
+      if roleconfid in self.bot.config['reactroles']:
         channel = await self.bot.fetch_channel(data.channel_id)
-        roleids = [int(r) for r in self.bot.config['reactroles'][f"{data.channel_id}_{data.message_id}_{emojiid}_roles"].split(' ')]
-        roles = []
+        roleids = [
+          int(r) for r in self.bot.config['reactroles'][roleconfid].split(' ')]
+        roles:list[disnake.Role] = []
         for roleid in roleids:
           try:
             roles.append(channel.guild.get_role(roleid))
           except Exception as e:
             print("failed to get role for reactrole: "+str(e))
-        await member.send(self.bot.babel(member, 'reactroles', 'role_taken', roles=', '.join([role.name for role in roles])))
+        await member.send(self.bot.babel(
+          member,
+          'reactroles',
+          'role_taken',
+          roles=', '.join([role.name for role in roles])
+        ))
         await member.remove_roles(*roles, reason='reactroles')
-  
+
   async def catchup(self):
     #TODO: give and take roles as needed to catch up to reality
     pass
@@ -107,20 +118,35 @@ class ReactRoles(commands.Cog):
     try:
       while len(emojis) < 10:
         tmp = await ctx.reply(self.bot.babel(ctx, 'reactroles', 'setup1', canstop=len(emojis) > 0))
-        reaction, _ = await self.bot.wait_for('reaction_add', check=lambda r, u: u==ctx.author and r.message == target, timeout=30)
+        reaction, _ = await self.bot.wait_for(
+          'reaction_add',
+          check=lambda r, u: u == ctx.author and r.message == target,
+          timeout=30
+        )
 
         if reaction.emoji not in emojis:
           await target.add_reaction(reaction)
           try:
             await target.remove_reaction(reaction, ctx.author)
-          except:
+          except (disnake.Forbidden, disnake.NotFound):
             pass
           await tmp.delete()
 
-          tmp = await ctx.reply(self.bot.babel(ctx, 'reactroles', 'setup2', emoji=str(reaction.emoji)))
-          msg = await self.bot.wait_for('message', check=lambda m: m.channel == ctx.channel and m.author == ctx.author and len(m.role_mentions) > 0, timeout=30)
+          tmp = await ctx.reply(self.bot.babel(
+            ctx, 'reactroles', 'setup2', emoji=str(reaction.emoji)
+          ))
+          msg = await self.bot.wait_for(
+            'message',
+            check=(
+              lambda m:
+              m.channel == ctx.channel and m.author == ctx.author and len(m.role_mentions) > 0
+            ),
+            timeout=30)
           emojiid = reaction.emoji if isinstance(reaction.emoji, str) else str(reaction.emoji.id)
-          self.bot.config['reactroles'][f"{ctx.channel.id}_{target.id}_{emojiid}_roles"] = ' '.join([str(r.id) for r in msg.role_mentions])
+          roleconfid = f"{ctx.channel.id}_{target.id}_{emojiid}_roles"
+          self.bot.config['reactroles'][roleconfid] = ' '.join(
+            [str(r.id) for r in msg.role_mentions]
+          )
           await tmp.delete()
           await msg.delete()
           
@@ -128,7 +154,7 @@ class ReactRoles(commands.Cog):
         else:
           try:
             await target.remove_reaction(reaction, ctx.author)
-          except:
+          except (disnake.Forbidden, disnake.NotFound):
             pass
           await tmp.delete()
           tmp = await ctx.reply(self.bot.babel(ctx, 'reactroles', 'setup2_repeat'))
@@ -139,14 +165,15 @@ class ReactRoles(commands.Cog):
       if len(emojis) == 0:
         try:
           await target.delete()
-          if tmp is not None: await tmp.delete()
-        except:
+          if tmp is not None:
+            await tmp.delete()
+        except (disnake.Forbidden, disnake.NotFound):
           pass
         await ctx.reply(self.bot.babel(ctx, 'reactroles', 'setup_cancel'))
       else:
         try:
           await tmp.delete()
-        except:
+        except (disnake.Forbidden, disnake.NotFound):
           pass
         await ctx.reply(self.bot.babel(ctx, 'reactroles', 'setup_success'))
         self.watching.append(target)

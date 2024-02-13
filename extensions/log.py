@@ -14,6 +14,7 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class Log(commands.Cog):
   """ Record messages, commands and errors to file or a discord channel """
   def __init__(self, bot:MerelyBot):
@@ -31,7 +32,7 @@ class Log(commands.Cog):
     if self.bot.config['log']['logchannel'].isdigit():
       self.logchannel = await self.bot.fetch_channel(int(self.bot.config['log']['logchannel']))
 
-  def truncate(self, string:str, maxlen:int=80):
+  def truncate(self, string:str, maxlen:int = 80):
     """ trim a long string and add ellipsis """
     return string[:maxlen] + ('...' if len(string) > maxlen else '')
 
@@ -48,15 +49,17 @@ class Log(commands.Cog):
           f"[DM({self.truncate(channel.recipient.name, 10)}#{channel.recipient.discriminator})]",
           f"{author.name}#{author.discriminator}: {self.truncate(content)}"
         ))
-      return\
+      return (
         f"[DM] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+      )
     if isinstance(channel, disnake.Thread):
       return ' '.join((
         f"[Thread] {self.truncate(author.name, 10)}#{author.discriminator}:",
         f"{self.truncate(content)}"
       ))
-    return\
+    return (
       f"[Unknown] {self.truncate(author.name, 10)}#{author.discriminator}: {self.truncate(content)}"
+    )
 
   @commands.Cog.listener('on_command')
   async def log_command(self, ctx:commands.Context):
@@ -119,6 +122,7 @@ class Log(commands.Cog):
     print(logentry)
     if self.logchannel:
       await self.logchannel.send(logentry)
+
 
 def setup(bot:MerelyBot):
   """ Bind this cog to the bot """

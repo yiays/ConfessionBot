@@ -11,6 +11,7 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class Example(commands.Cog):
   """ Adds an echo command and logs new members """
   def __init__(self, bot:MerelyBot):
@@ -28,6 +29,7 @@ class Example(commands.Cog):
   async def example(self, inter:disnake.ApplicationCommandInteraction, echo:str):
     """ Just a simple echo command """
     await inter.send(echo, ephemeral=True)
+
 
 def setup(bot:MerelyBot):
   """ Bind this cog to the bot """

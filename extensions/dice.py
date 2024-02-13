@@ -12,13 +12,14 @@ from disnake.ext import commands
 if TYPE_CHECKING:
   from ..main import MerelyBot
 
+
 class Dice(commands.Cog):
   """simple dice rolling command extension, could be treated like another example"""
   def __init__(self, bot:MerelyBot):
     self.bot = bot
 
   @commands.slash_command()
-  async def dice(self, inter:disnake.ApplicationCommandInteraction, sides:str=6):
+  async def dice(self, inter:disnake.ApplicationCommandInteraction, sides:str = 6):
     """
     Roll an n-sided dice
 
@@ -37,6 +38,7 @@ class Dice(commands.Cog):
         return await inter.send(self.bot.babel(inter, 'dice', 'roll_error'))
 
     await inter.send('\n'.join(result))
+
 
 def setup(bot:MerelyBot):
   """ Bind this cog to the bot """

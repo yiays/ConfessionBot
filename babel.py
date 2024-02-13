@@ -11,6 +11,7 @@ from typing import Optional, Union
 from disnake import Locale, Guild, Message, Interaction, User, Member
 from disnake.ext.commands import Context
 
+
 class Babel():
   """ Stores language data and resolves and formats it for use in Cogs """
   PATH = 'babel'
@@ -162,7 +163,7 @@ class Babel():
       guild = target
     else:
       author = target[0]
-      guild = target[1] if len(target)>1 else None
+      guild = target[1] if len(target) > 1 else None
 
     reqlangs = self.resolve_lang(author, guild, inter)
 
@@ -176,7 +177,7 @@ class Babel():
 
     if match is None:
       variables = ', '.join(k+'={'+k+'}' for k in values)
-      match = "{"+ key.upper() + (': '+variables if variables else '') +"}"
+      match = "{" + key.upper() + (': '+variables if variables else '') + "}"
 
     # Fill in variables in the string
     for varname,varval in values.items():
@@ -201,7 +202,7 @@ class Babel():
           replace = conditionalquery[1]
         else:
           replace = conditionalquery[2]
-        match=match.replace(
+        match = match.replace(
           '{'+conditionalquery[0]+'?'+conditionalquery[1]+'|'+conditionalquery[2]+'}',
           replace
         )
