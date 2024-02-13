@@ -25,8 +25,7 @@ class ReactRoles(commands.Cog):
     # ensure config file has required data
     if not bot.config.has_section('reactroles'):
       bot.config.add_section('reactroles')
-    msglist = 'list[disnake.abc.Messageable]'
-    self.watching:msglist = []
+    self.watching:list[disnake.abc.Messageable] = []
 
   #TODO: make it possible for admins to add more reaction roles or delete them later
   #TODO: notice if the rr prompt is deleted during setup
@@ -149,7 +148,7 @@ class ReactRoles(commands.Cog):
           )
           await tmp.delete()
           await msg.delete()
-          
+
           emojis.append(reaction)
         else:
           try:
