@@ -787,7 +787,8 @@ class Confessions(commands.Cog):
           embed=self.message.embeds[0],
         )
         await inter.response.send_message(
-          self.confessions.bot.babel(inter, 'confessions', 'report_success')
+          self.confessions.bot.babel(inter, 'confessions', 'report_success'),
+          ephemeral=True
         )
 
   class ConfessionModal(disnake.ui.Modal):
