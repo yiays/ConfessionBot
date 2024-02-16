@@ -23,7 +23,9 @@ Clones of ConfessionBot that have the same branding are harmful for our support 
 You can easily rename the bot by changing the botname parameter in `config.ini`. You should also use a different Username and profile picture when creating the bot user.
 
 ### Setup Instructions
- - Clone the project to a folder
+ - Clone [Merely Framework](https://github.com/MerelyServices/Merely-Framework) into a folder
+ - Create a subfolder named 'overlay'
+ - Clone this project into 'overlay'
  - Install python <=3.10
  - Install required python packages with `python3 -m pip install -r requirements.txt`
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token to continue
@@ -50,9 +52,7 @@ self.bot.babel('confessions', 'confession_vetting_accepted', channel=channel.men
 "Your message was accepted and posted to {channel}."
 ```
 
-All code relevant to ConfessionBot is contained within `extensions/confessions.py`, the rest is a copy from the merelybot framework. Improvements to the framework are shared between both codebases. Refer to `extensions/example.py` to learn the basic formatting and common features of commands.
-
-If you want to make changes to merelybot framework code, consider [committing it directly upstream](https://github.com/MerelyServices/Merely-Framework/). If you feel the improvements would only benefit ConfessionBot, committing it here is fine as well.
+**This repository depends on the Merely Framework.** Clone this repo into an overlay folder inside of [Merely Framework](https://github.com/MerelyServices/Merely-Framework) to run this code *(you will need to create the overlay folder)*. Afterwards, any improvements made to the framework can be comitted back upstream without any merge conflicts. *- Contributions to the framework are greatly appreciated!*
 
 ### Code structure
 `confessions.py` implements the [`disnake.ext.commands.Cog`](https://docs.disnake.dev/en/latest/ext/commands/api.html#cog) class. Read the documentation to learn how to write new commands or improve existing ones with this structure.

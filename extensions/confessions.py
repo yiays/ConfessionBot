@@ -18,7 +18,7 @@ from disnake.ext import commands
 import aiohttp
 
 if TYPE_CHECKING:
-  from ..main import MerelyBot
+  from ...main import MerelyBot
 
 
 class ChannelType(int, Enum):
@@ -381,7 +381,7 @@ class Confessions(commands.Cog):
 
   async def safe_fetch_channel(
     self,
-    ctx:Union[commands.Context, disnake.ApplicationCommandInteraction],
+    ctx:Union[commands.Context, disnake.CommandInteraction],
     channel_id:int
   ) -> Optional[disnake.TextChannel]:
     """ Gracefully handles whenever a confession target isn't available """
@@ -1209,7 +1209,7 @@ class Confessions(commands.Cog):
     )
 
   @commands.slash_command()
-  async def list(self, inter:disnake.ApplicationCommandInteraction):
+  async def list(self, inter:disnake.CommandInteraction):
     """
     List all anonymous channels available here
     """
