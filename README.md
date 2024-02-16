@@ -34,11 +34,9 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
 
 ## Contributing
 ### Translation
-
-I have built a website which makes it easier to translate my projects, including ConfessionBot. 
+I have built a website which makes it easier to translate my projects, including ConfessionBot. [Babel Translator](https://translate.yiays.com).
 
 ### Code contribution
-
 ConfessionBot is written in Python with the help of the disnake API wrapper (like discord.py). Refer to the [Project roadmap](https://github.com/yiays/ConfessionBot-2.0/projects/1) for future features we'd like to implement. All contributions are welcome and support can be given in the [Discord server](https://discord.gg/wfKx24kDUR).
 
 ### Design
@@ -52,7 +50,7 @@ self.bot.babel('confessions', 'confession_vetting_accepted', channel=channel.men
 "Your message was accepted and posted to {channel}."
 ```
 
-All code relevant to ConfessionBot is contained within `extensions/confessions.py`, the rest is a copy from the merelybot framework. Improvements to the framework are shared between both codebases.
+All code relevant to ConfessionBot is contained within `extensions/confessions.py`, the rest is a copy from the merelybot framework. Improvements to the framework are shared between both codebases. Refer to `extensions/example.py` to learn the basic formatting and common features of commands.
 
 If you want to make changes to merelybot framework code, consider [committing it directly upstream](https://github.com/MerelyServices/Merely-Framework/). If you feel the improvements would only benefit ConfessionBot, committing it here is fine as well.
 
