@@ -235,9 +235,10 @@ class ConfessionData:
         ephemeral=True
       )
 
-  async def send_confession(self, ctx:Union[disnake.DMChannel, disnake.Interaction], smsg=False):
+  async def send_confession(self, ctx:disnake.DMChannel | disnake.Interaction, smsg=False):
     """ Send confession to the destination channel """
-    func = self.targetchannel.send(embed=self.embed, file=self.attachment)
+    preface = self.bot.config.get('confessions', f'{ctx.guild.id}_preface', fallback='')
+    func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
     success = await self.handle_send_errors(ctx, func)
 
     if success and smsg:
@@ -1001,7 +1002,7 @@ class Confessions(commands.Cog):
         return
 
       await msg.reply(
-        self.babel(msg, 'channelprompt') + 
+        self.babel(msg, 'channelprompt') +
         (' ' + self.babel(msg, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
         view=self.ChannelSelectView(msg, self, matches))
 
@@ -1285,6 +1286,7 @@ class Confessions(commands.Cog):
     """
       Enable or disable images in confessions
     """
+    #TODO: delete this in time as users adjust
     if 'Help' in self.bot.cogs:
       await self.bot.cogs['Help'].slash_help(inter, 'imagesupport', ephemeral=True)
 
