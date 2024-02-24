@@ -17,8 +17,11 @@ import disnake
 from disnake.ext import commands
 import aiohttp
 
+from extensions.controlpanel import Toggleable, Selectable, Stringable
+
 if TYPE_CHECKING:
-  from ...main import MerelyBot
+  from main import MerelyBot
+  from babel import Resolvable
 
 
 class ChannelType(int, Enum):
@@ -30,12 +33,6 @@ class ChannelType(int, Enum):
   vetting = 2
   feedback = 3
   untraceablefeedback = 4
-
-
-class Toggle(int, Enum):
-  """ Enable and disable options for imagesupport """
-  enable = 1
-  disable = 0
 
 
 class CorruptConfessionDataException(Exception):
@@ -89,7 +86,7 @@ class ConfessionData:
   """ Dataclass for Confessions """
   def __init__(
     self,
-    bot:commands.Bot,
+    bot:MerelyBot,
     crypto:Crypto,
     rawdata:Optional[str] = None,
     *,
@@ -254,6 +251,16 @@ class ConfessionData:
 
 class Confessions(commands.Cog):
   """ Enable anonymous messaging with moderation on your server """
+  SCOPE = 'confessions'
+
+  @property
+  def config(self) -> dict[str, str]:
+    """ Shorthand for self.bot.config[scope] """
+    return self.bot.config[self.SCOPE]
+
+  def babel(self, target:Resolvable, key:str, **values: dict[str, str | bool]) -> list[str]:
+    """ Shorthand for self.bot.babel(scope, key, **values) """
+    return self.bot.babel(target, self.SCOPE, key, **values)
 
   channel_icons = {
     ChannelType.untraceable: '🙈',
@@ -269,25 +276,36 @@ class Confessions(commands.Cog):
     if not bot.config.getboolean('extensions', 'auth', fallback=False):
       raise AssertionError("'auth' must be enabled to use 'confessions'")
     # ensure config file has required data
-    if not bot.config.has_section('confessions'):
-      bot.config.add_section('confessions')
-    if 'confession_cooldown' not in bot.config['confessions']:
-      bot.config['confessions']['confession_cooldown'] = '1'
-    if 'report_channel' not in bot.config['confessions']:
-      bot.config['confessions']['report_channel'] = ''
-    if 'secret' not in bot.config['confessions'] or bot.config['confessions']['secret'] == '':
-      bot.config['confessions']['secret'] = self.crypto.keygen(32)
+    if not bot.config.has_section(self.SCOPE):
+      bot.config.add_section(self.SCOPE)
+    if 'confession_cooldown' not in self.config:
+      self.config['confession_cooldown'] = '1'
+    if 'report_channel' not in self.config:
+      self.config['report_channel'] = ''
+    if 'secret' not in self.config or self.config['secret'] == '':
+      self.config['secret'] = self.crypto.keygen(32)
       print(
         "WARNING: Your security key has been regenerated. Old confessions are now incompatible."
       )
-    if 'spam_flags' not in bot.config['confessions']:
-      bot.config['confessions']['spam_flags'] = ''
+    if 'spam_flags' not in self.config:
+      self.config['spam_flags'] = ''
 
-    self.crypto.key = bot.config['confessions']['secret']
+    self.crypto.key = self.config['secret']
 
     # self.initiated = set()
     self.ignore = set()
     self.confession_cooldown = dict()
+
+  def controlpanel_settings(self) -> list[Toggleable | Selectable | Stringable]:
+    # ControlPanel integration
+    return [
+      Toggleable("Images in confessions", self.bot.config, self.SCOPE, '{g}_imagesupport'),
+      Stringable("Text before confession", self.bot.config, self.SCOPE, '{g}_preface')
+    ]
+
+  def controlpanel_theme(self) -> tuple[str, disnake.ButtonStyle]:
+    # Controlpanel custom theme for buttons
+    return (self.SCOPE, disnake.ButtonStyle.blurple)
 
   #	Utility functions
 
@@ -315,7 +333,7 @@ class Confessions(commands.Cog):
         f'{self.channel_icons[match[1]]}<#{match[0].id}>' +
         (' ('+match[0].guild.name+')' if not isinstance(user, disnake.Member) else '')
       )
-    vettingwarning = ('\n\n'+self.bot.babel(user, 'confessions', 'vetting') if vetting else '')
+    vettingwarning = ('\n\n'+self.babel(user, 'vetting') if vetting else '')
 
     return '\n'.join(targets) + vettingwarning
 
@@ -325,7 +343,7 @@ class Confessions(commands.Cog):
     matches = []
     vetting = False
     for channel in member.guild.channels:
-      if f"{member.guild.id}_{channel.id}" in self.bot.config['confessions']:
+      if f"{member.guild.id}_{channel.id}" in self.config:
         chtype = self.bot.config.getint('confessions', f"{member.guild.id}_{channel.id}")
         if chtype == ChannelType.vetting:
           vetting = True
@@ -389,7 +407,7 @@ class Confessions(commands.Cog):
       return await self.bot.fetch_channel(channel_id)
     except disnake.Forbidden:
       await ctx.send(
-        self.bot.babel(ctx, 'confessions', 'missingchannelerr') + ' (fetch)',
+        self.babel(ctx, 'missingchannelerr') + ' (fetch)',
         **{'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
       )
       return None
@@ -481,7 +499,7 @@ class Confessions(commands.Cog):
         self.page_decrement_button = disnake.ui.Button(
           disabled=True,
           style=disnake.ButtonStyle.secondary,
-          label=self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_prev')
+          label=self.confessions.babel(origin, 'channelprompt_button_prev')
         )
         self.page_decrement_button.callback = self.change_page(-1)
         self.add_item(self.page_decrement_button)
@@ -489,7 +507,7 @@ class Confessions(commands.Cog):
         self.page_increment_button = disnake.ui.Button(
           disabled=False,
           style=disnake.ButtonStyle.secondary,
-          label=self.confessions.bot.babel(origin, 'confessions', 'channelprompt_button_next')
+          label=self.confessions.babel(origin, 'channelprompt_button_next')
         )
         self.page_increment_button.callback = self.change_page(1)
         self.add_item(self.page_increment_button)
@@ -518,7 +536,7 @@ class Confessions(commands.Cog):
       except disnake.Forbidden:
         self.send_button.disabled = True
         await inter.response.edit_message(
-          content=self.confessions.bot.babel(inter, 'confessions', 'missingchannelerr')+' (select)',
+          content=self.confessions.babel(inter, 'missingchannelerr')+' (select)',
           view=self
         )
         return
@@ -555,7 +573,7 @@ class Confessions(commands.Cog):
       )
 
       if not self.confessions.check_banned(self.selection.guild.id, anonid):
-        await inter.send(self.confessions.bot.babel(inter, 'confessions', 'nosendbanned'))
+        await inter.send(self.confessions.babel(inter, 'nosendbanned'))
         await self.disable(inter)
         return
 
@@ -568,7 +586,7 @@ class Confessions(commands.Cog):
       )
       if self.origin.attachments:
         if not self.confessions.check_image(self.selection.guild.id, self.origin.attachments[0]):
-          await inter.send(self.confessions.bot.babel(inter, 'confessions', 'nosendimages'))
+          await inter.send(self.confessions.babel(inter, 'nosendimages'))
           await self.disable(inter)
           return
 
@@ -661,7 +679,7 @@ class Confessions(commands.Cog):
       try:
         if not self.done:
           await self.origin.reply(
-            self.confessions.bot.babel(self.origin.author, 'confessions', 'timeouterror')
+            self.confessions.babel(self.origin.author, 'timeouterror')
           )
         async for msg in self.origin.channel.history(after=self.origin):
           if (
@@ -717,7 +735,7 @@ class Confessions(commands.Cog):
       self.message = message
       self.origin = origin
 
-      self.report_button.label = confessions.bot.babel(origin, 'confessions', 'report_button')
+      self.report_button.label = confessions.babel(origin, 'report_button')
 
       asyncio.ensure_future(self.enable_button())
 
@@ -746,12 +764,12 @@ class Confessions(commands.Cog):
         origin: disnake.Interaction
     ):
       super().__init__(
-        title=confessions.bot.babel(origin, 'confessions', 'report_title'),
+        title=confessions.babel(origin, 'report_title'),
         custom_id=f'report_{message.id}',
         components=[
           disnake.ui.TextInput(
-            label=confessions.bot.babel(origin, 'confessions', 'report_field'),
-            placeholder=confessions.bot.babel(origin, 'confessions', 'report_placeholder'),
+            label=confessions.babel(origin, 'report_field'),
+            placeholder=confessions.babel(origin, 'report_placeholder'),
             custom_id='report_reason',
             style=disnake.TextInputStyle.paragraph,
             min_length=1
@@ -766,13 +784,13 @@ class Confessions(commands.Cog):
 
     async def callback(self, inter: disnake.ModalInteraction):
       """ Send report to mod channel as configured """
-      if self.confessions.bot.config['confessions']['report_channel']:
+      if self.confessions.config['report_channel']:
         reportchannel = await self.confessions.safe_fetch_channel(
           inter, self.confessions.bot.config.getint('confessions', 'report_channel')
         )
         if reportchannel is None:
           await inter.response.send_message(
-            self.confessions.bot.babel(inter, 'confessions', 'report_failed')
+            self.confessions.babel(inter, 'report_failed')
           )
           return
         await reportchannel.send(
@@ -787,7 +805,7 @@ class Confessions(commands.Cog):
           embed=self.message.embeds[0],
         )
         await inter.response.send_message(
-          self.confessions.bot.babel(inter, 'confessions', 'report_success'),
+          self.confessions.babel(inter, 'report_success'),
           ephemeral=True
         )
 
@@ -800,11 +818,11 @@ class Confessions(commands.Cog):
       pendingconfession:ConfessionData
     ):
       super().__init__(
-        title=confessions.bot.babel(origin, 'confessions', 'editor_title'),
+        title=confessions.babel(origin, 'editor_title'),
         custom_id="confession_modal",
         components=[
           disnake.ui.TextInput(
-            label=confessions.bot.babel(origin, 'confessions', 'editor_message_label'),
+            label=confessions.babel(origin, 'editor_message_label'),
             placeholder=confessions.bot.babel(
               origin,
               'confessions',
@@ -829,7 +847,7 @@ class Confessions(commands.Cog):
 
       if not self.confessions.check_spam(inter.text_values['content']):
         await inter.send(
-          self.confessions.bot.babel(inter, 'confessions', 'nospam'),
+          self.confessions.babel(inter, 'nospam'),
           ephemeral=True
         )
         return
@@ -881,7 +899,7 @@ class Confessions(commands.Cog):
           print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
           return
       except CorruptConfessionDataException:
-        await inter.send(self.bot.babel(inter, 'confessions', 'vetcorrupt'))
+        await inter.send(self.babel(inter, 'vetcorrupt'))
         return
 
       try:
@@ -965,39 +983,33 @@ class Confessions(commands.Cog):
         await self.bot.cogs['Log'].log_misc_message(msg)
 
       if not self.bot.member_cache:
-        await msg.reply(self.bot.babel(msg, 'confessions', 'dmconfessiondisabled'))
+        await msg.reply(self.babel(msg, 'dmconfessiondisabled'))
         return
       matches,_ = self.listavailablechannels(msg.author)
 
       if not self.bot.is_ready():
-        await msg.reply(self.bot.babel(msg, 'confessions', 'cachebuilding'))
+        await msg.reply(self.babel(msg, 'cachebuilding'))
         if not matches:
           return
 
       if not matches:
-        await msg.reply(self.bot.babel(msg, 'confessions', 'inaccessible'))
+        await msg.reply(self.babel(msg, 'inaccessible'))
         return
 
       if not self.check_spam(msg.content):
-        await msg.reply(self.bot.babel(msg, 'confessions', 'nospam'))
+        await msg.reply(self.babel(msg, 'nospam'))
         return
 
       await msg.reply(
-        self.bot.babel(
-          msg,
-          'confessions',
-          'channelprompt'
-        ) + (
-          ' ' + self.bot.babel(msg, 'confessions', 'channelprompt_pager', page=1)
-          if len(matches) > 25 else ''
-        ),
+        self.babel(msg, 'channelprompt') + 
+        (' ' + self.babel(msg, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
         view=self.ChannelSelectView(msg, self, matches))
 
   # Clear config when the bot is removed from a guild
   @commands.Cog.listener('on_guild_leave')
   async def guild_cleanup(self, guild:disnake.Guild):
     """ Automatically remove data related to a guild on removal """
-    for option in self.bot.config['confessions']:
+    for option in self.config:
       if option.startswith(str(guild.id)+'_'):
         self.bot.config.remove_option('confessions', option)
     self.bot.config.save()
@@ -1006,7 +1018,7 @@ class Confessions(commands.Cog):
   @commands.Cog.listener('on_guild_channel_delete')
   async def channel_cleanup(self, channel:disnake.TextChannel):
     """ Automatically remove data related to a channel on delete """
-    for option in self.bot.config['confessions']:
+    for option in self.config:
       if option == str(channel.guild.id)+'_'+str(channel.id):
         self.bot.config.remove_option('confessions', option)
         break
@@ -1022,7 +1034,7 @@ class Confessions(commands.Cog):
        len(inter.target.embeds) > 0 and\
        inter.target.embeds[0].title is None:
       await inter.response.send_message(
-        content=self.bot.babel(inter, 'confessions', 'report_prep', msgurl=inter.target.jump_url),
+        content=self.babel(inter, 'report_prep', msgurl=inter.target.jump_url),
         view=self.ReportView(self, inter.target, inter),
         ephemeral=True,
         suppress_embeds=True
@@ -1030,7 +1042,7 @@ class Confessions(commands.Cog):
       return
 
     await inter.response.send_message(
-      self.bot.babel(inter, 'confessions', 'report_invalid_message'),
+      self.babel(inter, 'report_invalid_message'),
       ephemeral=True
     )
 
@@ -1066,7 +1078,7 @@ class Confessions(commands.Cog):
       channel = inter.channel
 
     if not self.check_channel(inter.guild_id, channel.id):
-      await inter.send(self.bot.babel(inter, 'confessions', 'nosendchannel'), ephemeral=True)
+      await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
       return
 
     anonid = self.get_anonid(inter.guild_id, inter.author.id)
@@ -1074,12 +1086,12 @@ class Confessions(commands.Cog):
     channeltype = self.bot.config.getint('confessions', f"{inter.guild_id}_{channel.id}")
 
     if not self.check_banned(inter.guild_id, anonid):
-      await inter.send(self.bot.babel(inter, 'confessions', 'nosendbanned'), ephemeral=True)
+      await inter.send(self.babel(inter, 'nosendbanned'), ephemeral=True)
       return
 
     if image:
       if not self.check_image(inter.guild_id, image):
-        await inter.send(self.bot.babel(inter, 'confessions', 'nosendimages'), ephemeral=True)
+        await inter.send(self.babel(inter, 'nosendimages'), ephemeral=True)
         return
 
     pendingconfession = ConfessionData(
@@ -1094,7 +1106,7 @@ class Confessions(commands.Cog):
         content = ''
 
       if not self.check_spam(content):
-        await inter.send(self.bot.babel(inter, 'confessions', 'nospam'), ephemeral=True)
+        await inter.send(self.babel(inter, 'nospam'), ephemeral=True)
         return
 
       vetting = self.findvettingchannel(inter.guild)
@@ -1192,20 +1204,20 @@ class Confessions(commands.Cog):
         str(inter.guild.id)+'_'+str(inter.channel.id), fallback=ChannelType.none
       )
       if wastype == ChannelType.none:
-        await inter.send(self.bot.babel(inter, 'confessions', 'unsetfailure'))
+        await inter.send(self.babel(inter, 'unsetfailure'))
         return
       self.bot.config.remove_option('confessions', str(inter.guild.id)+'_'+str(inter.channel.id))
     else:
-      self.bot.config['confessions'][str(inter.guild.id)+'_'+str(inter.channel.id)] = str(mode)
+      self.config[str(inter.guild.id)+'_'+str(inter.channel.id)] = str(mode)
     self.bot.config.save()
 
     modestring = (
       'setsuccess'+str(mode) if mode > ChannelType.none else 'unsetsuccess'+str(wastype)
     )
     await inter.send(
-      self.bot.babel(inter, 'confessions', modestring) + ' ' +
-      self.bot.babel(inter, 'confessions', 'setundo' if mode > ChannelType.none else 'unsetundo') +
-      ('\n'+self.bot.babel(inter, 'confessions', 'setcta') if mode > ChannelType.none else '')
+      self.babel(inter, modestring) + ' ' +
+      self.babel(inter, 'setundo' if mode > ChannelType.none else 'unsetundo') +
+      ('\n'+self.babel(inter, 'setcta') if mode > ChannelType.none else '')
     )
 
   @commands.slash_command()
@@ -1216,7 +1228,7 @@ class Confessions(commands.Cog):
     try:
       matches, vetting = self.listavailablechannels(inter.author)
     except NoMemberCacheError:
-      await inter.send(self.bot.babel(inter, 'confessions', 'dmconfessiondisabled'))
+      await inter.send(self.babel(inter, 'dmconfessiondisabled'))
       return
 
     local = ('local' if isinstance(inter.author, disnake.Member) else '')
@@ -1232,8 +1244,8 @@ class Confessions(commands.Cog):
           self.bot.babel(inter,'confessions','listtitle' + local) +
           '\n'+self.generate_list(inter.author, matches, vetting) +
           (
-            '\n\n' + self.bot.babel(inter, 'confessions', 'confess_to_feedback')
-            if [match for match in matches if match[1] in (
+            '\n\n' + self.babel(inter, 'confess_to_feedback')
+            if [m for m in matches if m[1] in (
               ChannelType.feedback, ChannelType.untraceablefeedback
             )] else ''
           )
@@ -1248,10 +1260,8 @@ class Confessions(commands.Cog):
     """
     if not self.check_promoted(inter.author):
       self.bot.cogs['Auth'].mods(inter)
-    if str(inter.guild.id)+'_banned' in self.bot.config['confessions']:
-      await inter.send(
-        self.bot.babel(inter, 'confessions', 'shufflebanresetwarning')
-      )
+    if str(inter.guild.id)+'_banned' in self.config:
+      await inter.send(self.babel(inter, 'shufflebanresetwarning'))
 
       def check(m):
         return m.channel == inter.channel and\
@@ -1260,7 +1270,7 @@ class Confessions(commands.Cog):
       try:
         await self.bot.wait_for('message', check=check, timeout=30)
       except asyncio.TimeoutError:
-        await inter.send(self.bot.babel(inter, 'confessions', 'timeouterror'))
+        await inter.send(self.babel(inter, 'timeouterror'))
       else:
         self.bot.config.remove_option('confessions', str(inter.guild.id)+'_banned')
 
@@ -1268,29 +1278,15 @@ class Confessions(commands.Cog):
     self.bot.config.set('confessions', str(inter.guild.id)+'_shuffle', str(shuffle + 1))
     self.bot.config.save()
 
-    await inter.send(self.bot.babel(inter, 'confessions', 'shufflesuccess'))
+    await inter.send(self.babel(inter, 'shufflesuccess'))
 
   @commands.slash_command(dm_permission=False)
-  async def imagesupport(self, inter:disnake.GuildCommandInteraction, toggle:Toggle):
+  async def imagesupport(self, inter:disnake.GuildCommandInteraction):
     """
-    Enable or disable images in confessions
+      Enable or disable images in confessions
     """
-    self.bot.cogs['Auth'].admins(inter)
-    val = self.bot.config.getboolean('confessions', f"{inter.guild.id}_imagesupport", fallback=True)
-    if toggle == Toggle.enable:
-      if val:
-        await inter.send(self.bot.babel(inter, 'confessions', 'imagesupportalreadyenabled'))
-      else:
-        self.bot.config['confessions'][str(inter.guild.id)+'_imagesupport'] = 'True'
-        self.bot.config.save()
-        await inter.send(self.bot.babel(inter, 'confessions', 'imagesupportenabled'))
-    elif toggle == Toggle.disable:
-      if not val:
-        await inter.send(self.bot.babel(inter, 'confessions', 'imagesupportalreadydisabled'))
-      else:
-        self.bot.config['confessions'][str(inter.guild.id)+'_imagesupport'] = 'False'
-        self.bot.config.save()
-        await inter.send(self.bot.babel(inter, 'confessions', 'imagesupportdisabled'))
+    if 'Help' in self.bot.cogs:
+      await self.bot.cogs['Help'].slash_help(inter, 'imagesupport', ephemeral=True)
 
   @commands.slash_command(aliases=['ban'], dm_permission=False)
   async def block(
@@ -1315,9 +1311,9 @@ class Confessions(commands.Cog):
     if anonid is None:
       if banlist_split:
         printedlist = '\n```'+'\n'.join(banlist_split)+'```'
-        await inter.send(self.bot.babel(inter, 'confessions', 'banlist') + printedlist)
+        await inter.send(self.babel(inter, 'banlist') + printedlist)
       else:
-        await inter.send(self.bot.babel(inter, 'confessions', 'emptybanlist'))
+        await inter.send(self.babel(inter, 'emptybanlist'))
       return
 
     anonid = anonid.lower()
@@ -1326,21 +1322,21 @@ class Confessions(commands.Cog):
     try:
       int(anonid, 16)
     except ValueError:
-      await inter.send(self.bot.babel(inter, 'confessions', 'invalidanonid'))
+      await inter.send(self.babel(inter, 'invalidanonid'))
       return
     if anonid in banlist_split and not unblock:
-      await inter.send(self.bot.babel(inter, 'confessions', 'doublebananonid'))
+      await inter.send(self.babel(inter, 'doublebananonid'))
       return
 
     if unblock:
       fullid = [i for i in banlist_split if anonid in i][0]
-      self.bot.config['confessions'][str(inter.guild.id)+'_banned'] = banlist.replace(fullid+',','')
+      self.config[str(inter.guild.id)+'_banned'] = banlist.replace(fullid+',','')
     else:
-      self.bot.config['confessions'][str(inter.guild.id)+'_banned'] = banlist + anonid + ','
+      self.config[str(inter.guild.id)+'_banned'] = banlist + anonid + ','
     self.bot.config.save()
 
     await inter.send(
-      self.bot.babel(inter, 'confessions', ('un' if unblock else '')+'bansuccess', user=anonid)
+      self.babel(inter, ('un' if unblock else '')+'bansuccess', user=anonid)
     )
 
   @commands.slash_command(dm_permission=False)
@@ -1364,40 +1360,40 @@ class Confessions(commands.Cog):
     if target is None:
       if modlist:
         printedlist = '\n```\n' + '\n'.join(modlist.split(',')) + '```'
-        await inter.send(self.bot.babel(inter, 'confessions', 'botmodlist') + printedlist)
+        await inter.send(self.babel(inter, 'botmodlist') + printedlist)
       else:
-        await inter.send(self.bot.babel(inter, 'confessions', 'botmodemptylist'))
+        await inter.send(self.babel(inter, 'botmodemptylist'))
     elif target:
       if isinstance(target, disnake.Member):
         if target.bot:
-          await inter.send(self.bot.babel(inter, 'confessions', 'botmodboterr'))
+          await inter.send(self.babel(inter, 'botmodboterr'))
           return
         if target.guild_permissions.ban_members:
-          await inter.send(self.bot.babel(inter, 'confessions', 'botmodmoderr'))
+          await inter.send(self.babel(inter, 'botmodmoderr'))
           return
       else:
         if target.permissions.ban_members:
-          await inter.send(self.bot.babel(inter, 'confessions', 'botmodmoderr'))
+          await inter.send(self.babel(inter, 'botmodmoderr'))
           return
 
       if revoke:
         if str(target.id) in modlist.split(','):
           modlist = modlist.replace(str(target.id)+',','')
-          self.bot.config['confessions'][str(inter.guild.id)+'_promoted'] = modlist
+          self.config[str(inter.guild.id)+'_promoted'] = modlist
           self.bot.config.save()
           await inter.send(
-            self.bot.babel(inter, 'confessions', 'botmoddemotesuccess', user=target.name)
+            self.babel(inter, 'botmoddemotesuccess', user=target.name)
           )
         else:
-          await inter.send(self.bot.babel(inter, 'confessions', 'botmoddemoteerr'))
+          await inter.send(self.babel(inter, 'botmoddemoteerr'))
       else:
         if str(target.id) not in modlist.split(','):
           modlist += str(target.id)+','
-          self.bot.config['confessions'][str(inter.guild.id)+'_promoted'] = modlist
+          self.config[str(inter.guild.id)+'_promoted'] = modlist
           self.bot.config.save()
-          await inter.send(self.bot.babel(inter, 'confessions', 'botmodsuccess', user=target.name))
+          await inter.send(self.babel(inter, 'botmodsuccess', user=target.name))
         else:
-          await inter.send(self.bot.babel(inter, 'confessions', 'rebotmoderr'))
+          await inter.send(self.babel(inter, 'rebotmoderr'))
     else:
       raise commands.BadArgument()
 
