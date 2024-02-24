@@ -303,6 +303,7 @@ class Confessions(commands.Cog):
       Toggleable("Images in confessions", self.bot.config, self.SCOPE, '{g}_imagesupport'),
       Stringable("Text before confession", self.bot.config, self.SCOPE, '{g}_preface')
     ]
+  #TODO: Add custom pfp stringable, Anon-ID usernames, Anon-Colour pfps as more premium controls
 
   def controlpanel_theme(self) -> tuple[str, disnake.ButtonStyle]:
     # Controlpanel custom theme for buttons
