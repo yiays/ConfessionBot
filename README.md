@@ -4,7 +4,7 @@
 
 > Try ConfessionBot on the [Official Bot Discord server](https://discord.gg/wfKx24kDUR)
 
-> [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=952453311703941170&permissions=0&scope=bot%20applications.commands) to your own server
+> [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=562440687363293195&permissions=0&scope=bot%20applications.commands) to your own server
 
 ## News
 Seven languages are now supported! English, German, French, Polish, Brazilian Portugese, Tagalog, and Chinese are all available to choose with `/language set` today, but some are incomplete. *ConfessionBot now also follows your user and server language preferences by default.*
@@ -29,7 +29,7 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
  - Install python <=3.10
  - Install required python packages with `python3 -m pip install -r requirements.txt`
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token to continue
-    - **[Please don't copy the branding of confessionbot!](#Terms-of-use)**
+    - **[Please don't copy the branding of ConfessionBot!](#Terms-of-use)**
  - Give ConfessionBot the token by setting it in the [main] section of the config
  - Run your bot with `python3 main.py`
  - Add your ConfessionBot to your server
