@@ -85,6 +85,8 @@ class Crypto:
 
 class ConfessionData:
   """ Dataclass for Confessions """
+  anonid:str | None
+
   def __init__(
     self,
     parent:Confessions,
@@ -120,7 +122,6 @@ class ConfessionData:
       self.content = \
         embed.description[20:] if embed.description.startswith('**[Anon-')\
         else embed.description
-      self.image = embed.image.url if embed.image else None
 
   def store(self) -> str:
     """ Encrypt data for secure storage """
@@ -153,8 +154,10 @@ class ConfessionData:
   async def generate_embed(self, anonid:str, lead:str, content:str, image:Optional[str] = None):
     """ Generate the confession embed """
     if lead:
+      self.anonid = anonid
       embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+' '+content)
     else:
+      self.anonid = None
       embed = disnake.Embed(description=content if content else '')
     if image:
       async with aiohttp.ClientSession() as session:
@@ -173,6 +176,7 @@ class ConfessionData:
               )
             embed.set_image(url=image)
     self.embed = embed
+    self.content = content
 
   async def handle_send_errors(self, ctx:Union[disnake.DMChannel, disnake.Interaction], func):
     """
@@ -204,7 +208,7 @@ class ConfessionData:
   async def send_vetting(
     self,
     ctx:Union[disnake.DMChannel, disnake.Interaction],
-    confessions,
+    confessions:Confessions,
     vettingchannel:disnake.TextChannel
   ):
     """ Send confession to a vetting channel for approval """
@@ -221,11 +225,18 @@ class ConfessionData:
         ephemeral=True
       )
 
-  async def send_confession(self, ctx:disnake.DMChannel | disnake.Interaction, smsg=False):
+  async def send_confession(self, ctx:disnake.TextChannel | disnake.Interaction, smsg=False):
     """ Send confession to the destination channel """
     preface = self.parent.config.get(f'{ctx.guild.id}_preface', fallback='')
-
-    func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
+    if self.parent.config.get(f'{ctx.guild.id}_webhook', None) == 'True':
+      if webhook := await self.find_or_create_webhook(
+        ctx.channel if isinstance(ctx, disnake.Interaction) else ctx
+      ):
+        kwargs = {'file': self.attachment} if self.attachment else {}
+        func = webhook.send(self.content, username='[Anon-' + self.anonid + ']', **kwargs)
+        #TODO: add support for custom PFPs, fix reporting.
+    else:
+      func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
     success = await self.handle_send_errors(ctx, func)
 
     if success and smsg:
@@ -235,6 +246,18 @@ class ConfessionData:
         ), channel=self.targetchannel.mention),
         ephemeral=True
       )
+
+  async def find_or_create_webhook(self, channel:disnake.TextChannel) -> disnake.Webhook | None:
+    """ Tries to find a webhook, or create it, or complain about missing permissions """
+    webhook:disnake.Webhook
+    try:
+      for webhook in await channel.webhooks():
+        if webhook.application_id == self.parent.bot.application_id:
+          return webhook
+      return await channel.create_webhook(name=self.parent.bot.config['main']['botname'])
+    except disnake.Forbidden:
+      await channel.send(self.parent.babel(channel.guild, 'missingperms', perm='MANAGE_WEBHOOKS'))
+      return None
 
 
 class Confessions(commands.Cog):
