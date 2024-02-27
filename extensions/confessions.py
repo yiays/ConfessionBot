@@ -234,7 +234,7 @@ class ConfessionData:
       ):
         kwargs = {'file': self.attachment} if self.attachment else {}
         func = webhook.send(self.content, username='[Anon-' + self.anonid + ']', **kwargs)
-        #TODO: add support for custom PFPs, fix reporting.
+        #TODO: add support for custom PFPs
     else:
       func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
     success = await self.handle_send_errors(ctx, func)
@@ -759,6 +759,11 @@ class Confessions(commands.Cog):
             self.confessions.babel(inter, 'report_failed')
           )
           return
+        embed:disnake.Embed
+        if len(self.message.embeds) > 0:
+          embed = self.message.embeds[0]
+        else:
+          embed = disnake.Embed(description=f'**{self.message.author.name}** {self.message.content}')
         await reportchannel.send(
           self.confessions.babel(
             reportchannel.guild, 'new_report',
@@ -766,11 +771,12 @@ class Confessions(commands.Cog):
             user=f'{inter.author.mention} ({inter.author.name}#{inter.author.discriminator})',
             reason=inter.text_values['report_reason']
           ),
-          embed=self.message.embeds[0],
+          embed=embed,
         )
         await inter.response.send_message(
           self.confessions.babel(inter, 'report_success'),
-          ephemeral=True
+          ephemeral=True,
+          suppress_embeds=True
         )
 
   class ConfessionModal(disnake.ui.Modal):
@@ -978,9 +984,16 @@ class Confessions(commands.Cog):
   @commands.message_command(name="Report confession", dm_permission=False)
   async def report(self, inter:disnake.MessageCommandInteraction):
     """ Reports a confession to the bot owners """
-    if inter.target.author == self.bot.user and\
-       len(inter.target.embeds) > 0 and\
-       inter.target.embeds[0].title is None:
+    if (
+      (
+        inter.target.author == self.bot.user and
+        len(inter.target.embeds) > 0 and
+        inter.target.embeds[0].title is None
+      ) or (
+        inter.target.application_id == self.bot.application_id and
+        '[Anon-' in inter.target.author.name
+      )
+    ):
       await inter.response.send_message(
         content=self.babel(inter, 'report_prep', msgurl=inter.target.jump_url),
         view=self.ReportView(self, inter.target, inter),
