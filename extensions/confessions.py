@@ -308,9 +308,15 @@ class Confessions(commands.Cog):
   def controlpanel_settings(self) -> list[Toggleable | Selectable | Stringable]:
     # ControlPanel integration
     return [
-      Toggleable(self.SCOPE, '{g}_imagesupport'),
-      Toggleable(self.SCOPE, '{g}_webhook'),
-      Stringable(self.SCOPE, '{g}_preface')
+      Stringable(self.SCOPE, '{g}_banned', permissions=disnake.Permissions(moderate_members=True)),
+      Toggleable(
+        self.SCOPE, '{g}_imagesupport', default=True,
+        permissions=disnake.Permissions(administrator=True)
+      ),
+      Toggleable(
+        self.SCOPE, '{g}_webhook', default=False, permissions=disnake.Permissions(administrator=True)
+      ),
+      Stringable(self.SCOPE, '{g}_preface', permissions=disnake.Permissions(administrator=True))
     ]
   #TODO: Add custom pfp stringable, Anon-ID usernames, Anon-Colour pfps as more premium controls
 
