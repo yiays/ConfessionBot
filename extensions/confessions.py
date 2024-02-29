@@ -119,9 +119,11 @@ class ConfessionData:
     self.attachment = None
 
     if embed:
-      self.content = \
-        embed.description[20:] if embed.description.startswith('**[Anon-')\
-        else embed.description
+      if embed.description.startswith('**[Anon-'):
+        self.content = embed.description[20:]
+      else:
+        self.content = embed.description
+      self.image = embed.image.url if embed.image else None
 
   def store(self) -> str:
     """ Encrypt data for secure storage """
@@ -229,11 +231,18 @@ class ConfessionData:
     """ Send confession to the destination channel """
     preface = self.parent.config.get(f'{ctx.guild.id}_preface', fallback='')
     if self.parent.config.get(f'{ctx.guild.id}_webhook', None) == 'True':
-      if webhook := await self.find_or_create_webhook(
-        ctx.channel if isinstance(ctx, disnake.Interaction) else ctx
-      ):
+      if webhook := await self.find_or_create_webhook(self.targetchannel):
         kwargs = {'file': self.attachment} if self.attachment else {}
-        func = webhook.send(self.content, username='[Anon-' + self.anonid + ']', **kwargs)
+        botcolour = self.parent.bot.config['main']['themecolor'][2:]
+        func = webhook.send(
+          self.content,
+          username='[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']',
+          avatar_url=(
+            self.parent.config.get('pfpgen_url', '')
+            .replace('{}', botcolour if self.anonid is None else self.anonid)
+          ),
+          **kwargs
+        )
         #TODO: add support for custom PFPs
     else:
       func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
@@ -298,6 +307,11 @@ class Confessions(commands.Cog):
       )
     if 'spam_flags' not in self.config:
       self.config['spam_flags'] = ''
+    if 'pfpgen_url' not in self.config or self.config['pfpgen_url'] == '':
+      self.config['pfpgen_url'] = ''
+      print(
+        "WARNING: You don't have a pfp generator. Profile pictures in webhook mode will be blank."
+      )
 
     self.crypto.key = self.config['secret']
 
@@ -884,9 +898,6 @@ class Confessions(commands.Cog):
         lead = f"**[Anon-*{anonid}*]**"
         channeltype = int(self.config.get(f"{inter.guild.id}_{pendingconfession.targetchannel_id}"))
 
-        if pendingconfession.image:
-          await inter.response.defer(ephemeral=True)
-
         await pendingconfession.generate_embed(
           anonid,
           lead if channeltype not in (
@@ -997,7 +1008,7 @@ class Confessions(commands.Cog):
         inter.target.embeds[0].title is None
       ) or (
         inter.target.application_id == self.bot.application_id and
-        '[Anon-' in inter.target.author.name
+        ('[Anon-' in inter.target.author.name or '[Anon]' in inter.target.author.name)
       )
     ):
       await inter.response.send_message(
