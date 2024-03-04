@@ -17,7 +17,7 @@ import disnake
 from disnake.ext import commands
 import aiohttp
 
-from extensions.controlpanel import Toggleable, Selectable, Stringable
+from extensions.controlpanel import Toggleable, Stringable
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
 class ChannelType(int, Enum):
   """ Channel Types as they are stored """
-  invalid = -2
   none = -1
   untraceable = 0
   traceable = 1
@@ -319,20 +318,21 @@ class Confessions(commands.Cog):
     self.ignore = set()
     self.confession_cooldown = dict()
 
-  def controlpanel_settings(self) -> list[Toggleable | Selectable | Stringable]:
+  def controlpanel_settings(self, inter:disnake.Interaction):
     # ControlPanel integration
-    return [
-      Stringable(self.SCOPE, '{g}_banned', permissions=disnake.Permissions(moderate_members=True)),
-      Toggleable(
-        self.SCOPE, '{g}_imagesupport', default=True,
-        permissions=disnake.Permissions(administrator=True)
-      ),
-      Toggleable(
-        self.SCOPE, '{g}_webhook', default=False, permissions=disnake.Permissions(administrator=True)
-      ),
-      Stringable(self.SCOPE, '{g}_preface', permissions=disnake.Permissions(administrator=True))
-    ]
-  #TODO: Add custom pfp stringable, Anon-ID usernames, Anon-Colour pfps as more premium controls
+    if inter.guild is None:
+      return []
+    out = []
+    if inter.permissions.moderate_members:
+      out.append(Stringable(self.SCOPE, f'{inter.guild_id}_banned', 'guild_banlist'))
+    if inter.permissions.administrator:
+      out += [
+        Toggleable(self.SCOPE, f'{inter.guild_id}_imagesupport', 'image_support', default=True),
+        Toggleable(self.SCOPE, f'{inter.guild_id}_webhook', 'enable_webhooks', default=False),
+        Stringable(self.SCOPE, f'{inter.guild_id}_preface', 'confession_preface')
+        #TODO: Add custom pfp stringable, Anon-ID usernames, Anon-Colour pfps
+      ]
+    return out
 
   def controlpanel_theme(self) -> tuple[str, disnake.ButtonStyle]:
     # Controlpanel custom theme for buttons
@@ -1159,7 +1159,7 @@ class Confessions(commands.Cog):
   async def set(
     self,
     inter:disnake.GuildCommandInteraction,
-    mode:ChannelType = commands.Param(ChannelType.invalid, ge=ChannelType.none)
+    mode:ChannelType = commands.Param(None, ge=ChannelType.none)
   ):
     """
     Set a channel for use with ConfessionBot
@@ -1169,7 +1169,7 @@ class Confessions(commands.Cog):
     mode: The channel type, use `/help set` for an explaination of types
     """
     self.bot.auth.admins(inter)
-    if mode == ChannelType.invalid:
+    if mode is None:
       raise commands.BadArgument()
     elif mode == ChannelType.none:
       wastype = int(self.config.get(
