@@ -235,7 +235,10 @@ class ConfessionData:
         botcolour = self.parent.bot.config['main']['themecolor'][2:]
         func = webhook.send(
           self.content,
-          username='[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']',
+          username=(
+            (preface + ' - ' if preface else '')
+            ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
+          ),
           avatar_url=(
             self.parent.config.get('pfpgen_url', '')
             .replace('{}', botcolour if self.anonid is None else self.anonid)
