@@ -1,5 +1,6 @@
 __pycache__
 /.vscode
+.pytest_cache/
 /config/config_history
 /config/config.ini
 /logs
