@@ -236,7 +236,7 @@ class ConfessionData:
         func = webhook.send(
           self.content,
           username=(
-            (preface + ' - ' if preface else '')
+            (preface + ' - ' if preface else '') +
             ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
           ),
           avatar_url=(
