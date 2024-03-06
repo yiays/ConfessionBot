@@ -228,8 +228,8 @@ class ConfessionData:
 
   async def send_confession(self, ctx:disnake.TextChannel | disnake.Interaction, smsg=False):
     """ Send confession to the destination channel """
-    preface = self.parent.config.get(f'{ctx.guild.id}_preface', fallback='')
-    if self.parent.config.get(f'{ctx.guild.id}_webhook', None) == 'True':
+    preface = self.parent.config.get(f'{self.targetchannel.guild.id}_preface', fallback='')
+    if self.parent.config.get(f'{self.targetchannel.guild.id}_webhook', None) == 'True':
       if webhook := await self.find_or_create_webhook(self.targetchannel):
         kwargs = {'file': self.attachment} if self.attachment else {}
         botcolour = self.parent.bot.config['main']['themecolor'][2:]
