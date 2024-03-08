@@ -16,7 +16,7 @@ if TYPE_CHECKING:
   from configparser import SectionProxy
 
 from extensions.controlpanel import Toggleable, Stringable
-from overlay.extensions.confessions_common import ChannelType
+from overlay.extensions.confessions_common import ChannelType, findvettingchannel
 
 
 class ConfessionsSetup(commands.Cog):
@@ -95,15 +95,13 @@ class ConfessionsSetup(commands.Cog):
     mode:ChannelType
   ):
     """
-    Set a channel for use with ConfessionBot
+      Set a channel for use with ConfessionBot
 
-    Parameters
-    ----------
-    mode: The channel type, use `/help set` for an explaination of types
+      Parameters
+      ----------
+      mode: The channel type, use `/help set` for an explaination of types
     """
-    if mode is None:
-      raise commands.BadArgument()
-    elif mode == ChannelType.none:
+    if mode == ChannelType.none:
       wastype = int(self.config.get(
         f'{inter.guild.id}_{inter.channel.id}', fallback=ChannelType.none
       ))
@@ -111,16 +109,23 @@ class ConfessionsSetup(commands.Cog):
         await inter.send(self.babel(inter, 'unsetfailure'))
         return
       self.bot.config.remove_option(self.SCOPE, str(inter.guild.id)+'_'+str(inter.channel.id))
-    else:
-      if mode == ChannelType.vetting and 'ConfessionsModeration' not in self.bot.cogs:
+    elif mode == ChannelType.vetting:
+      if 'ConfessionsModeration' not in self.bot.cogs:
         await inter.send(self.babel(inter, 'no_moderation'))
         return
+      if findvettingchannel(self.config, inter.guild):
+        await inter.send(self.babel(inter, 'singlechannel'))
+        return
+      self.config[str(inter.guild.id)+'_'+str(inter.channel.id)] = str(mode)
+    else:
       self.config[str(inter.guild.id)+'_'+str(inter.channel.id)] = str(mode)
     self.bot.config.save()
 
+    #BABEL: setsuccess#,unsetsuccess#
     modestring = (
       'setsuccess'+str(mode) if mode > ChannelType.none else 'unsetsuccess'+str(wastype)
     )
+    #BABEL: setundo,unsetundo
     await inter.send(
       self.babel(inter, modestring) + ' ' +
       self.babel(inter, 'setundo' if mode > ChannelType.none else 'unsetundo') +
@@ -131,7 +136,7 @@ class ConfessionsSetup(commands.Cog):
   @commands.slash_command(dm_permission=False)
   async def shuffle(self, inter:disnake.GuildCommandInteraction):
     """
-    Change all anon-ids on a server
+      Change all anon-ids on a server
     """
     if str(inter.guild.id)+'_banned' in self.config:
       await inter.send(self.babel(inter, 'shufflebanresetwarning'))
@@ -167,7 +172,7 @@ class ConfessionsSetup(commands.Cog):
   @commands.slash_command(dm_permission=False)
   async def botmod(self, inter:disnake.GuildCommandInteraction):
     """
-    Grant or take away botmod powers from a user
+      Grant or take away botmod powers from a user
     """
     #TODO: delete this in time as users adjust
     await inter.response.send_message(self.babel(inter, 'botmod_removed'))

@@ -238,6 +238,7 @@ class ConfessionsModeration(commands.Cog):
         await pendingconfession.send_confession(inter)
 
       await inter.message.edit(view=None)
+      #BABEL: vetaccepted,vetdenied
       await inter.send(self.babel(
         inter.guild,
         'vetaccepted' if accepted else 'vetdenied',
@@ -245,6 +246,7 @@ class ConfessionsModeration(commands.Cog):
         channel=f"<#{pendingconfession.targetchannel_id}>"
       ))
 
+      #BABEL: confession_vetting_accepted,confession_vetting_denied
       content = self.babel(
         pendingconfession.author,
         'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
@@ -297,12 +299,12 @@ class ConfessionsModeration(commands.Cog):
     unblock:Optional[bool] = False
   ):
     """
-    Block or unblock anon-ids from confessing
+      Block or unblock anon-ids from confessing
 
-    Parameters
-    ----------
-    anonid: The anonymous id found next to any traceable anonymous message
-    unblock: Set to true if you want to unblock this id instead
+      Parameters
+      ----------
+      anonid: The anonymous id found next to any traceable anonymous message
+      unblock: Set to true if you want to unblock this id instead
     """
     banlist = self.config.get(f'{inter.guild.id}_banned', fallback='')
     banlist_split = banlist.split(',')
@@ -325,6 +327,9 @@ class ConfessionsModeration(commands.Cog):
     if anonid in banlist_split and not unblock:
       await inter.send(self.babel(inter, 'doublebananonid'))
       return
+    #BABEL: nomatchanonid
+    #TODO: keeping this string around in case a new way to check is found
+    # will probably involve storing / retreiving recent anon-ids
 
     if unblock:
       fullid = [i for i in banlist_split if anonid in i][0]
@@ -333,6 +338,7 @@ class ConfessionsModeration(commands.Cog):
       self.config[str(inter.guild.id)+'_banned'] = banlist + anonid + ','
     self.bot.config.save()
 
+    #BABEL: unbansuccess,bansuccess
     await inter.send(
       self.babel(inter, ('un' if unblock else '')+'bansuccess', user=anonid)
     )

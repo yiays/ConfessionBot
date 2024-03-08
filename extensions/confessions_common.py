@@ -87,6 +87,7 @@ class NoMemberCacheError(Exception):
 
 class ConfessionData:
   """ Dataclass for Confessions """
+  SCOPE = 'confessions' # exists to keep babel happy
   anonid:str | None
 
   def __init__(
@@ -193,11 +194,13 @@ class ConfessionData:
       return True
     except disnake.Forbidden:
       try:
+        #BABEL: confessions/missingperms
         await self.targetchannel.send(
           self.parent.babel(self.targetchannel.guild, 'missingperms', perm='Embed Links')
         )
         await ctx.send(self.parent.babel(ctx, 'embederr'), **kwargs)
       except disnake.Forbidden:
+        #BABEL: confessions/missingchannelerr
         await ctx.send(
           self.parent.babel(ctx, 'missingchannelerr') + ' (403 Forbidden)',
           **kwargs
@@ -237,6 +240,7 @@ class ConfessionData:
     success = await self.handle_send_errors(ctx, func)
 
     if success and smsg:
+      #BABEL: confession_sent_below,confession_sent_channel
       await ctx.send(
         self.parent.babel(ctx, (
           'confession_sent_below' if ctx.channel == self.targetchannel else 'confession_sent_channel'

@@ -690,6 +690,7 @@ class Confessions(commands.Cog):
       )
     # send the list of channels, complete or not
     if len(matches) > 0:
+      #BABEL: listtitlelocal,listtitle
       await inter.send((
         self.babel(inter, 'listtitlelocal' if local else 'listtitle') + '\n' +
         self.generate_list(inter.author, matches, vetting) +
