@@ -867,6 +867,7 @@ class Confessions(commands.Cog):
   @commands.Cog.listener('on_button_click')
   async def on_confession_review(self, inter:disnake.MessageInteraction):
     """ Handle approving and denying confessions """
+    await inter.response.defer()
     if inter.data.custom_id.startswith('pendingconfession_'):
       vetmessage = inter.message
 
@@ -884,14 +885,14 @@ class Confessions(commands.Cog):
           print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
           return
       except CorruptConfessionDataException:
-        await inter.send(self.babel(inter, 'vetcorrupt'))
+        await inter.response.send_message(self.babel(inter, 'vetcorrupt'))
         return
 
       try:
         await pendingconfession.fetch()
       except (disnake.NotFound, disnake.Forbidden):
         if accepted:
-          await inter.send(self.babel(
+          await inter.response.send_message(self.babel(
             inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel_id}>"
           ))
           return
@@ -916,7 +917,7 @@ class Confessions(commands.Cog):
         await pendingconfession.send_confession(inter)
 
       await vetmessage.edit(view=None)
-      await inter.send(self.babel(
+      await inter.response.send_message(self.babel(
         inter.guild,
         'vetaccepted' if accepted else 'vetdenied',
         user=inter.author.mention,
