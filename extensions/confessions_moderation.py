@@ -44,6 +44,7 @@ class ConfessionsModeration(commands.Cog):
 
   def __init__(self, bot:MerelyBot):
     self.bot = bot
+    self.button_lock:list[str] = []
 
     if 'confessions' not in bot.config['extensions']:
       raise Exception("Module `confessions` must be enabled!")
@@ -191,7 +192,12 @@ class ConfessionsModeration(commands.Cog):
   @commands.Cog.listener('on_button_click')
   async def on_confession_review(self, inter:disnake.MessageInteraction):
     """ Handle approving and denying confessions """
+    if inter.data.custom_id in self.button_lock:
+      # The button was double-pressed. Ignore.
+      return
     if inter.data.custom_id.startswith('pendingconfession_'):
+      await inter.response.defer()
+      self.button_lock.append(inter.data.custom_id)
       try:
         if inter.data.custom_id.startswith('pendingconfession_approve_'):
           pendingconfession = ConfessionData(
@@ -203,15 +209,18 @@ class ConfessionsModeration(commands.Cog):
           pendingconfession = ConfessionData(self, inter.data.custom_id[23:])
           accepted = False
         else:
+          self.button_lock.remove(inter.data.custom_id)
           print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
           return
       except CorruptConfessionDataException:
         await inter.send(self.babel(inter, 'vetcorrupt'))
+        self.button_lock.remove(inter.data.custom_id)
         return
 
       try:
         await pendingconfession.fetch()
       except (disnake.NotFound, disnake.Forbidden):
+        self.button_lock.remove(inter.data.custom_id)
         if accepted:
           await inter.send(self.babel(
             inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel_id}>"
@@ -238,6 +247,7 @@ class ConfessionsModeration(commands.Cog):
         await pendingconfession.send_confession(inter)
 
       await inter.message.edit(view=None)
+      self.button_lock.remove(inter.data.custom_id)
       #BABEL: vetaccepted,vetdenied
       await inter.send(self.babel(
         inter.guild,
