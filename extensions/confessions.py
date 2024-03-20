@@ -18,8 +18,10 @@ if TYPE_CHECKING:
   from babel import Resolvable
   from configparser import SectionProxy
 
-from overlay.extensions.confessions_common\
-  import ChannelType, ConfessionData, NoMemberCacheError, Crypto, findvettingchannel
+from overlay.extensions.confessions_common import (
+  ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto,
+  findvettingchannel, CHANNEL_ICONS
+)
 
 
 class Confessions(commands.Cog):
@@ -34,13 +36,6 @@ class Confessions(commands.Cog):
   def babel(self, target:Resolvable, key:str, **values: dict[str, str | bool]) -> list[str]:
     """ Shorthand for self.bot.babel(scope, key, **values) """
     return self.bot.babel(target, self.SCOPE, key, **values)
-
-  channel_icons = {
-    ChannelType.untraceable: '🙈',
-    ChannelType.traceable: '👁',
-    ChannelType.feedback: '📢',
-    ChannelType.untraceablefeedback: '🙈📢'
-  }
 
   def __init__(self, bot:MerelyBot):
     self.bot = bot
@@ -83,7 +78,7 @@ class Confessions(commands.Cog):
   def generate_list(
     self,
     user:disnake.User,
-    matches:list[tuple],
+    matches:list[tuple[disnake.TextChannel, ChannelType]],
     vetting:bool,
     enum:bool = False
   ) -> str:
@@ -93,17 +88,19 @@ class Confessions(commands.Cog):
     for i, match in enumerate(matches):
       targets.append(
         (str(i+1)+':' if enum else '') +
-        f'{self.channel_icons[match[1]]}<#{match[0].id}>' +
+        f'{CHANNEL_ICONS[match[1]]}<#{match[0].id}>' +
         (' ('+match[0].guild.name+')' if not isinstance(user, disnake.Member) else '')
       )
     vettingwarning = ('\n\n'+self.babel(user, 'vetting') if vetting else '')
 
     return '\n'.join(targets) + vettingwarning
 
-  def scanguild(self, member:disnake.Member) -> tuple[disnake.TextChannel]:
+  def scanguild(
+    self, member:disnake.Member
+  ) -> tuple[list[tuple[disnake.TextChannel, ChannelType]], bool]:
     """ Scans a guild for any targets that a member can use for confessions """
 
-    matches = []
+    matches:list[tuple[disnake.TextChannel, ChannelType]] = []
     vetting = False
     for channel in member.guild.channels:
       if f"{member.guild.id}_{channel.id}" in self.config:
@@ -120,21 +117,21 @@ class Confessions(commands.Cog):
           matches.append((channel, chtype))
           continue
 
-    matches.sort(key=lambda m: m[0].position)
+    matches.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
 
     return matches, vetting
 
   def listavailablechannels(
       self,
       user:Union[disnake.User, disnake.Member]
-    ) -> tuple[disnake.TextChannel]:
+    ) -> tuple[list[tuple[disnake.TextChannel, ChannelType]], bool]:
     """
       List all available targets on a server for a member
       List all available targets on all mutual servers for a user
     """
 
     if isinstance(user, disnake.Member):
-      matches,vetting = self.scanguild(user)
+      matches, vetting = self.scanguild(user)
     else:
       if not self.bot.intents.members:
         raise NoMemberCacheError()
@@ -150,16 +147,16 @@ class Confessions(commands.Cog):
 
   async def safe_fetch_channel(
     self,
-    ctx:Union[commands.Context, disnake.CommandInteraction],
+    inter:disnake.CommandInteraction,
     channel_id:int
   ) -> Optional[disnake.TextChannel]:
     """ Gracefully handles whenever a confession target isn't available """
     try:
       return await self.bot.fetch_channel(channel_id)
     except disnake.Forbidden:
-      await ctx.send(
-        self.babel(ctx, 'missingchannelerr') + ' (fetch)',
-        **{'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
+      await inter.send(
+        self.babel(inter, 'missingchannelerr') + ' (fetch)',
+        ephemeral=True
       )
       return None
 
@@ -168,7 +165,7 @@ class Confessions(commands.Cog):
   def check_channel(self, guild_id:int, channel_id:int) -> bool:
     """ Verifies channel is currently in the config """
 
-    channeltype = int(self.config.get(f"{guild_id}_{channel_id}", fallback=ChannelType.none))
+    channeltype = int(self.config.get(f"{guild_id}_{channel_id}", fallback=ChannelType.unset))
     if channeltype in [
       ChannelType.traceable,
       ChannelType.untraceable,
@@ -201,212 +198,6 @@ class Confessions(commands.Cog):
       if re.match(spamflag, content):
         return False
     return True
-
-  #	Views
-
-  class ChannelSelectView(disnake.ui.View):
-    """ View for selecting a target interactively """
-    origin: disnake.Message
-    parent: Confessions
-    matches: tuple[disnake.TextChannel]
-    page: int = 0
-    selection: Optional[disnake.TextChannel] = None
-    done: bool = False
-
-    def __init__(
-        self,
-        origin:disnake.Message,
-        parent: Confessions,
-        matches: tuple[disnake.TextChannel]
-      ):
-      super().__init__(timeout=30)
-      self.origin = origin
-      self.parent = parent
-      self.matches = matches
-      self.update_list()
-      self.channel_selector.placeholder = self.parent.babel(origin, 'channelprompt_placeholder')
-      self.send_button.label = self.parent.babel(origin, 'channelprompt_button_send')
-
-      if len(matches) > 25:
-        # Add pagination only when needed
-        self.page_decrement_button = disnake.ui.Button(
-          disabled=True,
-          style=disnake.ButtonStyle.secondary,
-          label=self.parent.babel(origin, 'channelprompt_button_prev')
-        )
-        self.page_decrement_button.callback = self.change_page(-1)
-        self.add_item(self.page_decrement_button)
-
-        self.page_increment_button = disnake.ui.Button(
-          disabled=False,
-          style=disnake.ButtonStyle.secondary,
-          label=self.parent.babel(origin, 'channelprompt_button_next')
-        )
-        self.page_increment_button.callback = self.change_page(1)
-        self.add_item(self.page_increment_button)
-
-    def update_list(self):
-      """
-        Fill channel selector with channels
-        Discord limits this to 25 options, so longer lists need pagination
-      """
-      start = self.page*25
-      self.channel_selector.options = [
-        disnake.SelectOption(
-          label=f'{channel.name} (from {channel.guild.name})',
-          value=str(channel.id),
-          emoji=Confessions.channel_icons[channeltype]
-        ) for channel,channeltype in self.matches[start:start+25]
-      ]
-
-    @disnake.ui.select(min_values=1, max_values=1)
-    async def channel_selector(self, _:disnake.ui.Select, inter:disnake.MessageInteraction):
-      """ Update the message to preview the selected target """
-
-      self.send_button.disabled = False
-      try:
-        self.selection = await self.parent.bot.fetch_channel(int(inter.values[0]))
-      except disnake.Forbidden:
-        self.send_button.disabled = True
-        await inter.response.edit_message(
-          content=self.parent.babel(inter, 'missingchannelerr')+' (select)',
-          view=self
-        )
-        return
-      vetting = findvettingchannel(self.parent.config, self.selection.guild)
-      channeltype = int(self.parent.config.get(
-        f"{self.selection.guild.id}_{self.selection.id}"
-      ))
-      await inter.response.edit_message(
-        content=self.parent.babel(
-          inter, 'channelprompted', channel=self.selection.mention,
-          vetting=vetting and channeltype not in (
-            ChannelType.feedback, ChannelType.untraceablefeedback
-          )
-        ),
-        view=self)
-
-    @disnake.ui.button(disabled=True, style=disnake.ButtonStyle.primary)
-    async def send_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
-      """ Send the confession """
-
-      if self.selection is None:
-        self.disable(inter)
-        return
-
-      anonid = self.parent.get_anonid(self.selection.guild.id, inter.author.id)
-      lead = f"**[Anon-*{anonid}*]**"
-      channeltype = int(self.parent.config.get(f"{self.selection.guild.id}_{self.selection.id}"))
-
-      if not self.parent.check_banned(self.selection.guild.id, anonid):
-        await inter.send(self.parent.babel(inter, 'nosendbanned'))
-        await self.disable(inter)
-        return
-
-      pendingconfession = ConfessionData(
-        self.parent, author=inter.author, origin=self.origin, targetchannel=self.selection
-      )
-      if self.origin.attachments:
-        if not self.parent.check_image(self.selection.guild.id, self.origin.attachments[0]):
-          await inter.send(self.parent.babel(inter, 'nosendimages'))
-          await self.disable(inter)
-          return
-
-      image = None
-      if self.origin.attachments:
-        image = self.origin.attachments[0].url
-        await inter.response.defer(ephemeral=True)
-
-      vetting = findvettingchannel(self.parent.config, self.selection.guild)
-      await pendingconfession.generate_embed(
-        anonid,
-        lead if vetting or channeltype != ChannelType.untraceable else '',
-        self.origin.content,
-        image
-      )
-
-      if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
-        if 'ConfessionsModeration' in self.parent.bot.cogs:
-          await self.parent.bot.cogs['ConfessionModeration'].send_vetting(
-            inter, pendingconfession, vetting
-          )
-        else:
-          await inter.response.send_message(
-            self.parent.babel(inter, 'no_moderation'),
-            ephemeral=True
-          )
-        await self.disable(inter)
-        return
-
-      await pendingconfession.send_confession(inter)
-
-      self.send_button.label = self.parent.babel(inter, 'channelprompt_button_sent')
-      self.channel_selector.disabled = True
-      self.send_button.disabled = True
-      self.done = True
-      await inter.response.edit_message(
-        content=self.parent.babel(
-          inter, 'confession_sent_channel', channel=self.selection.mention
-        ),
-        view=self
-      )
-
-    def change_page(self, pagediff:int):
-      """ Add or remove pagediff to self.page and trigger on_page_change event """
-      async def action(inter):
-        self.page += pagediff
-        await self.on_page_change(inter)
-      return action
-
-    async def on_page_change(self, inter:disnake.MessageInteraction):
-      """ Update view based on current page number """
-      if self.page <= 0:
-        self.page = 0
-        self.page_decrement_button.disabled = True
-      else:
-        self.page_decrement_button.disabled = False
-
-      if self.page >= len(self.matches) // 25:
-        self.page = len(self.matches) // 25
-        self.page_increment_button.disabled = True
-      else:
-        self.page_increment_button.disabled = False
-
-      self.send_button.disabled = True
-
-      self.update_list()
-
-      await inter.response.edit_message(
-        content=(
-          self.parent.babel(inter, 'channelprompt') + ' ' +
-          self.parent.babel(inter, 'channelprompt_pager', page=self.page + 1)
-        ),
-        view=self
-      )
-
-    async def disable(self, inter:disnake.MessageInteraction):
-      """ Prevent further input """
-
-      self.channel_selector.disabled = True
-      self.send_button.disabled = True
-      self.done = True
-      await inter.message.edit(view=self)
-
-    async def on_timeout(self):
-      try:
-        if not self.done:
-          await self.origin.reply(
-            self.parent.babel(self.origin.author, 'timeouterror')
-          )
-        async for msg in self.origin.channel.history(after=self.origin):
-          if (
-            isinstance(msg.reference, disnake.MessageReference) and
-            msg.reference.message_id == self.origin.id
-          ):
-            await msg.delete()
-            return
-      except disnake.HTTPException:
-        pass
 
   # Modals
 
@@ -466,7 +257,7 @@ class Confessions(commands.Cog):
       )
       if vetting and channeltype != ChannelType.vetting:
         if 'ConfessionsModeration' in self.parent.bot.cogs:
-          await self.parent.bot.cogs['ConfessionModeration'].send_vetting(
+          await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
             inter, self.pendingconfession, vetting
           )
         else:
@@ -492,9 +283,6 @@ class Confessions(commands.Cog):
   @commands.Cog.listener('on_message')
   async def confession_request(self, msg:disnake.Message):
     """ Handle plain DM messages as confessions """
-    ctx = await self.bot.get_context(msg)
-    if ctx.prefix is not None:
-      return
     if isinstance(msg.channel, disnake.DMChannel) and\
        msg.author != self.bot.user:
       if msg.channel in self.ignore:
@@ -531,7 +319,7 @@ class Confessions(commands.Cog):
       await msg.reply(
         self.babel(msg, 'channelprompt') +
         (' ' + self.babel(msg, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
-        view=self.ChannelSelectView(msg, self, matches))
+        view=ChannelSelectView(msg, self, matches))
 
   # Context menu commands
 
@@ -663,7 +451,7 @@ class Confessions(commands.Cog):
     matches, _ = self.scanguild(inter.author)
     for match in matches:
       if search in match[0].name:
-        results.append(f"{self.channel_icons[match[1]]} #{match[0].name} ({match[0].id})")
+        results.append(f"{CHANNEL_ICONS[match[1]]} #{match[0].name} ({match[0].id})")
     return results[0:24] + (
       ['this list is incomplete, use /list to see all'] if len(results) > 25 else []
     )
