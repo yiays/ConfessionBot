@@ -51,15 +51,15 @@ class Confessions(commands.Cog):
     if 'secret' not in self.config or self.config['secret'] == '':
       self.config['secret'] = self.crypto.keygen(32)
       print(
-        "WARNING: Your security key has been regenerated. Old confessions are now incompatible."
+        " - WARN: Your security key has been regenerated. Old confessions are now incompatible."
       )
     if 'spam_flags' not in self.config:
       self.config['spam_flags'] = ''
 
     if not bot.config.getboolean('extensions', 'confessions_setup', fallback=False):
-      print("WARN: Without `confessions_setup` enabled, users won't be able to change settings!")
+      print(" - WARN: Without `confessions_setup` enabled, users won't be able to change settings!")
     if not bot.config.getboolean('extensions', 'confessions_moderation', fallback=False):
-      print("WARN: Without `confessions_moderation` enabled, vetting channels won't work!")
+      print(" - WARN: Without `confessions_moderation` enabled, vetting channels won't work!")
 
     self.crypto.key = self.config['secret']
     self.ignore = set()

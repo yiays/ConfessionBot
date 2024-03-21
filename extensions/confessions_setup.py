@@ -42,10 +42,10 @@ class ConfessionsSetup(commands.Cog):
     if 'pfpgen_url' not in self.config or self.config['pfpgen_url'] == '':
       self.config['pfpgen_url'] = ''
       print(
-        "WARNING: You don't have a pfp generator. Profile pictures in webhook mode will be blank."
+        " - WARN: You don't have a pfp generator. Profile pictures in webhook mode will be blank."
       )
     if 'confessions' not in bot.config['extensions']:
-      raise Warning("Without Confessions enabled, users won't be able to confess!")
+      print(" - WARN: Without Confessions enabled, users won't be able to confess!")
 
   def controlpanel_settings(self, inter:disnake.Interaction):
     # ControlPanel integration
