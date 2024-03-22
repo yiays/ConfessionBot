@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 
 from extensions.controlpanel import Toggleable, Stringable
 from overlay.extensions.confessions_common import \
-  ChannelType, ChannelSelectView, findvettingchannel, CHANNEL_ICONS
+  ChannelType, ChannelSelectView, findvettingchannel, get_guildchannels, set_guildchannels,\
+  CHANNEL_ICONS
 
 
 class ConfessionsSetup(commands.Cog):
@@ -69,13 +70,14 @@ class ConfessionsSetup(commands.Cog):
 
   class SetupView(ChannelSelectView):
     """ Configure channels and shortcuts to configure guild settings """
-    current_channel: disnake.TextChannel | None = None
-    current_mode: ChannelType | None = None
+    current_channel: disnake.TextChannel
+    current_mode: ChannelType
 
     def __init__(
       self,
       inter:disnake.GuildCommandInteraction,
-      parent:ConfessionsSetup
+      parent:ConfessionsSetup,
+      channel:disnake.TextChannel
     ):
       # Find channel types in config
       matches = self.regenerate_matches(parent, inter.guild)
@@ -91,6 +93,7 @@ class ConfessionsSetup(commands.Cog):
         for mode in ChannelType
       ]
       self.remove_item(self.send_button)
+      self.help.label = parent.babel(inter, 'setup_help')
       if 'ControlPanel' in parent.bot.cogs:
         linkbutton = disnake.ui.Button(
           custom_id='controlpanel',
@@ -102,18 +105,21 @@ class ConfessionsSetup(commands.Cog):
         linkbutton.callback = self.controlpanel_shortcut
         self.add_item(linkbutton)
 
+      self.current_channel = channel
+      guildchannels = get_guildchannels(parent.config, inter.guild.id)
+      self.current_mode = guildchannels.get(channel.id, ChannelType.unset)
+      self.update_state()
+
     def regenerate_matches(
       self, parent:ConfessionsSetup, guild:disnake.Guild
     ) -> tuple[disnake.TextChannel, ChannelType]:
       if len(guild.channels) == 0:
         return []
       botmember = guild.get_member(parent.bot.user.id)
-      confid = f'{guild.id}_'
-      out = [
-        (c, ChannelType(parent.config.getint(confid + str(c.id), fallback=ChannelType.unset.value)))
-        for c in guild.channels if isinstance(c, disnake.TextChannel)
-        and c.permissions_for(botmember).read_messages
-      ]
+      guildchannels = get_guildchannels(parent.config, guild.id)
+      out = [(c, guildchannels.get(c.id, ChannelType.unset)) for c in guild.channels if (
+        isinstance(c, disnake.TextChannel) and c.permissions_for(botmember).read_messages
+      )]
       out.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
       return out
 
@@ -126,24 +132,26 @@ class ConfessionsSetup(commands.Cog):
       self, inter:disnake.MessageInteraction, channel:disnake.TextChannel, mode:ChannelType
     ) -> bool:
       """ Tries to change settings as requested and handles all rules and requirements """
-      configkey = f'{channel.guild.id}_{channel.id}'
-      wastype = self.parent.config.getint(configkey, fallback=ChannelType.unset.value)
+      guildchannels = get_guildchannels(self.parent.config, channel.guild.id)
+      wastype = int(guildchannels.get(channel.id, ChannelType.unset))
       if mode == ChannelType.unset:
         if wastype == ChannelType.unset:
           await inter.send(self.parent.babel(inter, 'unsetfailure'), ephemeral=True)
           return False
-        self.parent.bot.config.remove_option(self.SCOPE, configkey)
+        guildchannels.pop(channel.id)
       elif mode == ChannelType.vetting:
         if 'ConfessionsModeration' not in self.parent.bot.cogs:
           await inter.send(self.parent.babel(inter, 'no_moderation'), ephemeral=True)
           return False
-        if findvettingchannel(self.parent.config, channel.guild):
+        if findvettingchannel(guildchannels):
           await inter.send(self.parent.babel(inter, 'singlechannel'), ephemeral=True)
           return False
       if wastype == mode:
         await inter.send(self.parent.babel(inter, 'no_change'), ephemeral=True)
         return False
-      self.parent.config[configkey] = str(mode.value)
+      if mode != ChannelType.unset:
+        guildchannels[channel.id] = mode
+      set_guildchannels(self.parent.config, channel.guild.id, guildchannels)
       self.parent.bot.config.save()
 
       #BABEL: setsuccess#,unsetsuccess#
@@ -151,36 +159,34 @@ class ConfessionsSetup(commands.Cog):
         f'setsuccess{mode.value}' if mode > ChannelType.unset else f'unsetsuccess{wastype}'
       )
       #BABEL: setundo,unsetundo
-      await channel.send(
-        self.parent.babel(inter.guild, modestring) + ' ' +
-        self.parent.babel(inter.guild, 'setundo' if mode > ChannelType.unset else 'unsetundo') +
-        ('\n'+self.parent.babel(inter.guild, 'setcta') if mode > ChannelType.unset else '')
-      )
+      try:
+        await channel.send(
+          self.parent.babel(inter.guild, modestring) + ' ' +
+          self.parent.babel(inter.guild, 'setundo' if mode > ChannelType.unset else 'unsetundo') +
+          ('\n'+self.parent.babel(inter.guild, 'setcta') if mode > ChannelType.unset else '')
+        )
+      except disnake.Forbidden:
+        pass
       return True
 
-    async def update_state(self, inter:disnake.MessageInteraction):
-      #BABEL: state_desc_unset,state_desc_#
-      modename = self.current_mode.name if isinstance(self.current_mode, ChannelType) else 'unset'
-      modeval = (
-        self.current_mode.value if isinstance(self.current_mode, ChannelType) else ChannelType.unset
-      )
+    def update_state(self):
+      modeval = self.current_mode.value
       for option in self.channel_selector.options:
-        option.default = bool(
-          int(option.value) == self.current_channel.id if self.current_channel else False
-        )
+        option.default = bool(int(option.value) == self.current_channel.id)
       for option in self.mode_selector.options:
         option.default = (
-          int(option.value) == modeval if isinstance(self.current_mode, ChannelType) else False
+          int(option.value) == modeval
         )
-      if self.current_channel is None:
-        await inter.response.edit_message(self.parent.babel(inter, 'setup_start'))
-        return
+
+    async def update_message(self, inter:disnake.MessageInteraction):
+      modename = self.current_mode.name
+      modeval = self.current_mode.value
       self.timeout = 180
+      self.help.disabled = True
+      #BABEL: state_desc_unset,state_desc_#
       descmode = 'state_desc_' + (str(modeval) if modeval != ChannelType.unset else 'unset')
       await inter.response.edit_message((
-        self.parent.babel(inter, 'setup_state',
-                          channel=self.current_channel.mention if self.current_channel else None,
-                          state=modename)
+        self.parent.babel(inter, 'setup_state', channel=self.current_channel.mention, state=modename)
         + '\n' + self.parent.babel(inter, descmode)
         + '\n' + self.parent.babel(inter, 'state_cta')
       ), view=self)
@@ -194,36 +200,37 @@ class ConfessionsSetup(commands.Cog):
       try:
         self.current_channel = await self.parent.bot.fetch_channel(int(inter.values[0]))
       except disnake.Forbidden:
-        self.current_channel = None
-        self.current_mode = None
-        await self.update_state(inter)
+        self.current_mode = ChannelType.unset
+        self.update_state()
+        await self.update_message(inter)
         await inter.send(
           content=self.parent.babel(inter, 'setup_state_missing', channel_id=inter.values[0]),
           ephemeral=True
         )
         return
       c = self.current_channel
-      self.current_mode = ChannelType(
-        self.parent.config.getint(f'{c.guild.id}_{c.id}', fallback=ChannelType.unset)
-      )
-      await self.update_state(inter)
+      guildchannels = get_guildchannels(self.parent.config, c.guild.id)
+      self.current_mode = guildchannels.get(c.id, ChannelType.unset)
+      self.update_state()
+      await self.update_message(inter)
+
+    @disnake.ui.button(emoji='❓', row=4)
+    async def help(self, _:disnake.ui.Button, inter:disnake.MessageInteraction):
+      self.update_state()
+      await self.update_message(inter)
 
     @disnake.ui.select()
     async def mode_selector(self, _:disnake.ui.Select, inter:disnake.MessageInteraction):
       if inter.user != self.origin.author:
         await inter.send(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
-      if not self.current_channel:
-        await inter.send(
-          self.parent.babel(inter, 'setup_channel_required'), ephemeral=True
-        )
-        return
 
       if await self.set(inter, self.current_channel, ChannelType(int(inter.values[0]))):
         self.current_mode = ChannelType(int(inter.values[0]))
         self.matches = self.regenerate_matches(self.parent, inter.guild)
         self.update_list()
-        await self.update_state(inter)
+        self.update_state()
+        await self.update_message(inter)
 
     async def on_timeout(self):
       for component in self.children:
@@ -259,8 +266,9 @@ class ConfessionsSetup(commands.Cog):
     """
       Change confessions settings on this server
     """
+    channel = self.bot.get_channel(inter.channel_id)
     await inter.response.send_message(
-      self.babel(inter, 'setup_start'), view=self.SetupView(inter, self), ephemeral=True
+      self.babel(inter, 'setup_start'), view=self.SetupView(inter, self, channel), ephemeral=True
     )
 
   @commands.default_member_permissions(moderate_members=True)

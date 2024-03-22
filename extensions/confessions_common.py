@@ -44,13 +44,24 @@ CHANNEL_ICONS = {
 
 # Utility functions
 
-def findvettingchannel(config:"SectionProxy", guild:disnake.Guild) -> Optional[disnake.TextChannel]:
+def findvettingchannel(guildchannels:dict[int, ChannelType]) -> Optional[int]:
   """ Check if guild has a vetting channel and return it """
-
-  for channel in guild.channels:
-    if int(config.get(f'{guild.id}_{channel.id}', ChannelType.unset)) == ChannelType.vetting:
-      return channel
+  for channel_id in guildchannels:
+    if guildchannels[channel_id] == ChannelType.vetting:
+      return channel_id
   return None
+
+
+def get_guildchannels(config:SectionProxy, guild_id:int) -> dict[int, ChannelType]:
+  """ Returns a dictionary of {channel_id: channel_type} for the provided guild """
+  return {int(k):ChannelType(int(v)) for k,v in (
+    e.split('=') for e in config.get(f'{guild_id}_channels', '').split(',')
+  )}
+
+
+def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int, ChannelType]):
+  """ Writes a dictionary of {channel_id: channel_type} to the config """
+  config[f'{guild_id}_channels'] = ','.join(f'{k}={int(v)}' for k,v in guildchannels.items())
 
 
 # Exceptions
@@ -134,10 +145,9 @@ class ChannelSelectView(disnake.ui.View):
         view=self
       )
       return
-    vetting = findvettingchannel(self.parent.config, self.selection.guild)
-    channeltype = int(self.parent.config.get(
-      f"{self.selection.guild.id}_{self.selection.id}"
-    ))
+    guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
+    vetting = findvettingchannel(guildchannels)
+    channeltype = guildchannels[self.selection.id]
     await inter.response.edit_message(
       content=self.parent.babel(
         inter, 'channelprompted', channel=self.selection.mention,
@@ -159,7 +169,7 @@ class ChannelSelectView(disnake.ui.View):
 
     anonid = self.parent.get_anonid(self.selection.guild.id, inter.author.id)
     lead = f"**[Anon-*{anonid}*]**"
-    channeltype = int(self.parent.config.get(f"{self.selection.guild.id}_{self.selection.id}"))
+    channeltype = get_guildchannels(self.parent.config, self.selection.guild.id)
 
     if not self.parent.check_banned(self.selection.guild.id, anonid):
       await inter.send(self.parent.babel(inter, 'nosendbanned'))
@@ -180,7 +190,7 @@ class ChannelSelectView(disnake.ui.View):
       image = self.origin.attachments[0].url
       await inter.response.defer(ephemeral=True)
 
-    vetting = findvettingchannel(self.parent.config, self.selection.guild)
+    vetting = findvettingchannel(get_guildchannels(self.parent.config, self.selection.guild.id))
     await pendingconfession.generate_embed(
       anonid,
       lead if vetting or channeltype != ChannelType.untraceable else '',
@@ -191,7 +201,7 @@ class ChannelSelectView(disnake.ui.View):
     if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
       if 'ConfessionsModeration' in self.parent.bot.cogs:
         await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-          inter, pendingconfession, vetting
+          inter, pendingconfession, self.origin.guild.get_channel(vetting)
         )
       else:
         await inter.response.send_message(
@@ -344,8 +354,11 @@ class ConfessionData:
     else:
       self.offline = False
       self.author = author
+      self.author_id = author.id
       self.origin = origin
+      self.origin_id = origin.id
       self.targetchannel = targetchannel
+      self.targetchannel_id = targetchannel.id
 
     self.parent = parent
     self.embed = embed

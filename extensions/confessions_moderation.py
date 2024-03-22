@@ -18,7 +18,7 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions_common import Crypto
 
 from overlay.extensions.confessions_common import\
-  ChannelType, ConfessionData, CorruptConfessionDataException
+  ChannelType, ConfessionData, CorruptConfessionDataException, get_guildchannels
 
 
 class ConfessionsModeration(commands.Cog):
@@ -230,7 +230,8 @@ class ConfessionsModeration(commands.Cog):
       if accepted:
         anonid = self.bot.cogs['Confessions'].get_anonid(inter.guild.id, pendingconfession.author.id)
         lead = f"**[Anon-*{anonid}*]**"
-        channeltype = int(self.config.get(f"{inter.guild.id}_{pendingconfession.targetchannel_id}"))
+        guildchannels = get_guildchannels(self.config, inter.guild.id)
+        channeltype = guildchannels[pendingconfession.targetchannel_id]
 
         await pendingconfession.generate_embed(
           anonid,

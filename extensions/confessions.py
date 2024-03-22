@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 from overlay.extensions.confessions_common import (
   ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto,
-  findvettingchannel, CHANNEL_ICONS
+  findvettingchannel, get_guildchannels, CHANNEL_ICONS
 )
 
 
@@ -102,19 +102,19 @@ class Confessions(commands.Cog):
 
     matches:list[tuple[disnake.TextChannel, ChannelType]] = []
     vetting = False
+    guildchannels = get_guildchannels(self.config, member.guild.id)
     for channel in member.guild.channels:
-      if f"{member.guild.id}_{channel.id}" in self.config:
-        chtype = int(self.config.get(f"{member.guild.id}_{channel.id}"))
-        if chtype == ChannelType.vetting:
+      if channel.id in guildchannels:
+        if guildchannels[channel.id] == ChannelType.vetting:
           vetting = True
           continue
         channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
         channel.guild.name = channel.guild.name[:40]+('...' if len(channel.guild.name) > 40 else '')
-        if chtype in (ChannelType.feedback, ChannelType.untraceablefeedback):
-          matches.append((channel, chtype))
+        if guildchannels[channel.id] in (ChannelType.feedback, ChannelType.untraceablefeedback):
+          matches.append((channel, guildchannels[channel.id]))
           continue
         if channel.permissions_for(member).read_messages:
-          matches.append((channel, chtype))
+          matches.append((channel, guildchannels[channel.id]))
           continue
 
     matches.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
@@ -164,8 +164,8 @@ class Confessions(commands.Cog):
 
   def check_channel(self, guild_id:int, channel_id:int) -> bool:
     """ Verifies channel is currently in the config """
-
-    channeltype = int(self.config.get(f"{guild_id}_{channel_id}", fallback=ChannelType.unset))
+    guildchannels = get_guildchannels(self.config, guild_id)
+    channeltype = guildchannels.get(channel_id, ChannelType.unset)
     if channeltype in [
       ChannelType.traceable,
       ChannelType.untraceable,
@@ -241,9 +241,8 @@ class Confessions(commands.Cog):
         return
 
       anonid = self.parent.get_anonid(inter.guild.id, inter.author.id)
-      channeltype = int(self.parent.config.get(
-        f"{self.pendingconfession.targetchannel.guild.id}_{self.pendingconfession.targetchannel.id}"
-      ))
+      guildchannels = get_guildchannels(inter.guild.id)
+      channeltype = guildchannels[self.pendingconfession.targetchannel_id]
       lead = f"**[Anon-*{anonid}*]**"
 
       vetting = findvettingchannel(self.parent.config, inter.guild)
@@ -360,7 +359,8 @@ class Confessions(commands.Cog):
 
     anonid = self.get_anonid(inter.guild_id, inter.author.id)
     lead = f"**[Anon-*{anonid}*]**"
-    channeltype = int(self.config.get(f"{inter.guild_id}_{channel.id}"))
+    guildchannels = get_guildchannels(self.config, inter.guild_id)
+    channeltype = guildchannels[channel.id]
 
     if not self.check_banned(inter.guild_id, anonid):
       await inter.send(self.babel(inter, 'nosendbanned'), ephemeral=True)
