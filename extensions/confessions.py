@@ -245,7 +245,7 @@ class Confessions(commands.Cog):
       channeltype = guildchannels[self.pendingconfession.targetchannel_id]
       lead = f"**[Anon-*{anonid}*]**"
 
-      vetting = findvettingchannel(self.parent.config, inter.guild)
+      vetting = findvettingchannel(guildchannels)
 
       await self.pendingconfession.generate_embed(
         anonid,
@@ -381,7 +381,7 @@ class Confessions(commands.Cog):
         await inter.send(self.babel(inter, 'nospam'), ephemeral=True)
         return
 
-      vetting = findvettingchannel(self.config, inter.guild)
+      vetting = findvettingchannel(guildchannels)
 
       if image:
         await inter.response.defer(ephemeral=True)

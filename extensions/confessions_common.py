@@ -336,7 +336,7 @@ class ConfessionData:
     rawdata:Optional[str] = None,
     *,
     author:Optional[disnake.User] = None,
-    origin:Optional[Union[disnake.Message, disnake.Interaction]] = None,
+    origin:Optional[disnake.Message] = None,
     targetchannel:Optional[disnake.TextChannel] = None,
     embed:Optional[disnake.Embed] = None
   ):
@@ -356,7 +356,8 @@ class ConfessionData:
       self.author = author
       self.author_id = author.id
       self.origin = origin
-      self.origin_id = origin.id
+      if isinstance(origin, disnake.Message):
+        self.origin_id = origin.id
       self.targetchannel = targetchannel
       self.targetchannel_id = targetchannel.id
 

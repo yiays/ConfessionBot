@@ -54,7 +54,10 @@ class ConfessionsSetup(commands.Cog):
       return []
     out = []
     if inter.permissions.moderate_members:
-      out.append(Stringable(self.SCOPE, f'{inter.guild_id}_banned', 'guild_banlist'))
+      pass
+      # removed because users could enter an invalid format and cause errors
+      #TODO: maybe add support for a required format regex?
+      # out.append(Stringable(self.SCOPE, f'{inter.guild_id}_banned', 'guild_banlist'))
     if inter.permissions.administrator:
       out += [
         Toggleable(self.SCOPE, f'{inter.guild_id}_imagesupport', 'image_support', default=True),
