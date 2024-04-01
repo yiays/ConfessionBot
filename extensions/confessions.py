@@ -386,8 +386,7 @@ class Confessions(commands.Cog):
 
       vetting = findvettingchannel(guildchannels)
 
-      if image:
-        await inter.response.defer(ephemeral=True)
+      await inter.response.defer(ephemeral=True)
 
       await pendingconfession.generate_embed(
         anonid,
