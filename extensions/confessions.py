@@ -50,16 +50,19 @@ class Confessions(commands.Cog):
       self.config['report_channel'] = ''
     if 'secret' not in self.config or self.config['secret'] == '':
       self.config['secret'] = self.crypto.keygen(32)
-      print(
-        " - WARN: Your security key has been regenerated. Old confessions are now incompatible."
-      )
+      if not bot.quiet:
+        print(
+          " - WARN: Your security key has been regenerated. Old confessions are now incompatible"
+        )
     if 'spam_flags' not in self.config:
       self.config['spam_flags'] = ''
 
     if not bot.config.getboolean('extensions', 'confessions_setup', fallback=False):
-      print(" - WARN: Without `confessions_setup` enabled, users won't be able to change settings!")
+      if not bot.quiet:
+        print(" - WARN: Without `confessions_setup` enabled, users won't be able to change settings")
     if not bot.config.getboolean('extensions', 'confessions_moderation', fallback=False):
-      print(" - WARN: Without `confessions_moderation` enabled, vetting channels won't work!")
+      if not bot.quiet:
+        print(" - WARN: Without `confessions_moderation` enabled, vetting channels won't work")
 
     self.crypto.key = self.config['secret']
     self.ignore = set()
@@ -322,7 +325,7 @@ class Confessions(commands.Cog):
 
   # Context menu commands
 
-  @commands.cooldown(1, 1)
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
   @commands.message_command(name="Confess here", dm_permission=False)
   async def confess_message(self, inter:disnake.MessageCommandInteraction):
     """ Shorthand to start a confession modal in this channel """
@@ -330,7 +333,7 @@ class Confessions(commands.Cog):
 
   #	Slash commands
 
-  @commands.cooldown(1, 1)
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
   @commands.slash_command()
   async def confess(
     self,
@@ -412,7 +415,7 @@ class Confessions(commands.Cog):
         modal=self.ConfessionModal(self, inter, pendingconfession)
       )
 
-  @commands.cooldown(1, 1)
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
   @commands.slash_command(name='confess-to')
   async def confess_to(
     self,
