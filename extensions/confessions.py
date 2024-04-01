@@ -244,7 +244,7 @@ class Confessions(commands.Cog):
         return
 
       anonid = self.parent.get_anonid(inter.guild.id, inter.author.id)
-      guildchannels = get_guildchannels(inter.guild.id)
+      guildchannels = get_guildchannels(self.parent.config, inter.guild.id)
       channeltype = guildchannels[self.pendingconfession.targetchannel_id]
       lead = f"**[Anon-*{anonid}*]**"
 
@@ -260,7 +260,7 @@ class Confessions(commands.Cog):
       if vetting and channeltype != ChannelType.vetting:
         if 'ConfessionsModeration' in self.parent.bot.cogs:
           await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-            inter, self.pendingconfession, vetting
+            inter, self.pendingconfession, inter.guild.get_channel(vetting)
           )
         else:
           await inter.response.send_message(
@@ -402,7 +402,7 @@ class Confessions(commands.Cog):
       if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
         if 'ConfessionsModeration' in self.bot.cogs:
           await self.bot.cogs['ConfessionsModeration'].send_vetting(
-            inter, pendingconfession, vetting
+            inter, pendingconfession, inter.guild.get_channel(vetting)
           )
         else:
           await inter.response.send_message(self.babel(inter, 'no_moderation'), ephemeral=True)
