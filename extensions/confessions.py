@@ -275,7 +275,7 @@ class Confessions(commands.Cog):
 
   @commands.Cog.listener('on_button_click')
   async def on_confession_review(self, inter:disnake.MessageInteraction):
-    """ Handle approving and denying confessions """
+    """ Notify users when handling vetting is not possible """
     if (
       inter.data.custom_id.startswith('pendingconfession_') and
       'ConfessionsModeration' not in self.bot.cogs
