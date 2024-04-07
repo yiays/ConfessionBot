@@ -221,7 +221,8 @@ class Confessions(commands.Cog):
             placeholder=parent.babel(origin, 'editor_message_placeholder'),
             custom_id="content",
             style=disnake.TextInputStyle.paragraph,
-            min_length=1
+            min_length=1,
+            max_length=3900
           )
         ]
       )
@@ -338,7 +339,7 @@ class Confessions(commands.Cog):
   async def confess(
     self,
     inter: disnake.GuildCommandInteraction,
-    content:Optional[str] = None,
+    content:Optional[str] = commands.Param(default=None, max_length=3900),
     image:Optional[disnake.Attachment] = None,
     **kwargs
   ):
@@ -420,7 +421,7 @@ class Confessions(commands.Cog):
     self,
     inter:disnake.GuildCommandInteraction,
     channel:str,
-    content:Optional[str] = None,
+    content:Optional[str] = commands.Param(default=None, max_length=3900),
     image:Optional[disnake.Attachment] = None
   ):
     """
