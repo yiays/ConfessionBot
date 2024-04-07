@@ -239,8 +239,11 @@ class ConfessionsSetup(commands.Cog):
       for component in self.children:
         if isinstance(component, (disnake.ui.Button, disnake.ui.Select)):
           component.disabled = True
-      msg = await self.origin.original_message()
-      await msg.edit(view=self)
+      try:
+        msg = await self.origin.original_message()
+        await msg.edit(view=self)
+      except disnake.HTTPException:
+        pass
 
   # Events
 
