@@ -239,12 +239,30 @@ class ConfessionsSetup(commands.Cog):
       for component in self.children:
         if isinstance(component, (disnake.ui.Button, disnake.ui.Select)):
           component.disabled = True
-      msg = await self.origin.original_message()
-      await msg.edit(view=self)
+      try:
+        msg = await self.origin.original_message()
+        await msg.edit(view=self)
+      except disnake.HTTPException:
+        pass
 
   # Events
 
-  @commands.Cog.listener('on_guild_leave')
+  @commands.Cog.listener('on_ready')
+  async def config_verify(self):
+    """ Ensure guilds stored in config are still accessible to the bot """
+    await asyncio.sleep(15)
+
+    for guild_id in set(k.split('_')[0] for k in self.config):
+      if self.bot.get_guild(guild_id) is None:
+        guildchannels = get_guildchannels(self.config, guild_id)
+        if self.bot.verbose:
+          print("Removed guild", guild_id, "from config.")
+        for channel_id in guildchannels:
+          guildchannels.pop(channel_id)
+          set_guildchannels(self.config, guild_id, guildchannels)
+        self.bot.config.save()
+
+  @commands.Cog.listener('on_guild_remove')
   async def guild_cleanup(self, guild:disnake.Guild):
     """ Automatically remove data related to a guild on removal """
     for option in self.config:
@@ -255,10 +273,10 @@ class ConfessionsSetup(commands.Cog):
   @commands.Cog.listener('on_guild_channel_delete')
   async def channel_cleanup(self, channel:disnake.TextChannel):
     """ Automatically remove data related to a channel on delete """
-    for option in self.config:
-      if option == str(channel.guild.id)+'_'+str(channel.id):
-        self.bot.config.remove_option(self.SCOPE, option)
-        break
+    guildchannels = get_guildchannels(self.config, channel.guild.id)
+    if channel.id in guildchannels:
+      guildchannels.pop(channel.id)
+      set_guildchannels(self.config, channel.guild.id, guildchannels)
     self.bot.config.save()
 
   # Commands
