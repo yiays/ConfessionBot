@@ -55,7 +55,7 @@ def findvettingchannel(guildchannels:dict[int, ChannelType]) -> Optional[int]:
 def get_guildchannels(config:SectionProxy, guild_id:int) -> dict[int, ChannelType]:
   """ Returns a dictionary of {channel_id: channel_type} for the provided guild """
   return {int(k):ChannelType(int(v)) for k,v in (
-    e.split('=') for e in config.get(f'{guild_id}_channels', '').split(',')
+    e.split('=') for e in config.get(f'{guild_id}_channels', fallback='').split(',') if e
   )}
 
 

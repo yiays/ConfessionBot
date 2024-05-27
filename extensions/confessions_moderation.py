@@ -265,10 +265,11 @@ class ConfessionsModeration(commands.Cog):
       )
       if isinstance(pendingconfession.origin, disnake.Message):
         await pendingconfession.origin.reply(content)
-      elif isinstance(pendingconfession.origin, disnake.Interaction):
-        await pendingconfession.origin.send(content, ephemeral=True)
       else:
-        await pendingconfession.author.send(content)
+        try:
+          await pendingconfession.author.send(content)
+        except disnake.Forbidden:
+          pass
 
   # Context menu commands
 
