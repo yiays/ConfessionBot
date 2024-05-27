@@ -59,9 +59,12 @@ def get_guildchannels(config:SectionProxy, guild_id:int) -> dict[int, ChannelTyp
   )}
 
 
-def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int, ChannelType]):
+def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int, ChannelType] | None):
   """ Writes a dictionary of {channel_id: channel_type} to the config """
-  config[f'{guild_id}_channels'] = ','.join(f'{k}={int(v)}' for k,v in guildchannels.items())
+  if guildchannels:
+    config[f'{guild_id}_channels'] = ','.join(f'{k}={int(v)}' for k,v in guildchannels.items())
+  else:
+    config.pop(f'{guild_id}_channels')
 
 
 # Exceptions

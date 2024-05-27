@@ -252,15 +252,16 @@ class ConfessionsSetup(commands.Cog):
     """ Ensure guilds stored in config are still accessible to the bot """
     await asyncio.sleep(15)
 
+    if self.bot.verbose:
+      print("Starting lost guild search")
     for guild_id in set(k.split('_')[0] for k in self.config):
-      if self.bot.get_guild(guild_id) is None:
-        guildchannels = get_guildchannels(self.config, guild_id)
-        if self.bot.verbose:
+      if guild_id.isdigit() and self.bot.get_guild(int(guild_id)) is None:
+        for key in list(s for s in self.config if s.startswith(f'{guild_id}_')):
+          self.config.pop(key)
+        if not self.bot.quiet:
           print("Removed guild", guild_id, "from config.")
-        for channel_id in guildchannels:
-          guildchannels.pop(channel_id)
-          set_guildchannels(self.config, guild_id, guildchannels)
-        self.bot.config.save()
+      #TODO: Also check for deleted channels
+    self.bot.config.save()
 
   @commands.Cog.listener('on_guild_remove')
   async def guild_cleanup(self, guild:disnake.Guild):
