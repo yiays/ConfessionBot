@@ -53,11 +53,6 @@ class ConfessionsSetup(commands.Cog):
     if inter.guild is None:
       return []
     out = []
-    if inter.permissions.moderate_members:
-      pass
-      # removed because users could enter an invalid format and cause errors
-      #TODO: maybe add support for a required format regex?
-      # out.append(Stringable(self.SCOPE, f'{inter.guild_id}_banned', 'guild_banlist'))
     if inter.permissions.administrator:
       out += [
         Toggleable(self.SCOPE, f'{inter.guild_id}_imagesupport', 'image_support', default=True),
@@ -254,22 +249,41 @@ class ConfessionsSetup(commands.Cog):
 
     if self.bot.verbose:
       print("Starting lost guild search")
-    for guild_id in set(k.split('_')[0] for k in self.config):
-      if guild_id.isdigit() and self.bot.get_guild(int(guild_id)) is None:
-        for key in list(s for s in self.config if s.startswith(f'{guild_id}_')):
+    removed = []
+    for key in self.config:
+      guild_id = key.split('_')[0]
+      if guild_id.isdigit():
+        guild = self.bot.get_guild(int(guild_id))
+        # Remove config for any guilds the bot can't access
+        if guild is None:
           self.config.pop(key)
-        if not self.bot.quiet:
-          print("Removed guild", guild_id, "from config.")
-      #TODO: Also check for deleted channels
+          if not self.bot.quiet and guild_id not in removed:
+            print("Removed guild", guild_id, "from config.")
+          removed.append(guild_id)
+        # Remove config for any channels the bot can't access
+        elif key.endswith('_channels'):
+          guildchannels = get_guildchannels(self.config, guild.id)
+          for channel_id in list(guildchannels):
+            if guild.get_channel(channel_id) is None:
+              guildchannels.pop(channel_id)
+              if not self.bot.quiet:
+                print("Removed channel", channel_id, "from guild", guild_id, "config.")
+          set_guildchannels(self.config, guild.id, guildchannels)
+
     self.bot.config.save()
+    if self.bot.verbose:
+      print("Completed lost guild search")
 
   @commands.Cog.listener('on_guild_remove')
   async def guild_cleanup(self, guild:disnake.Guild):
     """ Automatically remove data related to a guild on removal """
-    for option in self.config:
-      if option.startswith(str(guild.id)+'_'):
-        self.bot.config.remove_option(self.SCOPE, option)
+    removed = False
+    for key in list(k for k in self.config if k.startswith(str(guild.id)+'_')):
+      self.config.pop(key)
+      removed = True
     self.bot.config.save()
+    if removed and not self.bot.quiet:
+      print("Removed guild", guild.id, "from config.")
 
   @commands.Cog.listener('on_guild_channel_delete')
   async def channel_cleanup(self, channel:disnake.TextChannel):
@@ -277,6 +291,8 @@ class ConfessionsSetup(commands.Cog):
     guildchannels = get_guildchannels(self.config, channel.guild.id)
     if channel.id in guildchannels:
       guildchannels.pop(channel.id)
+      if not self.bot.quiet:
+        print("Removed channel", channel.id, "from guild", channel.guild.id, "config.")
       set_guildchannels(self.config, channel.guild.id, guildchannels)
     self.bot.config.save()
 
@@ -311,7 +327,7 @@ class ConfessionsSetup(commands.Cog):
       except asyncio.TimeoutError:
         await inter.send(self.babel(inter, 'timeouterror'))
       else:
-        self.bot.config.remove_option(self.SCOPE, str(inter.guild.id)+'_banned')
+        self.config.pop(str(inter.guild.id)+'_banned')
 
     shuffle = int(self.config.get(f'{inter.guild.id}_shuffle', fallback=0))
     self.bot.config.set(self.SCOPE, str(inter.guild.id)+'_shuffle', str(shuffle + 1))
