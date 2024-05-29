@@ -194,11 +194,11 @@ class Confessions(commands.Cog):
       return False
     raise commands.BadArgument
 
-  def check_spam(self, content:str):
+  def check_spam(self, content:str | None):
     """ Verify message doesn't contain spam as defined in [confessions] spam_flags """
 
     for spamflag in self.config.get('spam_flags', fallback=None).splitlines():
-      if re.match(spamflag, content):
+      if content and re.match(spamflag, content):
         return False
     return True
 
