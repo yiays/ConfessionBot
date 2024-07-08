@@ -265,7 +265,7 @@ class ConfessionsModeration(commands.Cog):
       )
       if isinstance(pendingconfession.origin, disnake.Message):
         await pendingconfession.origin.reply(content)
-      else:
+      elif f'{pendingconfession.author_id}_dm_notif' not in self.config:
         try:
           await pendingconfession.author.send(content)
         except disnake.Forbidden:

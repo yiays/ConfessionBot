@@ -50,9 +50,9 @@ class ConfessionsSetup(commands.Cog):
 
   def controlpanel_settings(self, inter:disnake.Interaction):
     # ControlPanel integration
+    out = [Toggleable(self.SCOPE, f'{inter.user.id}_dm_notif', 'dm_notifications', default=True)]
     if inter.guild is None:
-      return []
-    out = []
+      return out
     if inter.permissions.administrator:
       out += [
         Toggleable(self.SCOPE, f'{inter.guild_id}_imagesupport', 'image_support', default=True),
