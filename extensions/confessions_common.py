@@ -9,45 +9,152 @@ import io, os, base64
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from typing import Optional, Union, TYPE_CHECKING
-from enum import Enum
 import disnake
 import aiohttp
 
 if TYPE_CHECKING:
+  from collections.abc import Mapping
   from overlay.extensions.confessions import Confessions
   from overlay.extensions.confessions_moderation import ConfessionsModeration
   from overlay.extensions.confessions_setup import ConfessionsSetup
   from configparser import SectionProxy
+  from babel import Babel, Resolvable
 
 
-# Consts
+# Data Class
 
-class ChannelType(int, Enum):
+class ChannelType:
   """ Channel Types as they are stored """
-  unset = -1
-  untraceable = 0
-  traceable = 1
-  vetting = 2
-  feedback = 3
-  untraceablefeedback = 4
 
+  name:str
+  value:int
+  icon:str
+  anonid:bool
 
-CHANNEL_ICONS = {
-  ChannelType.unset: '❓',
-  ChannelType.untraceable: '👻',
-  ChannelType.traceable: '👁',
-  ChannelType.vetting: '🧑‍⚖️',
-  ChannelType.feedback: '📢',
-  ChannelType.untraceablefeedback: '💨'
-}
+  NAMES = {
+    -1: 'unset',
+    0: 'untraceable',
+    1: 'traceable',
+    2: 'vetting',
+    3: 'feedback',
+    4: 'untraceablefeedback',
+    5: 'marketplace'
+  }
+
+  ICONS = {
+    -1: '❓',
+    0: '👻',
+    1: '💬',
+    2: '🧑‍⚖️',
+    3: '📢',
+    4: '💨',
+    5:  '🛒'
+  }
+
+  ANONIDS = {
+    -1: False,
+    0: False,
+    1: True,
+    2: True,
+    3: True,
+    4: False,
+    5: True
+  }
+
+  DEPS = {
+    -1: None,
+    0: None,
+    1: None,
+    2: 'ConfessionsModeration',
+    3: None,
+    4: None,
+    5: 'ConfessionsMarketplace'
+  }
+
+  SWAPS = {0:1, 1:0, 3:4, 4:3}
+
+  def __init__(self, i:int):
+    self.name = self.NAMES[i]
+    self.value = i
+    self.icon = self.ICONS[i]
+    self.anonid = self.ANONIDS[i]
+
+  def __getitem__(self, i:str) -> ChannelType:
+    return ChannelType({v:k for k,v in self.NAMES.items()}[i])
+
+  def __int__(self):
+    return self.value
+
+  def __eq__(self, other):
+    return isinstance(other, ChannelType) and other.value == self.value
+
+  @classmethod
+  def unset(cls) -> ChannelType:
+    """ A channel that has no config """
+    return cls(-1)
+
+  @classmethod
+  def untraceable(cls) -> ChannelType:
+    """ A channel that has anonymous messages, but no Anon-IDs """
+    return cls(0)
+
+  @classmethod
+  def traceable(cls) -> ChannelType:
+    """ A channel that has anonymous messages, with Anon-IDs """
+    return cls(1)
+
+  @classmethod
+  def vetting(cls) -> ChannelType:
+    """ A channel that intercepts messages headed to other channels """
+    return cls(2)
+
+  @classmethod
+  def feedback(cls) -> ChannelType:
+    """ A channel that has anonymous feedback messages, with Anon-IDs """
+    return cls(3)
+
+  @classmethod
+  def untraceablefeedback(cls) -> ChannelType:
+    """ A channel that has anonymous feedback messages, but no Anon-IDs """
+    return cls(4)
+
+  @classmethod
+  def marketplace(cls) -> ChannelType:
+    """ A channel that hosts an anonymous marketplace """
+    return cls(5)
+
+  def localname(self, babel:Babel, target:Resolvable, long:bool = True) -> str:
+    """ Find name of current ChannelType in Babel """
+    name = None
+    #BABEL: channeltype_#,channeltype_#-#
+    for key in babel.langs[babel.defaultlang]['confessions']:
+      if key.startswith('channeltype_'):
+        if key == f'channeltype_{self.value}':
+          name = babel(target, 'confessions', key)
+          break
+        elif len(key) == 15 and self.value in range(int(key[-3]), int(key[-1]) + 1):
+          name = babel(target, 'confessions', key)
+          break
+    ext = None
+    if long and self.value in self.SWAPS.keys():
+      if self.anonid:
+        ext = babel(target, 'confessions', 'channeltype_traceable')
+      else:
+        ext = babel(target, 'confessions', 'channeltype_untraceable')
+    return name + (' ' + ext if ext else '')
 
 
 # Utility functions
 
+def get_channeltypes(cogs:Mapping[str, disnake.ext.commands.Cog]) -> list[ChannelType]:
+  """ Provide a selection of ChannelTypes based on the currently active modules """
+  return [ChannelType(int(i)) for i, d in ChannelType.DEPS.items() if d is None or d in cogs]
+
+
 def findvettingchannel(guildchannels:dict[int, ChannelType]) -> Optional[int]:
   """ Check if guild has a vetting channel and return it """
   for channel_id in guildchannels:
-    if guildchannels[channel_id] == ChannelType.vetting:
+    if guildchannels[channel_id] == ChannelType.vetting():
       return channel_id
   return None
 
@@ -65,6 +172,17 @@ def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int,
     config[f'{guild_id}_channels'] = ','.join(f'{k}={int(v)}' for k,v in guildchannels.items())
   else:
     config.pop(f'{guild_id}_channels')
+
+
+# Checks
+
+def check_channel(config:SectionProxy, guild_id:int, channel_id:int) -> bool | ChannelType:
+  """ Verifies channel is currently in the config """
+  guildchannels = get_guildchannels(config, guild_id)
+  channeltype = guildchannels.get(channel_id, ChannelType.unset())
+  if channeltype.value >= 0:
+    return channeltype
+  return False
 
 
 # Exceptions
@@ -126,9 +244,9 @@ class ChannelSelectView(disnake.ui.View):
     start = self.page*25
     self.channel_selector.options = [
       disnake.SelectOption(
-        label=channel.name + ('' if self.soleguild else f' (from {channel.guild.name})'),
+        label='#' + channel.name + ('' if self.soleguild else f' (from {channel.guild.name})'),
         value=channel.id,
-        emoji=CHANNEL_ICONS[channeltype]
+        emoji=channeltype.icon
       ) for channel,channeltype in self.matches[start:start+25]
     ]
 
@@ -154,9 +272,7 @@ class ChannelSelectView(disnake.ui.View):
     await inter.response.edit_message(
       content=self.parent.babel(
         inter, 'channelprompted', channel=self.selection.mention,
-        vetting=vetting and channeltype not in (
-          ChannelType.feedback, ChannelType.untraceablefeedback
-        )
+        vetting=vetting and 'feedback' not in channeltype.name
       ),
       view=self)
 
@@ -171,8 +287,8 @@ class ChannelSelectView(disnake.ui.View):
       return
 
     anonid = self.parent.get_anonid(self.selection.guild.id, inter.author.id)
-    lead = f"**[Anon-*{anonid}*]**"
-    channeltype = get_guildchannels(self.parent.config, self.selection.guild.id)
+    guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
+    channeltype = guildchannels.get(inter.channel_id)
 
     if not self.parent.check_banned(self.selection.guild.id, anonid):
       await inter.send(self.parent.babel(inter, 'nosendbanned'))
@@ -193,15 +309,15 @@ class ChannelSelectView(disnake.ui.View):
       image = self.origin.attachments[0].url
       await inter.response.defer(ephemeral=True)
 
-    vetting = findvettingchannel(get_guildchannels(self.parent.config, self.selection.guild.id))
+    vetting = findvettingchannel(guildchannels)
     await pendingconfession.generate_embed(
       anonid,
-      lead if vetting or channeltype != ChannelType.untraceable else '',
+      vetting or channeltype.anonid,
       self.origin.content,
       image
     )
 
-    if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
+    if vetting and 'feedback' not in channeltype.name:
       if 'ConfessionsModeration' in self.parent.bot.cogs:
         await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
           inter, pendingconfession, self.origin.guild.get_channel(vetting)
@@ -369,6 +485,7 @@ class ConfessionData:
     self.attachment = None
 
     if embed:
+      # TODO: Legacy feature for older confessions, delete someday
       if embed.description.startswith('**[Anon-'):
         self.content = embed.description[20:]
       else:
@@ -403,11 +520,12 @@ class ConfessionData:
       self.targetchannel = await self.parent.bot.fetch_channel(self.targetchannel_id)
       self.offline = False
 
-  async def generate_embed(self, anonid:str, lead:str, content:str, image:Optional[str] = None):
+  async def generate_embed(self, anonid:str, lead:bool, content:str, image:Optional[str] = None):
     """ Generate the confession embed """
     if lead:
       self.anonid = anonid
-      embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+' '+content)
+      embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)), description=content)
+      embed.set_author(name=f'Anon-{anonid}')
     else:
       self.anonid = None
       embed = disnake.Embed(description=content if content else '')

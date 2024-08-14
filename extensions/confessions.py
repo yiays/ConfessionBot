@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 from overlay.extensions.confessions_common import (
   ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto,
-  findvettingchannel, get_guildchannels, CHANNEL_ICONS
+  findvettingchannel, get_guildchannels, check_channel
 )
 
 
@@ -82,16 +82,14 @@ class Confessions(commands.Cog):
     self,
     user:disnake.User,
     matches:list[tuple[disnake.TextChannel, ChannelType]],
-    vetting:bool,
-    enum:bool = False
+    vetting:bool
   ) -> str:
     """ Returns a formatted list of available confession targets """
 
     targets = []
-    for i, match in enumerate(matches):
+    for match in matches:
       targets.append(
-        (str(i+1)+':' if enum else '') +
-        f'{CHANNEL_ICONS[match[1]]}<#{match[0].id}>' +
+        f'{match[1].icon} <#{match[0].id}>' +
         (' ('+match[0].guild.name+')' if not isinstance(user, disnake.Member) else '')
       )
     vettingwarning = ('\n\n'+self.babel(user, 'vetting') if vetting else '')
@@ -108,12 +106,12 @@ class Confessions(commands.Cog):
     guildchannels = get_guildchannels(self.config, member.guild.id)
     for channel in member.guild.channels:
       if channel.id in guildchannels:
-        if guildchannels[channel.id] == ChannelType.vetting:
+        if guildchannels[channel.id] == ChannelType.vetting():
           vetting = True
           continue
         channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
         channel.guild.name = channel.guild.name[:40]+('...' if len(channel.guild.name) > 40 else '')
-        if guildchannels[channel.id] in (ChannelType.feedback, ChannelType.untraceablefeedback):
+        if 'feedback' in guildchannels[channel.id].name:
           matches.append((channel, guildchannels[channel.id]))
           continue
         if channel.permissions_for(member).read_messages:
@@ -164,19 +162,6 @@ class Confessions(commands.Cog):
       return None
 
   #	Checks
-
-  def check_channel(self, guild_id:int, channel_id:int) -> bool:
-    """ Verifies channel is currently in the config """
-    guildchannels = get_guildchannels(self.config, guild_id)
-    channeltype = guildchannels.get(channel_id, ChannelType.unset)
-    if channeltype in [
-      ChannelType.traceable,
-      ChannelType.untraceable,
-      ChannelType.feedback,
-      ChannelType.untraceablefeedback
-    ]:
-      return True
-    return False
 
   def check_banned(self, guild_id:int, anonid:str) -> bool:
     """ Verify the user hasn't been banned """
@@ -247,18 +232,15 @@ class Confessions(commands.Cog):
       anonid = self.parent.get_anonid(inter.guild.id, inter.author.id)
       guildchannels = get_guildchannels(self.parent.config, inter.guild.id)
       channeltype = guildchannels[self.pendingconfession.targetchannel_id]
-      lead = f"**[Anon-*{anonid}*]**"
 
       vetting = findvettingchannel(guildchannels)
 
       await self.pendingconfession.generate_embed(
         anonid,
-        lead if vetting or channeltype not in (
-          ChannelType.untraceable, ChannelType.untraceablefeedback
-        ) else '',
+        vetting or channeltype.anonid,
         inter.text_values['content']
       )
-      if vetting and channeltype != ChannelType.vetting:
+      if vetting and channeltype != ChannelType.vetting():
         if 'ConfessionsModeration' in self.parent.bot.cogs:
           await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
             inter, self.pendingconfession, inter.guild.get_channel(vetting)
@@ -339,8 +321,8 @@ class Confessions(commands.Cog):
   async def confess(
     self,
     inter: disnake.GuildCommandInteraction,
-    content:Optional[str] = commands.Param(default=None, max_length=3900),
-    image:Optional[disnake.Attachment] = None,
+    content: Optional[str] = commands.Param(default=None, max_length=3900),
+    image: Optional[disnake.Attachment] = None,
     **kwargs
   ):
     """
@@ -357,12 +339,15 @@ class Confessions(commands.Cog):
     else:
       channel = inter.channel
 
-    if not self.check_channel(inter.guild_id, channel.id):
+    if channeltype := check_channel(self.config, inter.guild_id, channel.id):
+      if channeltype == ChannelType.marketplace() and 'marketplace' not in kwargs:
+        await inter.send(self.babel(inter, 'wrongcommand', cmd='sell'), ephemeral=True)
+        return
+    else:
       await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
       return
 
     anonid = self.get_anonid(inter.guild_id, inter.author.id)
-    lead = f"**[Anon-*{anonid}*]**"
     guildchannels = get_guildchannels(self.config, inter.guild_id)
     channeltype = guildchannels[channel.id]
 
@@ -391,15 +376,12 @@ class Confessions(commands.Cog):
 
       await pendingconfession.generate_embed(
         anonid,
-        lead if vetting or channeltype not in (
-          ChannelType.untraceable,
-          ChannelType.untraceablefeedback
-         ) else '',
+        vetting or channeltype.anonid,
         content,
         image.url if image else None
       )
 
-      if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
+      if vetting and 'feedback' in channeltype.name:
         if 'ConfessionsModeration' in self.bot.cogs:
           await self.bot.cogs['ConfessionsModeration'].send_vetting(
             inter, pendingconfession, inter.guild.get_channel(vetting)
@@ -454,7 +436,7 @@ class Confessions(commands.Cog):
     matches, _ = self.scanguild(inter.author)
     for match in matches:
       if search in match[0].name:
-        results.append(f"{CHANNEL_ICONS[match[1]]} #{match[0].name} ({match[0].id})")
+        results.append(f"{match[1].icon} #{match[0].name} ({match[0].id})")
     return results[0:24] + (
       ['this list is incomplete, use /list to see all'] if len(results) > 25 else []
     )
@@ -470,7 +452,7 @@ class Confessions(commands.Cog):
       await inter.send(self.babel(inter, 'dmconfessiondisabled'))
       return
 
-    # warn users when the channel list isn't complete
+    # Warn users when the channel list isn't complete
     local = isinstance(inter.author, disnake.Member)
     if not self.bot.is_ready() and not local:
       await inter.send(self.babel(inter, 'cachebuilding'), ephemeral=True)
@@ -479,17 +461,16 @@ class Confessions(commands.Cog):
         self.babel(inter, 'inaccessiblelocal' if local else 'inaccessible'),
         ephemeral=True
       )
-    # send the list of channels, complete or not
+    # Send the list of channels, complete or not
     if len(matches) > 0:
       #BABEL: listtitlelocal,listtitle
       await inter.send((
         self.babel(inter, 'listtitlelocal' if local else 'listtitle') + '\n' +
         self.generate_list(inter.author, matches, vetting) +
         (
+          # Hint on how to confess to a feedback channel
           '\n\n' + self.babel(inter, 'confess_to_feedback')
-          if [m for m in matches if m[1] in (
-            ChannelType.feedback, ChannelType.untraceablefeedback
-          )] else ''
+          if [m for m in matches if 'feedback' in m[1].name] else ''
         )
       ), ephemeral=True)
 
