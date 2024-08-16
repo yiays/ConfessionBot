@@ -12,7 +12,7 @@ if TYPE_CHECKING:
   from babel import Resolvable
   from configparser import SectionProxy
 
-from overlay.extensions.confessions_common import ChannelType, check_channel
+from overlay.extensions.confessions_common import ChannelType, get_guildchannels
 
 
 class ConfessionsMarketplace(commands.Cog):
@@ -54,17 +54,19 @@ class ConfessionsMarketplace(commands.Cog):
     description: Further details about the item you are selling
     image: A picture of the item you are selling
     """
-    channeltype = check_channel(self.config, inter.guild_id, inter.channel_id)
-    if channeltype != ChannelType.marketplace:
-      if channeltype is False:
-        await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
-      else:
-        await inter.send(self.babel(inter, 'wrongcommand', cmd='confess'), ephemeral=True)
+    guildchannels = get_guildchannels(self.config, inter.guild_id)
+    if inter.channel_id not in guildchannels:
+      await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
+      return
+    if guildchannels[inter.channel_id] != ChannelType.marketplace:
+      await inter.send(self.babel(inter, 'wrongcommand', cmd='confess'), ephemeral=True)
       return
 
     clean_desc = description.replace('# ', '') if description else '' # TODO: do this with regex
+    embed = disnake.Embed(title=title, description=clean_desc)
+
     await self.bot.cogs['Confessions'].confess(
-      inter, f'# For sale: {title}\n{clean_desc}', image, marketplace=True
+      inter, embed=embed
     )
 
 

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 from overlay.extensions.confessions_common import (
   ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto,
-  findvettingchannel, get_guildchannels, check_channel
+  findvettingchannel, get_guildchannels
 )
 
 
@@ -148,7 +148,7 @@ class Confessions(commands.Cog):
 
   async def safe_fetch_channel(
     self,
-    inter:disnake.CommandInteraction,
+    inter:disnake.GuildCommandInteraction,
     channel_id:int
   ) -> Optional[disnake.TextChannel]:
     """ Gracefully handles whenever a confession target isn't available """
@@ -165,15 +165,14 @@ class Confessions(commands.Cog):
 
   def check_banned(self, guild_id:int, anonid:str) -> bool:
     """ Verify the user hasn't been banned """
-
     if anonid in self.config.get(f"{guild_id}_banned", fallback='').split(','):
       return False
     return True
 
   def check_image(self, guild_id:int, image:disnake.Attachment) -> bool:
     """ Only allow images to be sent if imagesupport is enabled and the image is valid """
-
-    if image and image.content_type.startswith('image') and image.size < 8_000_000:
+    if image and image.content_type.startswith('image') and image.size < 25_000_000:
+      # Discord size limit
       if bool(self.config.get(f"{guild_id}_imagesupport", fallback=True)):
         return True
       return False
@@ -181,11 +180,56 @@ class Confessions(commands.Cog):
 
   def check_spam(self, content:str | None):
     """ Verify message doesn't contain spam as defined in [confessions] spam_flags """
-
     for spamflag in self.config.get('spam_flags', fallback=None).splitlines():
       if content and re.match(spamflag, content):
         return False
     return True
+
+  def check_all(
+    self,
+    guild_id:int,
+    channel_id:int,
+    anonid:str,
+    content:str | None = None,
+    image:disnake.Attachment | None = None,
+    embed:disnake.Embed | None = None
+  ) -> tuple[str, dict[str:str] | None] | None:
+    """
+      Run all pre-send checks on this confession
+      In the event that a check fails, return the relevant babel key
+    """
+    guildchannels = get_guildchannels(self.config, guild_id)
+
+    if channel_id in guildchannels:
+      if guildchannels[channel_id] == ChannelType.marketplace() and embed is None:
+        #BABEL: wrongcommand
+        return ('wrongcommand', {'cmd':'sell'})
+    else:
+      #BABEL: nosendchannel
+      return ('nosendchannel',)
+
+    if not self.check_banned(guild_id, anonid):
+      #BABEL: nosendbanned
+      return ('nosendbanned',)
+
+    if image:
+      try:
+        if not self.check_image(guild_id, image):
+          #BABEL: nosendimages
+          return ('nosendimages',)
+      except commands.BadArgument:
+        #BABEL: inavlidimage
+        return ('invalidimage',)
+
+    if not self.check_spam('' if content is None else content):
+      #BABEL: nospam
+      return ('nospam',)
+
+    if 'feedback' not in guildchannels[channel_id].name:
+      vetting = findvettingchannel(guildchannels)
+      if vetting and 'ConfessionModeration' not in self.bot.cogs:
+        #BABEL: no_moderation
+        return ('no_moderation',)
 
   # Modals
 
@@ -195,7 +239,7 @@ class Confessions(commands.Cog):
       self,
       parent:"Confessions",
       origin:disnake.Interaction,
-      pendingconfession:ConfessionData
+      targetchannel:disnake.TextChannel
     ):
       super().__init__(
         title=parent.babel(origin, 'editor_title'),
@@ -213,46 +257,11 @@ class Confessions(commands.Cog):
       )
 
       self.parent = parent
-      self.origin = origin
-      self.pendingconfession = pendingconfession
+      self.targetchannel = targetchannel
 
     async def callback(self, inter:disnake.ModalInteraction):
       """ Send the completed confession """
-
-      if 'Log' in self.parent.bot.cogs:
-        await self.parent.bot.cogs['Log'].log_misc_str(inter, inter.text_values['content'])
-
-      if not self.parent.check_spam(inter.text_values['content']):
-        await inter.send(
-          self.parent.babel(inter, 'nospam'),
-          ephemeral=True
-        )
-        return
-
-      anonid = self.parent.get_anonid(inter.guild.id, inter.author.id)
-      guildchannels = get_guildchannels(self.parent.config, inter.guild.id)
-      channeltype = guildchannels[self.pendingconfession.targetchannel_id]
-
-      vetting = findvettingchannel(guildchannels)
-
-      await self.pendingconfession.generate_embed(
-        anonid,
-        vetting or channeltype.anonid,
-        inter.text_values['content']
-      )
-      if vetting and channeltype != ChannelType.vetting():
-        if 'ConfessionsModeration' in self.parent.bot.cogs:
-          await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-            inter, self.pendingconfession, inter.guild.get_channel(vetting)
-          )
-        else:
-          await inter.response.send_message(
-            self.parent.babel(inter, 'no_moderation'),
-            ephemeral=True
-          )
-        return
-
-      await self.pendingconfession.send_confession(inter, True)
+      await self.parent.confess(inter, inter.text_values['content'], channel=self.targetchannel)
 
   #	Events
 
@@ -268,8 +277,7 @@ class Confessions(commands.Cog):
   @commands.Cog.listener('on_message')
   async def confession_request(self, msg:disnake.Message):
     """ Handle plain DM messages as confessions """
-    if isinstance(msg.channel, disnake.DMChannel) and\
-       msg.author != self.bot.user:
+    if isinstance(msg.channel, disnake.DMChannel) and msg.author != self.bot.user:
       if msg.channel in self.ignore:
         self.ignore.remove(msg.channel)
         return
@@ -279,9 +287,6 @@ class Confessions(commands.Cog):
       else:
         self.confession_cooldown[msg.author] = time.time() +\
           int(self.config.get('confession_cooldown', fallback=1))
-
-      if 'Log' in self.bot.cogs:
-        await self.bot.cogs['Log'].log_misc_message(msg)
 
       if not self.bot.member_cache:
         await msg.reply(self.babel(msg, 'dmconfessiondisabled'))
@@ -295,10 +300,6 @@ class Confessions(commands.Cog):
 
       if not matches:
         await msg.reply(self.babel(msg, 'inaccessible'))
-        return
-
-      if not self.check_spam(msg.content):
-        await msg.reply(self.babel(msg, 'nospam'))
         return
 
       await msg.reply(
@@ -339,26 +340,21 @@ class Confessions(commands.Cog):
     else:
       channel = inter.channel
 
-    if channeltype := check_channel(self.config, inter.guild_id, channel.id):
-      if channeltype == ChannelType.marketplace() and 'marketplace' not in kwargs:
-        await inter.send(self.babel(inter, 'wrongcommand', cmd='sell'), ephemeral=True)
-        return
-    else:
-      await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
-      return
-
     anonid = self.get_anonid(inter.guild_id, inter.author.id)
     guildchannels = get_guildchannels(self.config, inter.guild_id)
     channeltype = guildchannels[channel.id]
 
-    if not self.check_banned(inter.guild_id, anonid):
-      await inter.send(self.babel(inter, 'nosendbanned'), ephemeral=True)
+    result = self.check_all(
+      inter.guild_id,
+      channel.id,
+      anonid,
+      content,
+      image,
+      kwargs['embed'] if 'embed' in kwargs else None
+    )
+    if result:
+      await inter.response.send_message(self.babel(inter, result[0], **result[1]), ephemeral=True)
       return
-
-    if image:
-      if not self.check_image(inter.guild_id, image):
-        await inter.send(self.babel(inter, 'nosendimages'), ephemeral=True)
-        return
 
     pendingconfession = ConfessionData(self, author=inter.author, targetchannel=channel)
 
@@ -366,35 +362,30 @@ class Confessions(commands.Cog):
       if content is None:
         content = ''
 
-      if not self.check_spam(content):
-        await inter.send(self.babel(inter, 'nospam'), ephemeral=True)
-        return
-
       vetting = findvettingchannel(guildchannels)
 
       await inter.response.defer(ephemeral=True)
 
-      await pendingconfession.generate_embed(
-        anonid,
-        vetting or channeltype.anonid,
-        content,
-        image.url if image else None
-      )
+      if 'embed' in kwargs and isinstance(kwargs['embed'], disnake.Embed):
+        pendingconfession.embed = kwargs['embed']
+        pendingconfession.anonid = anonid
+        pendingconfession.content = kwargs['embed'].content
+      else:
+        if image:
+          await pendingconfession.download_image(image.url)
+        await pendingconfession.generate_embed(anonid, vetting or channeltype.anonid, content)
 
-      if vetting and 'feedback' in channeltype.name:
-        if 'ConfessionsModeration' in self.bot.cogs:
-          await self.bot.cogs['ConfessionsModeration'].send_vetting(
-            inter, pendingconfession, inter.guild.get_channel(vetting)
-          )
-        else:
-          await inter.response.send_message(self.babel(inter, 'no_moderation'), ephemeral=True)
+      if vetting and 'feedback' not in channeltype.name:
+        await self.bot.cogs['ConfessionsModeration'].send_vetting(
+          inter, pendingconfession, inter.guild.get_channel(vetting)
+        )
         return
 
       await pendingconfession.send_confession(inter, True)
 
     else:
       await inter.response.send_modal(
-        modal=self.ConfessionModal(self, inter, pendingconfession)
+        modal=self.ConfessionModal(self, inter, channel)
       )
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)
@@ -419,12 +410,10 @@ class Confessions(commands.Cog):
     search = re.search(r".*\((\d+)\)$", channel)
     if search:
       channel_id = search.groups()[0]
-      targetchannel = await self.safe_fetch_channel(inter, channel_id)
-      if targetchannel is None:
+      if targetchannel := await self.safe_fetch_channel(inter, channel_id):
+        await self.confess(inter, content, image, channel=targetchannel)
         return
-      await self.confess(inter, content, image, channel=targetchannel)
-    else:
-      raise commands.BadArgument("Channel must be selected from the list")
+    raise commands.BadArgument("Channel must be selected from the list")
 
   @confess_to.autocomplete('channel')
   async def channel_ac(self, inter:disnake.GuildCommandInteraction, search:str):
@@ -442,7 +431,7 @@ class Confessions(commands.Cog):
     )
 
   @commands.slash_command()
-  async def list(self, inter:disnake.CommandInteraction):
+  async def list(self, inter:disnake.GuildCommandInteraction):
     """
     List all anonymous channels available here
     """

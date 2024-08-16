@@ -232,12 +232,7 @@ class ConfessionsModeration(commands.Cog):
         guildchannels = get_guildchannels(self.config, inter.guild.id)
         channeltype = guildchannels[pendingconfession.targetchannel_id]
 
-        await pendingconfession.generate_embed(
-          anonid,
-          channeltype.anonid,
-          pendingconfession.content,
-          pendingconfession.image
-        )
+        await pendingconfession.generate_embed(anonid, channeltype.anonid, pendingconfession.content)
 
         if not pendingconfession.author.dm_channel:
           await pendingconfession.author.create_dm()

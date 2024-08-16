@@ -174,17 +174,6 @@ def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int,
     config.pop(f'{guild_id}_channels')
 
 
-# Checks
-
-def check_channel(config:SectionProxy, guild_id:int, channel_id:int) -> bool | ChannelType:
-  """ Verifies channel is currently in the config """
-  guildchannels = get_guildchannels(config, guild_id)
-  channeltype = guildchannels.get(channel_id, ChannelType.unset())
-  if channeltype.value >= 0:
-    return channeltype
-  return False
-
-
 # Exceptions
 
 class CorruptConfessionDataException(Exception):
@@ -288,45 +277,36 @@ class ChannelSelectView(disnake.ui.View):
 
     anonid = self.parent.get_anonid(self.selection.guild.id, inter.author.id)
     guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
-    channeltype = guildchannels.get(inter.channel_id)
-
-    if not self.parent.check_banned(self.selection.guild.id, anonid):
-      await inter.send(self.parent.babel(inter, 'nosendbanned'))
+    channeltype = guildchannels.get(self.selection.id)
+    
+    result = await self.parent.check_all(
+      self.selection.guild.id,
+      self.selection.id,
+      anonid,
+      self.origin.content,
+      self.origin.attachments[0] if self.origin.attachments else None,
+      None
+    )
+    if result:
+      await inter.send(self.parent.babel(inter, result[0], **result[1]))
       await self.disable(inter)
       return
 
     pendingconfession = ConfessionData(
       self.parent, author=inter.author, origin=self.origin, targetchannel=self.selection
     )
-    if self.origin.attachments:
-      if not self.parent.check_image(self.selection.guild.id, self.origin.attachments[0]):
-        await inter.send(self.parent.babel(inter, 'nosendimages'))
-        await self.disable(inter)
-        return
 
-    image = None
     if self.origin.attachments:
-      image = self.origin.attachments[0].url
       await inter.response.defer(ephemeral=True)
+      await pendingconfession.download_image(self.origin.attachments[0].url)
 
     vetting = findvettingchannel(guildchannels)
-    await pendingconfession.generate_embed(
-      anonid,
-      vetting or channeltype.anonid,
-      self.origin.content,
-      image
-    )
+    await pendingconfession.generate_embed(anonid, vetting or channeltype.anonid, self.origin.content)
 
     if vetting and 'feedback' not in channeltype.name:
-      if 'ConfessionsModeration' in self.parent.bot.cogs:
-        await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-          inter, pendingconfession, self.origin.guild.get_channel(vetting)
-        )
-      else:
-        await inter.response.send_message(
-          self.parent.babel(inter, 'no_moderation'),
-          ephemeral=True
-        )
+      await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
+        inter, pendingconfession, self.selection.guild.get_channel(vetting)
+      )
       await self.disable(inter)
       return
 
@@ -483,6 +463,7 @@ class ConfessionData:
     self.parent = parent
     self.embed = embed
     self.attachment = None
+    self.image_url = None
 
     if embed:
       # TODO: Legacy feature for older confessions, delete someday
@@ -490,7 +471,7 @@ class ConfessionData:
         self.content = embed.description[20:]
       else:
         self.content = embed.description
-      self.image = embed.image.url if embed.image else None
+      self.image_url = embed.image.url if embed.image else None
 
   def store(self) -> str:
     """ Encrypt data for secure storage """
@@ -520,7 +501,19 @@ class ConfessionData:
       self.targetchannel = await self.parent.bot.fetch_channel(self.targetchannel_id)
       self.offline = False
 
-  async def generate_embed(self, anonid:str, lead:bool, content:str, image:Optional[str] = None):
+  async def download_image(self, image:str):
+    async with aiohttp.ClientSession() as session:
+      async with session.get(image) as res:
+        if res.status == 200:
+          filename = 'file.'+res.content_type.replace('image/','')
+          self.attachment = disnake.File(
+            io.BytesIO(await res.read()),
+            filename
+          )
+        else:
+          raise Exception("Failed to attach image!")
+
+  async def generate_embed(self, anonid:str, lead:bool, content:str):
     """ Generate the confession embed """
     if lead:
       self.anonid = anonid
@@ -529,22 +522,10 @@ class ConfessionData:
     else:
       self.anonid = None
       embed = disnake.Embed(description=content if content else '')
-    if image:
-      async with aiohttp.ClientSession() as session:
-        async with session.get(image) as res:
-          if res.status == 200:
-            filename = 'file.'+res.content_type.replace('image/','')
-            self.attachment = disnake.File(
-              io.BytesIO(await res.read()),
-              filename
-            )
-            embed.set_image(url='attachment://'+filename)
-          else:
-            if 'Log' in self.parent.bot.cogs:
-              await self.parent.bot.cogs['Log'].log_misc_message(
-                f"WARN: Failed to upload embedded image ({res.status})"
-              )
-            embed.set_image(url=image)
+    if self.attachment:
+      embed.set_image(url='attachment://'+self.attachment.filename)
+    elif self.image_url:
+      embed.set_image(url=self.image_url)
     self.embed = embed
     self.content = content
 
