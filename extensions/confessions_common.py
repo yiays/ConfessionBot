@@ -270,6 +270,8 @@ class ChannelSelectView(disnake.ui.View):
     """ Send the confession """
     if isinstance(self.origin, disnake.Interaction):
       raise Exception("This function is not designed for Interactions!")
+    if self.parent.__cog_name__ != 'Confessions':
+      raise Exception("Confessions cannot be sent unless the parent is Confessions!")
 
     if self.selection is None:
       self.disable(inter)
@@ -278,8 +280,8 @@ class ChannelSelectView(disnake.ui.View):
     anonid = self.parent.get_anonid(self.selection.guild.id, inter.author.id)
     guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
     channeltype = guildchannels.get(self.selection.id)
-    
-    result = await self.parent.check_all(
+
+    result = self.parent.check_all(
       self.selection.guild.id,
       self.selection.id,
       anonid,
@@ -316,7 +318,7 @@ class ChannelSelectView(disnake.ui.View):
     self.channel_selector.disabled = True
     self.send_button.disabled = True
     self.done = True
-    await inter.response.edit_message(
+    await inter.edit_original_message(
       content=self.parent.babel(
         inter, 'confession_sent_channel', channel=self.selection.mention
       ),
@@ -511,7 +513,7 @@ class ConfessionData:
             filename
           )
         else:
-          raise Exception("Failed to attach image!")
+          raise Exception("Failed to download image!")
 
   async def generate_embed(self, anonid:str, lead:bool, content:str):
     """ Generate the confession embed """

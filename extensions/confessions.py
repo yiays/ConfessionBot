@@ -193,7 +193,7 @@ class Confessions(commands.Cog):
     content:str | None = None,
     image:disnake.Attachment | None = None,
     embed:disnake.Embed | None = None
-  ) -> tuple[str, dict[str:str] | None] | None:
+  ) -> tuple[str, dict[str:str]] | None:
     """
       Run all pre-send checks on this confession
       In the event that a check fails, return the relevant babel key
@@ -206,30 +206,30 @@ class Confessions(commands.Cog):
         return ('wrongcommand', {'cmd':'sell'})
     else:
       #BABEL: nosendchannel
-      return ('nosendchannel',)
+      return ('nosendchannel', {})
 
     if not self.check_banned(guild_id, anonid):
       #BABEL: nosendbanned
-      return ('nosendbanned',)
+      return ('nosendbanned', {})
 
     if image:
       try:
         if not self.check_image(guild_id, image):
           #BABEL: nosendimages
-          return ('nosendimages',)
+          return ('nosendimages', {})
       except commands.BadArgument:
         #BABEL: inavlidimage
-        return ('invalidimage',)
+        return ('invalidimage', {})
 
-    if not self.check_spam('' if content is None else content):
+    if not self.check_spam(content):
       #BABEL: nospam
-      return ('nospam',)
+      return ('nospam', {})
 
     if 'feedback' not in guildchannels[channel_id].name:
       vetting = findvettingchannel(guildchannels)
       if vetting and 'ConfessionModeration' not in self.bot.cogs:
         #BABEL: no_moderation
-        return ('no_moderation',)
+        return ('no_moderation', {})
 
   # Modals
 
@@ -261,7 +261,7 @@ class Confessions(commands.Cog):
 
     async def callback(self, inter:disnake.ModalInteraction):
       """ Send the completed confession """
-      await self.parent.confess(inter, inter.text_values['content'], channel=self.targetchannel)
+      await self.parent.confess(inter, inter.text_values['content'], None, channel=self.targetchannel)
 
   #	Events
 
@@ -313,7 +313,7 @@ class Confessions(commands.Cog):
   @commands.message_command(name="Confess here", dm_permission=False)
   async def confess_message(self, inter:disnake.MessageCommandInteraction):
     """ Shorthand to start a confession modal in this channel """
-    await self.confess(inter)
+    await self.confess(inter, None, None)
 
   #	Slash commands
 
@@ -341,8 +341,6 @@ class Confessions(commands.Cog):
       channel = inter.channel
 
     anonid = self.get_anonid(inter.guild_id, inter.author.id)
-    guildchannels = get_guildchannels(self.config, inter.guild_id)
-    channeltype = guildchannels[channel.id]
 
     result = self.check_all(
       inter.guild_id,
@@ -357,6 +355,8 @@ class Confessions(commands.Cog):
       return
 
     pendingconfession = ConfessionData(self, author=inter.author, targetchannel=channel)
+    guildchannels = get_guildchannels(self.config, inter.guild_id)
+    channeltype = guildchannels[channel.id]
 
     if content or image:
       if content is None:
@@ -366,13 +366,16 @@ class Confessions(commands.Cog):
 
       await inter.response.defer(ephemeral=True)
 
+      if image:
+        await pendingconfession.download_image(image.url)
       if 'embed' in kwargs and isinstance(kwargs['embed'], disnake.Embed):
         pendingconfession.embed = kwargs['embed']
         pendingconfession.anonid = anonid
-        pendingconfession.content = kwargs['embed'].content
-      else:
+        pendingconfession.embed.colour = disnake.Colour(int(anonid,16))
+        pendingconfession.embed.set_author(name='Anon-' + anonid)
         if image:
-          await pendingconfession.download_image(image.url)
+          pendingconfession.embed.set_image(pendingconfession.image_url)
+      else:
         await pendingconfession.generate_embed(anonid, vetting or channeltype.anonid, content)
 
       if vetting and 'feedback' not in channeltype.name:
