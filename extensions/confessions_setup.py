@@ -15,7 +15,7 @@ if TYPE_CHECKING:
   from babel import Resolvable
   from configparser import SectionProxy
 
-from extensions.controlpanel import Toggleable, Stringable
+from extensions.controlpanel import Toggleable, Stringable, Listable
 from overlay.extensions.confessions_common import \
   ChannelType, ChannelSelectView, get_channeltypes, findvettingchannel, get_guildchannels,\
   set_guildchannels
@@ -52,7 +52,7 @@ class ConfessionsSetup(commands.Cog):
 
   def controlpanel_settings(self, inter:disnake.Interaction):
     # ControlPanel integration
-    out = [Toggleable(self.SCOPE, f'{inter.user.id}_dm_notif', 'dm_notifications', default=True)]
+    out = [Listable(self.SCOPE, 'dm_notifications', 'dm_notifications', str(inter.author.id))]
     if inter.guild is None:
       return out
     if inter.permissions.administrator:

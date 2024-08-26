@@ -56,6 +56,8 @@ class Confessions(commands.Cog):
         )
     if 'spam_flags' not in self.config:
       self.config['spam_flags'] = ''
+    if 'dm_notifications' not in self.config:
+      self.config['dm_notifications'] = ''
 
     if not bot.config.getboolean('extensions', 'confessions_setup', fallback=False):
       if not bot.quiet:
