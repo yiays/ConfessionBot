@@ -18,7 +18,7 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions_common import Crypto
 
 from overlay.extensions.confessions_common import\
-  ConfessionData, CorruptConfessionDataException, get_guildchannels
+  ConfessionData, CorruptConfessionDataException, get_guildchannels, ChannelType
 
 
 class ConfessionsModeration(commands.Cog):
@@ -232,7 +232,10 @@ class ConfessionsModeration(commands.Cog):
         guildchannels = get_guildchannels(self.config, inter.guild.id)
         channeltype = guildchannels[pendingconfession.targetchannel_id]
 
-        await pendingconfession.generate_embed(anonid, channeltype.anonid, pendingconfession.content)
+        if channeltype != ChannelType.marketplace and not pendingconfession.embed:
+          await pendingconfession.generate_embed(
+            anonid, channeltype.anonid, pendingconfession.content
+          )
 
         if not pendingconfession.author.dm_channel:
           await pendingconfession.author.create_dm()

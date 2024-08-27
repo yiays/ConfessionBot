@@ -34,6 +34,46 @@ class ConfessionsMarketplace(commands.Cog):
     if 'confessions' not in bot.config['extensions']:
       raise Exception("Module `confessions` must be enabled!")
 
+  # Modals
+
+  class OfferModal(disnake.ui.Modal):
+    """ Modal that appears when a user wants to make an offer on a listing """
+    def __init__(
+      self, parent:"ConfessionsMarketplace", origin:disnake.MessageInteraction
+    ):
+      super().__init__(
+        title=parent.babel(origin, 'button_offer') + f' ({origin.message.embeds[0].title})',
+        custom_id="listing_offer",
+        components=[
+          disnake.ui.TextInput(
+            label=parent.babel(origin, 'offer_price_label'),
+            placeholder=parent.babel(origin, 'offer_price_example'),
+            custom_id='offer_price',
+            style=disnake.TextInputStyle.single_line,
+            min_length=3,
+            max_length=30
+          ),
+          disnake.ui.TextInput(
+            label=parent.babel(origin, 'offer_method_label'),
+            placeholder=parent.babel(origin, 'offer_method_example'),
+            custom_id='offer_method',
+            style=disnake.TextInputStyle.single_line,
+            min_length=3,
+            max_length=30
+          )
+        ]
+      )
+
+  # Events
+
+  @commands.Cog.listener('on_button_click')
+  async def on_make_offer(self, inter:disnake.MessageInteraction):
+    """ Open the offer form when a user wants to make an offer on a listing """
+    if len(inter.message.embeds) == 0:
+      await inter.send(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
+      return
+    await inter.response.send_modal(self.OfferModal(self, inter))
+
   # Slash commands
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)

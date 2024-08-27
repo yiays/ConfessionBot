@@ -229,7 +229,7 @@ class Confessions(commands.Cog):
 
     if 'feedback' not in guildchannels[channel_id].name:
       vetting = findvettingchannel(guildchannels)
-      if vetting and 'ConfessionModeration' not in self.bot.cogs:
+      if vetting and 'ConfessionsModeration' not in self.bot.cogs:
         #BABEL: no_moderation
         return ('no_moderation', {})
 
@@ -380,10 +380,12 @@ class Confessions(commands.Cog):
       else:
         await pendingconfession.generate_embed(anonid, vetting or channeltype.anonid, content)
 
+      if channeltype == ChannelType.marketplace():
+        pendingconfession.marketplace_button = True
+
       if vetting and 'feedback' not in channeltype.name:
-        await self.bot.cogs['ConfessionsModeration'].send_vetting(
-          inter, pendingconfession, inter.guild.get_channel(vetting)
-        )
+        vchannel = inter.guild.get_channel(vetting)
+        await self.bot.cogs['ConfessionsModeration'].send_vetting(inter, pendingconfession, vchannel)
         return
 
       await pendingconfession.send_confession(inter, True)

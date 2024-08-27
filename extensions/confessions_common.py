@@ -446,12 +446,19 @@ class ConfessionData:
       self.offline = True
 
       binary = parent.crypto.decrypt(rawdata)
-      if len(binary) != 24:
+      if len(binary) == 24: # TODO: Legacy format, remove eventually
+        self.author_id = int.from_bytes(binary[0:8], 'big')
+        self.origin_id = int.from_bytes(binary[8:16], 'big')
+        self.targetchannel_id = int.from_bytes(binary[16:24], 'big')
+        self.marketplace_button = False
+      elif len(binary) == 25:
+        self.author_id = int.from_bytes(binary[0:8], 'big')
+        self.origin_id = int.from_bytes(binary[8:16], 'big')
+        self.targetchannel_id = int.from_bytes(binary[16:24], 'big')
+        # from_bytes won't take a single byte, so this hack is needed.
+        self.marketplace_button = bool.from_bytes(bytes((binary[24],)), 'big')
+      else:
         raise CorruptConfessionDataException()
-
-      self.author_id = int.from_bytes(binary[0:8], 'big')
-      self.origin_id = int.from_bytes(binary[8:16], 'big')
-      self.targetchannel_id = int.from_bytes(binary[16:24], 'big')
     else:
       self.offline = False
       self.author = author
@@ -461,13 +468,14 @@ class ConfessionData:
         self.origin_id = origin.id
       self.targetchannel = targetchannel
       self.targetchannel_id = targetchannel.id
+      self.marketplace_button = False
 
     self.parent = parent
     self.embed = embed
     self.attachment = None
     self.image_url = None
 
-    if embed:
+    if embed and embed.description:
       # TODO: Legacy feature for older confessions, delete someday
       if embed.description.startswith('**[Anon-'):
         self.content = embed.description[20:]
@@ -486,8 +494,9 @@ class ConfessionData:
       bauthor = self.author.id.to_bytes(8, 'big')
       borigin = (self.origin.id if self.origin else 0).to_bytes(8, 'big')
       btarget = self.targetchannel.id.to_bytes(8, 'big')
+    bmarket = self.marketplace_button.to_bytes(1, 'big')
 
-    binary = bauthor + borigin + btarget
+    binary = bauthor + borigin + btarget + bmarket
     return self.parent.crypto.encrypt(binary).decode('ascii')
 
   async def fetch(self):
@@ -542,13 +551,11 @@ class ConfessionData:
       return True
     except disnake.Forbidden:
       try:
-        #BABEL: confessions/missingperms
         await self.targetchannel.send(
           self.parent.babel(self.targetchannel.guild, 'missingperms', perm='Embed Links')
         )
         await ctx.send(self.parent.babel(ctx, 'embederr'), **kwargs)
       except disnake.Forbidden:
-        #BABEL: confessions/missingchannelerr
         await ctx.send(
           self.parent.babel(ctx, 'missingchannelerr') + ' (403 Forbidden)',
           **kwargs
@@ -563,25 +570,34 @@ class ConfessionData:
   async def send_confession(self, ctx:disnake.DMChannel | disnake.Interaction, smsg=False):
     """ Send confession to the destination channel """
     preface = self.parent.config.get(f'{self.targetchannel.guild.id}_preface', fallback='')
+    kwargs = {}
+    if self.attachment:
+      kwargs['file'] = self.attachment
+    if self.marketplace_button:
+      kwargs['components'] = [disnake.ui.Button(
+        label=self.parent.babel(ctx.guild, 'button_offer'),
+        custom_id='confessionmarketplace_offer',
+        emoji='💵',
+        style=disnake.ButtonStyle.blurple
+      )]
+
     if self.parent.config.get(f'{self.targetchannel.guild.id}_webhook', None) == 'True':
       if webhook := await self.find_or_create_webhook(self.targetchannel):
-        kwargs = {'file': self.attachment} if self.attachment else {}
         botcolour = self.parent.bot.config['main']['themecolor'][2:]
-        func = webhook.send(
-          self.content,
-          username=(
-            (preface + ' - ' if preface else '') +
-            ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
-          ),
-          avatar_url=(
-            self.parent.config.get('pfpgen_url', '')
-            .replace('{}', botcolour if self.anonid is None else self.anonid)
-          ),
-          **kwargs
+        username = (
+          (preface + ' - ' if preface else '') +
+          ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
         )
+        pfp = (
+          self.parent.config.get('pfpgen_url', '')
+          .replace('{}', botcolour if self.anonid is None else self.anonid)
+        )
+        func = webhook.send(self.content, username=username, avatar_url=pfp, **kwargs)
         #TODO: add support for custom PFPs
+      else:
+        return
     else:
-      func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
+      func = self.targetchannel.send(preface, embed=self.embed, **kwargs)
 
     if hasattr(ctx, 'response') and not ctx.response.is_done():
       await ctx.response.defer(ephemeral=True)
@@ -605,7 +621,7 @@ class ConfessionData:
           return webhook
       return await channel.create_webhook(name=self.parent.bot.config['main']['botname'])
     except disnake.Forbidden:
-      await channel.send(self.parent.babel(channel.guild, 'missingperms', perm='MANAGE_WEBHOOKS'))
+      await channel.send(self.parent.babel(channel.guild, 'missingperms', perm='Manage Webhooks'))
       return None
 
 
