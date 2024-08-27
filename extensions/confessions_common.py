@@ -21,7 +21,7 @@ if TYPE_CHECKING:
   from babel import Babel, Resolvable
 
 
-# Data Class
+# Data Classes
 
 class ChannelType:
   """ Channel Types as they are stored """
@@ -566,7 +566,7 @@ class ConfessionData:
       kwargs['file'] = self.attachment
     if self.marketplace_button:
       kwargs['components'] = [disnake.ui.Button(
-        label=self.parent.babel(ctx.guild, 'button_offer'),
+        label=self.parent.babel(ctx.guild, 'button_offer', listing=None),
         custom_id='confessionmarketplace_offer',
         emoji='💵',
         style=disnake.ButtonStyle.blurple

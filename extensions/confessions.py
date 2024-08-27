@@ -396,7 +396,7 @@ class Confessions(commands.Cog):
       else:
         await pendingconfession.generate_embed(anonid, vetting or channeltype.anonid, content)
 
-      if channeltype == ChannelType.marketplace():
+      if channeltype == ChannelType.marketplace() and 'reference' not in kwargs:
         pendingconfession.marketplace_button = True
 
       if vetting and 'feedback' not in channeltype.name:

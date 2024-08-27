@@ -41,8 +41,10 @@ class ConfessionsMarketplace(commands.Cog):
     def __init__(
       self, parent:"ConfessionsMarketplace", origin:disnake.MessageInteraction
     ):
+      self.parent = parent
+      self.origin = origin
       super().__init__(
-        title=parent.babel(origin, 'button_offer') + f' ({origin.message.embeds[0].title})',
+        title=parent.babel(origin, 'button_offer', listing=origin.message.embeds[0].title),
         custom_id="listing_offer",
         components=[
           disnake.ui.TextInput(
@@ -63,6 +65,28 @@ class ConfessionsMarketplace(commands.Cog):
           )
         ]
       )
+
+    async def callback(self, inter:disnake.ModalInteraction):
+      guildchannels = get_guildchannels(self.parent.config, inter.guild_id)
+      if (
+        inter.channel_id not in guildchannels or
+        guildchannels[inter.channel_id] != ChannelType.marketplace()
+      ):
+        await inter.send(self.parent.babel(inter, 'nosendchannel'), ephemeral=True)
+        return
+
+      embed = disnake.Embed(
+        title=self.parent.babel(self.origin, 'offer_for', listing=self.origin.message.embeds[0].title)
+      )
+      embed.add_field('Offer price:', inter.text_values['offer_price'], inline=True)
+      embed.add_field('Offer payment method:', inter.text_values['offer_method'], inline=True)
+      embed.set_footer(text=self.parent.babel(inter, 'shop_disclaimer'))
+
+      # We provide description as content for the spam checker, otherwise this is unused
+      await self.parent.bot.cogs['Confessions'].confess(
+        inter, embed.title, embed=embed, reference=self.origin.message
+      )
+      # TODO: Disallow making offers to yourself, or repeat offers?
 
   # Events
 
@@ -116,7 +140,7 @@ class ConfessionsMarketplace(commands.Cog):
     # We provide description as content for the spam checker, otherwise this is unused
     await self.bot.cogs['Confessions'].confess(
       inter, description if description else title, image=image, embed=embed
-    )
+    ) # TODO: fix image not surviving vetting
 
 
 def setup(bot:MerelyBot) -> None:
