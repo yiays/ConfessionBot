@@ -295,7 +295,7 @@ class ChannelSelectView(disnake.ui.View):
       return
 
     pendingconfession = ConfessionData(
-      self.parent, author=inter.author, origin=self.origin, targetchannel=self.selection
+      self.parent, author=inter.author, targetchannel=self.selection
     )
 
     if self.origin.attachments:
@@ -437,9 +437,9 @@ class ConfessionData:
     rawdata:Optional[str] = None,
     *,
     author:Optional[disnake.User] = None,
-    origin:Optional[disnake.Message] = None,
     targetchannel:Optional[disnake.TextChannel] = None,
-    embed:Optional[disnake.Embed] = None
+    embed:Optional[disnake.Embed] = None,
+    reference:Optional[disnake.Message] = None
   ):
 
     if rawdata:
@@ -448,27 +448,25 @@ class ConfessionData:
       binary = parent.crypto.decrypt(rawdata)
       if len(binary) == 24: # TODO: Legacy format, remove eventually
         self.author_id = int.from_bytes(binary[0:8], 'big')
-        self.origin_id = int.from_bytes(binary[8:16], 'big')
         self.targetchannel_id = int.from_bytes(binary[16:24], 'big')
         self.marketplace_button = False
+        self.reference_id = 0
       elif len(binary) == 25:
         self.author_id = int.from_bytes(binary[0:8], 'big')
-        self.origin_id = int.from_bytes(binary[8:16], 'big')
-        self.targetchannel_id = int.from_bytes(binary[16:24], 'big')
+        self.targetchannel_id = int.from_bytes(binary[8:16], 'big')
         # from_bytes won't take a single byte, so this hack is needed.
-        self.marketplace_button = bool.from_bytes(bytes((binary[24],)), 'big')
+        self.marketplace_button = bool.from_bytes(bytes((binary[16],)), 'big')
+        self.reference_id = int.from_bytes(binary[17:25], 'big')
       else:
         raise CorruptConfessionDataException()
     else:
       self.offline = False
       self.author = author
       self.author_id = author.id
-      self.origin = origin
-      if isinstance(origin, disnake.Message):
-        self.origin_id = origin.id
       self.targetchannel = targetchannel
       self.targetchannel_id = targetchannel.id
       self.marketplace_button = False
+      self.reference_id = reference.id if reference else 0
 
     self.parent = parent
     self.embed = embed
@@ -485,30 +483,23 @@ class ConfessionData:
 
   def store(self) -> str:
     """ Encrypt data for secure storage """
-
+    # Size limit: ~100 bytes
     if self.offline:
       bauthor = self.author_id.to_bytes(8, 'big')
-      borigin = (self.origin_id if self.origin_id else 0).to_bytes(8, 'big')
       btarget = self.targetchannel_id.to_bytes(8, 'big')
     else:
       bauthor = self.author.id.to_bytes(8, 'big')
-      borigin = (self.origin.id if self.origin else 0).to_bytes(8, 'big')
       btarget = self.targetchannel.id.to_bytes(8, 'big')
     bmarket = self.marketplace_button.to_bytes(1, 'big')
+    breference = self.reference_id.to_bytes(8, 'big')
 
-    binary = bauthor + borigin + btarget + bmarket
+    binary = bauthor + btarget + bmarket + breference
     return self.parent.crypto.encrypt(binary).decode('ascii')
 
   async def fetch(self):
     """ Fetches referenced Discord elements for use """
     if self.offline:
       self.author = await self.parent.bot.fetch_user(self.author_id)
-      self.origin = None
-      if self.origin_id > 0:
-        try:
-          self.origin = await self.author.fetch_message(self.origin_id)
-        except (disnake.NotFound, disnake.Forbidden):
-          pass
       self.targetchannel = await self.parent.bot.fetch_channel(self.targetchannel_id)
       self.offline = False
 
@@ -580,6 +571,12 @@ class ConfessionData:
         emoji='💵',
         style=disnake.ButtonStyle.blurple
       )]
+    if self.reference_id:
+      kwargs['reference'] = disnake.MessageReference(
+        message_id=self.reference_id,
+        channel_id=self.targetchannel.id,
+        guild_id=self.targetchannel.guild.id
+      )
 
     if self.parent.config.get(f'{self.targetchannel.guild.id}_webhook', None) == 'True':
       if webhook := await self.find_or_create_webhook(self.targetchannel):

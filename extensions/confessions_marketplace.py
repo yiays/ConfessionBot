@@ -69,10 +69,11 @@ class ConfessionsMarketplace(commands.Cog):
   @commands.Cog.listener('on_button_click')
   async def on_make_offer(self, inter:disnake.MessageInteraction):
     """ Open the offer form when a user wants to make an offer on a listing """
-    if len(inter.message.embeds) == 0:
-      await inter.send(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
-      return
-    await inter.response.send_modal(self.OfferModal(self, inter))
+    if inter.data.custom_id.startswith('confessionmarketplace_offer'):
+      if len(inter.message.embeds) == 0:
+        await inter.send(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
+        return
+      await inter.response.send_modal(self.OfferModal(self, inter))
 
   # Slash commands
 

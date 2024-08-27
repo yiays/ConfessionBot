@@ -257,9 +257,7 @@ class ConfessionsModeration(commands.Cog):
         'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
         channel=f"<#{pendingconfession.targetchannel_id}>"
       )
-      if isinstance(pendingconfession.origin, disnake.Message):
-        await pendingconfession.origin.reply(content)
-      elif str(pendingconfession.author_id) not in self.config.get('dm_notifications', '').split(','):
+      if str(pendingconfession.author_id) not in self.config.get('dm_notifications', '').split(','):
         try:
           await pendingconfession.author.send(content)
         except disnake.Forbidden:

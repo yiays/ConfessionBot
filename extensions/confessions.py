@@ -241,7 +241,7 @@ class Confessions(commands.Cog):
       self,
       parent:"Confessions",
       origin:disnake.Interaction,
-      targetchannel:disnake.TextChannel
+      data:ConfessionData
     ):
       super().__init__(
         title=parent.babel(origin, 'editor_title'),
@@ -259,11 +259,17 @@ class Confessions(commands.Cog):
       )
 
       self.parent = parent
-      self.targetchannel = targetchannel
+      self.data = data
 
     async def callback(self, inter:disnake.ModalInteraction):
       """ Send the completed confession """
-      await self.parent.confess(inter, inter.text_values['content'], None, channel=self.targetchannel)
+      await self.parent.confess(
+        inter,
+        inter.text_values['content'],
+        None,
+        channel=self.data.targetchannel,
+        data=self.data
+      )
 
   #	Events
 
@@ -312,10 +318,11 @@ class Confessions(commands.Cog):
   # Context menu commands
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)
-  @commands.message_command(name="Confess here", dm_permission=False)
+  @commands.message_command(name="Confession Reply", dm_permission=False)
   async def confess_message(self, inter:disnake.MessageCommandInteraction):
     """ Shorthand to start a confession modal in this channel """
-    await self.confess(inter, None, None)
+    print(inter.target.id)
+    await self.confess(inter, None, None, reference=inter.target)
 
   #	Slash commands
 
@@ -356,7 +363,16 @@ class Confessions(commands.Cog):
       await inter.response.send_message(self.babel(inter, result[0], **result[1]), ephemeral=True)
       return
 
-    pendingconfession = ConfessionData(self, author=inter.author, targetchannel=channel)
+    if 'data' in kwargs:
+      pendingconfession = kwargs['data']
+    else:
+      pendingconfession = ConfessionData(
+        self,
+        author=inter.author,
+        targetchannel=channel,
+        embed=kwargs['embed'] if 'embed' in kwargs else None,
+        reference=kwargs['reference'] if 'reference' in kwargs else None
+      )
     guildchannels = get_guildchannels(self.config, inter.guild_id)
     channeltype = guildchannels[channel.id]
 
@@ -392,7 +408,7 @@ class Confessions(commands.Cog):
 
     else:
       await inter.response.send_modal(
-        modal=self.ConfessionModal(self, inter, channel)
+        modal=self.ConfessionModal(self, inter, pendingconfession)
       )
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)
