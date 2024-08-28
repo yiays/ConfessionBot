@@ -237,8 +237,12 @@ class ConfessionsModeration(commands.Cog):
             anonid, channeltype.anonid, pendingconfession.content
           )
 
-        if not pendingconfession.author.dm_channel:
-          await pendingconfession.author.create_dm()
+        if (
+          len(inter.message.attachments) and
+          inter.message.attachments[0].content_type.startswith('image')
+        ):
+          await pendingconfession.download_image(inter.message.attachments[0].url)
+
         await pendingconfession.send_confession(inter)
 
       await inter.message.edit(view=None)
@@ -259,6 +263,8 @@ class ConfessionsModeration(commands.Cog):
       )
       if str(pendingconfession.author_id) not in self.config.get('dm_notifications', '').split(','):
         try:
+          if not pendingconfession.author.dm_channel:
+            await pendingconfession.author.create_dm()
           await pendingconfession.author.send(content)
         except disnake.Forbidden:
           pass
