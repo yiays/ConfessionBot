@@ -232,7 +232,7 @@ class ConfessionsModeration(commands.Cog):
         guildchannels = get_guildchannels(self.config, inter.guild.id)
         channeltype = guildchannels[pendingconfession.targetchannel_id]
 
-        if channeltype != ChannelType.marketplace and not pendingconfession.embed:
+        if not (channeltype == ChannelType.marketplace and pendingconfession.embed):
           await pendingconfession.generate_embed(
             anonid, channeltype.anonid, pendingconfession.content
           )
@@ -242,6 +242,8 @@ class ConfessionsModeration(commands.Cog):
           inter.message.attachments[0].content_type.startswith('image')
         ):
           await pendingconfession.download_image(inter.message.attachments[0].url)
+        elif len(inter.message.embeds) and inter.message.embeds[0].image:
+          await pendingconfession.download_image(inter.message.embeds[0].image.url)
 
         await pendingconfession.send_confession(inter)
 

@@ -430,6 +430,7 @@ class ConfessionData:
   """ Dataclass for Confessions """
   SCOPE = 'confessions' # exists to keep babel happy
   anonid:str | None
+  content:str = ''
 
   def __init__(
     self,
