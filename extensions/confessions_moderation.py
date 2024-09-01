@@ -231,9 +231,6 @@ class ConfessionsModeration(commands.Cog):
         inter.message.attachments[0].content_type.startswith('image')
       ):
         await pendingconfession.add_image(attachment=inter.message.attachments[0])
-      else:
-        print("Confession does not have an image")
-
       await pendingconfession.send_confession(inter, perform_checks=False)
 
     metadata = {'user':inter.author.mention, 'channel':pendingconfession.targetchannel.mention}

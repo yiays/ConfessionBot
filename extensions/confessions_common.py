@@ -602,27 +602,27 @@ class ConfessionData:
       self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset()
     ):
       if self.channeltype == ChannelType.marketplace() and self.embed is None:
-        await inter.send(self.babel('wrongcommand', cmd='sell'), **kwargs)
+        await inter.send(self.babel(inter, 'wrongcommand', cmd='sell'), **kwargs)
         return False
     else:
-      await inter.send(self.babel('nosendchannel'), **kwargs)
+      await inter.send(self.babel(inter, 'nosendchannel'), **kwargs)
       return False
 
     if not self.check_banned():
-      await inter.send(self.babel('nosendbanned'), **kwargs)
+      await inter.send(self.babel(inter, 'nosendbanned'), **kwargs)
       return False
 
     if self.attachment:
       try:
         if not self.check_image():
-          await inter.send(self.babel('nosendimages'), **kwargs)
+          await inter.send(self.babel(inter, 'nosendimages'), **kwargs)
           return False
       except commands.BadArgument:
-        await inter.send(self.babel('invalidimage'), **kwargs)
+        await inter.send(self.babel(inter, 'invalidimage'), **kwargs)
         return False
 
     if not self.check_spam():
-      await inter.send(self.babel('nospam'), **kwargs)
+      await inter.send(self.babel(inter, 'nospam'), **kwargs)
       return False
 
     return True
@@ -681,7 +681,7 @@ class ConfessionData:
     # Create kwargs based on state
     if self.file:
       kwargs['file'] = self.file
-    if self.reference_id:
+    if self.reference_id and channel == self.targetchannel:
       kwargs['reference'] = disnake.MessageReference(
         message_id=self.reference_id,
         channel_id=channel.id,
@@ -689,7 +689,7 @@ class ConfessionData:
       )
 
     # Allow external modules to modify the message before sending
-    if inter.channel == self.targetchannel:
+    if channel == self.targetchannel:
       # ...as long as it's not being intercepted by another mechanism - like vetting
       if dep := self.channeltype.DEPS[self.channeltype.value]:
         special_function = getattr(self.bot.cogs[dep], 'on_channeltype_send', None)
