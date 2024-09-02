@@ -56,11 +56,18 @@ class ConfessionsModeration(commands.Cog):
     data:"ConfessionData",
     vettingchannel:disnake.TextChannel
   ):
-    """ Send confession to a vetting channel for approval """
+    """
+      Send confession to a vetting channel for approval
+      Checks are performed at this stage
+    """
     preface = self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.targetchannel.mention)
     view = self.PendingConfessionView(self, data)
     success = await data.send_confession(
-      inter, channel=vettingchannel, webhook_override=False, preface_override=preface, view=view
+      inter,
+      channel=vettingchannel,
+      webhook_override=False,
+      preface_override=preface,
+      view=view
     )
 
     if success:

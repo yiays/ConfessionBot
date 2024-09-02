@@ -179,17 +179,17 @@ class Confessions(commands.Cog):
         ]
       )
 
-      self.data = data
+      self.confession = data
 
     async def callback(self, inter:disnake.ModalInteraction):
       """ Send the completed confession """
-      self.data.set_content(inter.text_values['content'])
-      if vetting := await self.data.check_vetting(inter):
-        await inter.bot.cogs['ConfessionsModeration'].send_vetting(inter, self.data, vetting)
+      self.confession.set_content(inter.text_values['content'])
+      if vetting := await self.confession.check_vetting(inter):
+        await inter.bot.cogs['ConfessionsModeration'].send_vetting(inter, self.confession, vetting)
         return
       if vetting is False:
         return
-      await self.data.send_confession(inter, True)
+      await self.confession.send_confession(inter, success_message=True)
 
   #	Events
 
@@ -233,7 +233,8 @@ class Confessions(commands.Cog):
       await msg.reply(
         self.babel(msg, 'channelprompt') +
         (' ' + self.babel(msg, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
-        view=ChannelSelectView(msg, self, matches))
+        view=ChannelSelectView(msg, self, matches)
+      )
 
   # Context menu commands
 
@@ -278,14 +279,27 @@ class Confessions(commands.Cog):
       await pendingconfession.add_image(attachment=image)
 
     # --- From here, all state should be in pendingconfession, not in parameters ---
+    matches,_ = self.listavailablechannels(inter.author)
+    if not matches:
+      await inter.send(self.babel(inter, 'inaccessiblelocal'), ephemeral=True)
+      return
 
     if pendingconfession.content or pendingconfession.file:
+      if pendingconfession.channeltype == ChannelType.unset():
+        # User used /confess in the wrong channel, give them a chance to choose another
+        await inter.send(
+          self.babel(inter, 'channelprompt') +
+          (' ' + self.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
+          view=ChannelSelectView(inter, self, matches, confession=pendingconfession),
+          ephemeral=True
+        )
+        return
       if vetting := await pendingconfession.check_vetting(inter):
         await self.bot.cogs['ConfessionsModeration'].send_vetting(inter, pendingconfession, vetting)
         return
       if vetting is False:
         return
-      await pendingconfession.send_confession(inter, True)
+      await pendingconfession.send_confession(inter, success_message=True)
 
     else:
       await inter.response.send_modal(

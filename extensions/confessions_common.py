@@ -209,12 +209,14 @@ class ChannelSelectView(disnake.ui.View):
       self,
       origin:disnake.Message | disnake.Interaction,
       parent:Confessions | ConfessionsSetup,
-      matches:list[tuple[disnake.TextChannel, ChannelType]]
+      matches:list[tuple[disnake.TextChannel, ChannelType]],
+      confession:ConfessionData | None = None
     ):
     super().__init__()
     self.origin = origin
     self.parent = parent
     self.matches = matches
+    self.confession = confession
     self.soleguild = matches[0][0].guild if all((m.guild for m,_ in matches)) else None
     self.update_list()
     self.channel_selector.placeholder = self.parent.babel(origin, 'channelprompt_placeholder')
@@ -248,7 +250,8 @@ class ChannelSelectView(disnake.ui.View):
       disnake.SelectOption(
         label='#' + channel.name + ('' if self.soleguild else f' (from {channel.guild.name})'),
         value=channel.id,
-        emoji=channeltype.icon
+        emoji=channeltype.icon,
+        default=channel.id == self.selection.id if self.selection else False
       ) for channel,channeltype in self.matches[start:start+25]
     ]
 
@@ -268,6 +271,7 @@ class ChannelSelectView(disnake.ui.View):
         view=self
       )
       return
+    self.update_list()
     guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
     vetting = findvettingchannel(guildchannels)
     channeltype = guildchannels[self.selection.id]
@@ -281,48 +285,42 @@ class ChannelSelectView(disnake.ui.View):
   @disnake.ui.button(disabled=True, style=disnake.ButtonStyle.primary)
   async def send_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
     """ Send the confession """
-    if isinstance(self.origin, disnake.Interaction):
-      raise Exception("This function is not designed for Interactions!")
-    if self.parent.__cog_name__ != 'Confessions':
-      raise Exception("Confessions cannot be sent unless the parent is Confessions!")
-
-    if self.selection is None:
+    if self.selection is None or self.done:
       self.disable(inter)
       return
 
-    guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
-    channeltype = guildchannels.get(self.selection.id)
+    if self.confession is None:
+      self.confession = ConfessionData(self.parent)
+      self.confession.create(author=inter.author, targetchannel=self.selection)
+      self.confession.set_content(self.origin.content)
 
-    pendingconfession = ConfessionData(self.parent)
-    pendingconfession.create(author=inter.author, targetchannel=self.selection)
-    pendingconfession.set_content(self.origin.content)
+      if self.origin.attachments:
+        await inter.response.defer(ephemeral=True)
+        await self.confession.add_image(attachment=self.origin.attachments[0])
+    else:
+      # Override targetchannel as this has changed
+      self.confession.create(author=inter.author, targetchannel=self.selection)
 
-    if self.origin.attachments:
-      await inter.response.defer(ephemeral=True)
-      await pendingconfession.add_image(attachment=self.origin.attachments[0])
-
-    if not await pendingconfession.check_all(inter):
-      return
-    vetting = await pendingconfession.check_vetting(inter, guildchannels)
-    if vetting and 'feedback' not in channeltype.name:
+    if vetting := await self.confession.check_vetting(inter):
       await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-        inter, pendingconfession, vetting
+        inter, self.confession, vetting
       )
-      await self.disable(inter)
+      await inter.delete_original_response()
+      return
+    if vetting is False:
       return
 
-    await pendingconfession.send_confession(inter)
-
-    self.send_button.label = self.parent.babel(inter, 'channelprompt_button_sent')
-    self.channel_selector.disabled = True
-    self.send_button.disabled = True
-    self.done = True
-    await inter.edit_original_message(
-      content=self.parent.babel(
-        inter, 'confession_sent_channel', channel=self.selection.mention
-      ),
-      view=self
-    )
+    if await self.confession.send_confession(inter):
+      self.send_button.label = self.parent.babel(inter, 'channelprompt_button_sent')
+      self.channel_selector.disabled = True
+      self.send_button.disabled = True
+      self.done = True
+      await inter.edit_original_message(
+        content=self.parent.babel(
+          inter, 'confession_sent_channel', channel=self.selection.mention
+        ),
+        view=None
+      )
 
   def change_page(self, pagediff:int):
     """ Add or remove pagediff to self.page and trigger on_page_change event """
@@ -363,16 +361,27 @@ class ChannelSelectView(disnake.ui.View):
     self.channel_selector.disabled = True
     self.send_button.disabled = True
     self.done = True
-    await inter.message.edit(view=self)
+    if inter.response.is_done():
+      await inter.message.edit(view=self)
+    else:
+      await inter.response.edit_message(view=self)
 
   async def on_timeout(self):
-    if isinstance(self.origin, disnake.Interaction):
-      raise Exception("This function is not designed for Interactions!")
     try:
+      if isinstance(self.origin, disnake.Interaction):
+        if not self.done:
+          for component in self.children:
+            if isinstance(component, (disnake.ui.Button, disnake.ui.Select)):
+              component.disabled = True
+          await self.origin.edit_original_response(
+            content=self.parent.babel(self.origin.author, 'timeouterror'),
+            view=self
+          )
+        else:
+          await self.origin.delete_original_response()
+        return
       if not self.done:
-        await self.origin.reply(
-          self.parent.babel(self.origin.author, 'timeouterror')
-        )
+        await self.origin.reply(self.parent.babel(self.origin.author, 'timeouterror'))
       async for msg in self.origin.channel.history(after=self.origin):
         if (
           isinstance(msg.reference, disnake.MessageReference) and
@@ -381,7 +390,7 @@ class ChannelSelectView(disnake.ui.View):
           await msg.delete()
           return
     except disnake.HTTPException:
-      pass
+      pass # Message was probably dismissed, don't worry about it
 
 # Data classes
 
@@ -578,11 +587,9 @@ class ConfessionData:
   async def check_vetting(
     self,
     inter:disnake.Interaction,
-    guildchannels:dict[int, ChannelType] | None = None
   ) -> disnake.TextChannel | bool | None:
     """ Check if vetting is required, this is not a part of check_all """
-    if guildchannels is None:
-      guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
+    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
     vetting = findvettingchannel(guildchannels)
     if vetting and self.channeltype.vetted:
       if 'ConfessionsModeration' not in self.bot.cogs:
