@@ -678,16 +678,6 @@ class ConfessionData:
       else self.config.getboolean(f'{channel.guild.id}_webhook', False)
     )
 
-    # Create kwargs based on state
-    if self.file:
-      kwargs['file'] = self.file
-    if self.reference_id and channel == self.targetchannel:
-      kwargs['reference'] = disnake.MessageReference(
-        message_id=self.reference_id,
-        channel_id=channel.id,
-        guild_id=channel.guild.id
-      )
-
     # Allow external modules to modify the message before sending
     if channel == self.targetchannel:
       # ...as long as it's not being intercepted by another mechanism - like vetting
@@ -696,11 +686,22 @@ class ConfessionData:
         if callable(special_function):
           result = await special_function(inter, self)
           if result is False:
-            return
+            return False
           if 'use_webhook' in result:
             use_webhook = result['use_webhook']
           if 'components' in result:
             kwargs['components'] = result['components']
+
+    # Create kwargs based on state
+    if self.file:
+      kwargs['file'] = self.file
+    if self.reference_id and channel == self.targetchannel:
+      use_webhook = False
+      kwargs['reference'] = disnake.MessageReference(
+        message_id=self.reference_id,
+        channel_id=channel.id,
+        guild_id=channel.guild.id
+      )
 
     # Send the confession
     if use_webhook:
