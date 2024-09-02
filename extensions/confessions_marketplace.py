@@ -207,7 +207,9 @@ class ConfessionsMarketplace(commands.Cog):
       await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
       return
     if guildchannels[inter.channel_id] != ChannelType.marketplace():
-      await inter.send(self.babel(inter, 'wrongcommand', cmd='confess'), ephemeral=True)
+      await inter.send(self.babel(
+        inter, 'wrongcommand', cmd='confess', channel=inter.channel.mention
+      ), ephemeral=True)
       return
 
     clean_desc = description.replace('# ', '') if description else '' # TODO: do this with regex

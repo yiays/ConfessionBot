@@ -602,7 +602,9 @@ class ConfessionData:
       self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset()
     ):
       if self.channeltype == ChannelType.marketplace() and self.embed is None:
-        await inter.send(self.babel(inter, 'wrongcommand', cmd='sell'), **kwargs)
+        await inter.send(self.babel(
+          inter, 'wrongcommand', cmd='sell', channel=self.targetchannel.mention
+        ), **kwargs)
         return False
     else:
       await inter.send(self.babel(inter, 'nosendchannel'), **kwargs)
