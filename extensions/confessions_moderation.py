@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
@@ -17,8 +17,7 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions import Confessions
   from overlay.extensions.confessions_common import Crypto
 
-from overlay.extensions.confessions_common import\
-  ChannelType, ConfessionData, CorruptConfessionDataException, get_guildchannels
+from overlay.extensions.confessions_common import ConfessionData, CorruptConfessionDataException
 
 
 class ConfessionsModeration(commands.Cog):
@@ -53,21 +52,27 @@ class ConfessionsModeration(commands.Cog):
 
   async def send_vetting(
     self,
-    ctx:Union[disnake.DMChannel, disnake.Interaction],
+    inter:disnake.Interaction,
     data:"ConfessionData",
     vettingchannel:disnake.TextChannel
   ):
-    """ Send confession to a vetting channel for approval """
-    success = await data.handle_send_errors(ctx, vettingchannel.send(
-      self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.targetchannel.mention),
-      embed=data.embed,
-      file=data.attachment,
-      view=self.PendingConfessionView(self, data)
-    ))
+    """
+      Send confession to a vetting channel for approval
+      Checks are performed at this stage
+    """
+    preface = self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.targetchannel.mention)
+    view = self.PendingConfessionView(self, data)
+    success = await data.send_confession(
+      inter,
+      channel=vettingchannel,
+      webhook_override=False,
+      preface_override=preface,
+      view=view
+    )
 
     if success:
-      await ctx.send(
-        self.babel(ctx, 'confession_vetting', channel=data.targetchannel.mention),
+      await inter.send(
+        self.babel(inter, 'confession_vetting', channel=data.targetchannel.mention),
         ephemeral=True
       )
 
@@ -78,18 +83,17 @@ class ConfessionsModeration(commands.Cog):
     def __init__(self, parent:ConfessionsModeration, pendingconfession:"ConfessionData"):
       super().__init__(timeout=None)
 
+      guild = pendingconfession.targetchannel.guild
       data = pendingconfession.store()
       self.add_item(disnake.ui.Button(
-        label=parent.babel(
-          pendingconfession.targetchannel.guild, 'vetting_approve_button'
-        ),
+        label=parent.babel(guild, 'vetting_approve_button'),
         emoji='✅',
         style=disnake.ButtonStyle.blurple,
         custom_id=f"pendingconfession_approve_{data}"
       ))
 
       self.add_item(disnake.ui.Button(
-        label=parent.babel(pendingconfession.targetchannel.guild, 'vetting_deny_button'),
+        label=parent.babel(guild, 'vetting_deny_button'),
         emoji='❎',
         style=disnake.ButtonStyle.danger,
         custom_id=f"pendingconfession_deny_{data}"
@@ -192,84 +196,71 @@ class ConfessionsModeration(commands.Cog):
   @commands.Cog.listener('on_button_click')
   async def on_confession_review(self, inter:disnake.MessageInteraction):
     """ Handle approving and denying confessions """
+    if not inter.data.custom_id.startswith('pendingconfession_'):
+      return
     if inter.data.custom_id in self.button_lock:
       # The button was double-pressed. Ignore.
       return
-    if inter.data.custom_id.startswith('pendingconfession_'):
-      await inter.response.defer()
-      self.button_lock.append(inter.data.custom_id)
-      try:
-        if inter.data.custom_id.startswith('pendingconfession_approve_'):
-          pendingconfession = ConfessionData(
-            self, inter.data.custom_id[26:], embed=inter.message.embeds[0]
-          )
-          accepted = True
 
-        elif inter.data.custom_id.startswith('pendingconfession_deny_'):
-          pendingconfession = ConfessionData(self, inter.data.custom_id[23:])
-          accepted = False
-        else:
-          self.button_lock.remove(inter.data.custom_id)
-          print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
-          return
-      except CorruptConfessionDataException:
-        await inter.send(self.babel(inter, 'vetcorrupt'))
+    await inter.response.defer()
+    self.button_lock.append(inter.data.custom_id)
+    try:
+      if inter.data.custom_id.startswith('pendingconfession_approve_'):
+        pendingconfession = ConfessionData(self)
+        await pendingconfession.from_binary(self.crypto, inter.data.custom_id[26:])
+        pendingconfession.set_content(embed=inter.message.embeds[0])
+        accepted = True
+      elif inter.data.custom_id.startswith('pendingconfession_deny_'):
+        pendingconfession = ConfessionData(self)
+        await pendingconfession.from_binary(self.crypto, inter.data.custom_id[23:])
+        accepted = False
+      else:
         self.button_lock.remove(inter.data.custom_id)
+        print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
+        return
+    except CorruptConfessionDataException:
+      await inter.send(self.babel(inter, 'vetcorrupt'))
+      self.button_lock.remove(inter.data.custom_id)
+      return
+    except (disnake.NotFound, disnake.Forbidden):
+      self.button_lock.remove(inter.data.custom_id)
+      if accepted:
+        await inter.send(self.babel(
+          inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel.id}>"
+        ))
         return
 
+    if accepted:
+      if inter.message.embeds[0].image:
+        await pendingconfession.add_image(url=inter.message.embeds[0].image.url)
+      elif (
+        len(inter.message.attachments) and
+        inter.message.attachments[0].content_type.startswith('image')
+      ):
+        await pendingconfession.add_image(attachment=inter.message.attachments[0])
+      await pendingconfession.send_confession(inter, perform_checks=False)
+
+    metadata = {'user':inter.author.mention, 'channel':pendingconfession.targetchannel.mention}
+    if accepted:
+      msg = self.babel(inter.guild, 'vetaccepted', **metadata)
+    else:
+      msg = self.babel(inter.guild, 'vetdenied', **metadata)
+    await inter.message.edit(msg, view=None)
+    self.button_lock.remove(inter.data.custom_id)
+
+    #BABEL: confession_vetting_accepted,confession_vetting_denied
+    content = self.babel(
+      pendingconfession.author,
+      'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
+      channel=f"<#{pendingconfession.targetchannel.id}>"
+    )
+    if str(pendingconfession.author.id) not in self.config.get('dm_notifications', '').split(','):
       try:
-        await pendingconfession.fetch()
-      except (disnake.NotFound, disnake.Forbidden):
-        self.button_lock.remove(inter.data.custom_id)
-        if accepted:
-          await inter.send(self.babel(
-            inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel_id}>"
-          ))
-          return
-
-      if accepted:
-        anonid = self.bot.cogs['Confessions'].get_anonid(inter.guild.id, pendingconfession.author.id)
-        lead = f"**[Anon-*{anonid}*]**"
-        guildchannels = get_guildchannels(self.config, inter.guild.id)
-        channeltype = guildchannels[pendingconfession.targetchannel_id]
-
-        await pendingconfession.generate_embed(
-          anonid,
-          lead if channeltype not in (
-            ChannelType.untraceable,
-            ChannelType.untraceablefeedback
-          ) else '',
-          pendingconfession.content,
-          pendingconfession.image
-        )
-
         if not pendingconfession.author.dm_channel:
           await pendingconfession.author.create_dm()
-        await pendingconfession.send_confession(inter)
-
-      await inter.message.edit(view=None)
-      self.button_lock.remove(inter.data.custom_id)
-      #BABEL: vetaccepted,vetdenied
-      await inter.send(self.babel(
-        inter.guild,
-        'vetaccepted' if accepted else 'vetdenied',
-        user=inter.author.mention,
-        channel=f"<#{pendingconfession.targetchannel_id}>"
-      ))
-
-      #BABEL: confession_vetting_accepted,confession_vetting_denied
-      content = self.babel(
-        pendingconfession.author,
-        'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
-        channel=f"<#{pendingconfession.targetchannel_id}>"
-      )
-      if isinstance(pendingconfession.origin, disnake.Message):
-        await pendingconfession.origin.reply(content)
-      elif f'{pendingconfession.author_id}_dm_notif' not in self.config:
-        try:
-          await pendingconfession.author.send(content)
-        except disnake.Forbidden:
-          pass
+        await pendingconfession.author.send(content)
+      except disnake.Forbidden:
+        pass
 
   # Context menu commands
 

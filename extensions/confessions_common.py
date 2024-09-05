@@ -5,49 +5,169 @@
 """
 from __future__ import annotations
 
-import io, os, base64
+import io, os, base64, hashlib, re
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from typing import Optional, Union, TYPE_CHECKING
-from enum import Enum
 import disnake
+from disnake.ext import commands
 import aiohttp
 
 if TYPE_CHECKING:
+  from collections.abc import Mapping
   from overlay.extensions.confessions import Confessions
   from overlay.extensions.confessions_moderation import ConfessionsModeration
   from overlay.extensions.confessions_setup import ConfessionsSetup
   from configparser import SectionProxy
+  from babel import Babel, Resolvable
 
 
-# Consts
+# Data Classes
 
-class ChannelType(int, Enum):
+class ChannelType:
   """ Channel Types as they are stored """
-  unset = -1
-  untraceable = 0
-  traceable = 1
-  vetting = 2
-  feedback = 3
-  untraceablefeedback = 4
 
+  name:str
+  value:int
+  icon:str
+  anonid:bool
+  vetted:bool
 
-CHANNEL_ICONS = {
-  ChannelType.unset: '❓',
-  ChannelType.untraceable: '👻',
-  ChannelType.traceable: '👁',
-  ChannelType.vetting: '🧑‍⚖️',
-  ChannelType.feedback: '📢',
-  ChannelType.untraceablefeedback: '💨'
-}
+  NAMES = {
+    -1: 'unset',
+    0: 'untraceable',
+    1: 'traceable',
+    2: 'vetting',
+    3: 'feedback',
+    4: 'untraceablefeedback',
+    5: 'marketplace'
+  }
+
+  ICONS = {
+    -1: '❓',
+    0: '👻',
+    1: '💬',
+    2: '🧑‍⚖️',
+    3: '📢',
+    4: '💨',
+    5:  '🛒'
+  }
+
+  ANONIDS = {
+    -1: False,
+    0: False,
+    1: True,
+    2: True,
+    3: True,
+    4: False,
+    5: True
+  }
+
+  VETTED = {
+    -1: False,
+    0: True,
+    1: True,
+    2: True,
+    3: False,
+    4: False,
+    5: True
+  }
+
+  DEPS = {
+    -1: None,
+    0: None,
+    1: None,
+    2: 'ConfessionsModeration',
+    3: None,
+    4: None,
+    5: 'ConfessionsMarketplace'
+  }
+
+  SWAPS = {0:1, 1:0, 3:4, 4:3}
+
+  def __init__(self, i:int):
+    self.name = self.NAMES[i]
+    self.value = i
+    self.icon = self.ICONS[i]
+    self.anonid = self.ANONIDS[i]
+    self.vetted = self.VETTED[i]
+
+  def __getitem__(self, i:str) -> ChannelType:
+    return ChannelType({v:k for k,v in self.NAMES.items()}[i])
+
+  def __int__(self):
+    return self.value
+
+  def __eq__(self, other):
+    return isinstance(other, ChannelType) and other.value == self.value
+
+  @classmethod
+  def unset(cls) -> ChannelType:
+    """ A channel that has no config """
+    return cls(-1)
+
+  @classmethod
+  def untraceable(cls) -> ChannelType:
+    """ A channel that has anonymous messages, but no Anon-IDs """
+    return cls(0)
+
+  @classmethod
+  def traceable(cls) -> ChannelType:
+    """ A channel that has anonymous messages, with Anon-IDs """
+    return cls(1)
+
+  @classmethod
+  def vetting(cls) -> ChannelType:
+    """ A channel that intercepts messages headed to other channels """
+    return cls(2)
+
+  @classmethod
+  def feedback(cls) -> ChannelType:
+    """ A channel that has anonymous feedback messages, with Anon-IDs """
+    return cls(3)
+
+  @classmethod
+  def untraceablefeedback(cls) -> ChannelType:
+    """ A channel that has anonymous feedback messages, but no Anon-IDs """
+    return cls(4)
+
+  @classmethod
+  def marketplace(cls) -> ChannelType:
+    """ A channel that hosts an anonymous marketplace """
+    return cls(5)
+
+  def localname(self, babel:Babel, target:Resolvable, long:bool = True) -> str:
+    """ Find name of the current ChannelType in Babel """
+    name = None
+    #BABEL: channeltype_#,channeltype_#-#
+    for key in babel.langs[babel.defaultlang]['confessions']:
+      if key.startswith('channeltype_'):
+        if key == f'channeltype_{self.value}':
+          name = babel(target, 'confessions', key)
+          break
+        elif len(key) == 15 and self.value in range(int(key[-3]), int(key[-1]) + 1):
+          name = babel(target, 'confessions', key)
+          break
+    ext = None
+    if long and self.value in self.SWAPS.keys():
+      if self.anonid:
+        ext = babel(target, 'confessions', 'channeltype_traceable')
+      else:
+        ext = babel(target, 'confessions', 'channeltype_untraceable')
+    return name + (' ' + ext if ext else '')
 
 
 # Utility functions
 
+def get_channeltypes(cogs:Mapping[str, disnake.ext.commands.Cog]) -> list[ChannelType]:
+  """ Provide a selection of ChannelTypes based on the currently active modules """
+  return [ChannelType(int(i)) for i, d in ChannelType.DEPS.items() if d is None or d in cogs]
+
+
 def findvettingchannel(guildchannels:dict[int, ChannelType]) -> Optional[int]:
   """ Check if guild has a vetting channel and return it """
   for channel_id in guildchannels:
-    if guildchannels[channel_id] == ChannelType.vetting:
+    if guildchannels[channel_id] == ChannelType.vetting():
       return channel_id
   return None
 
@@ -89,12 +209,14 @@ class ChannelSelectView(disnake.ui.View):
       self,
       origin:disnake.Message | disnake.Interaction,
       parent:Confessions | ConfessionsSetup,
-      matches:list[tuple[disnake.TextChannel, ChannelType]]
+      matches:list[tuple[disnake.TextChannel, ChannelType]],
+      confession:ConfessionData | None = None
     ):
     super().__init__()
     self.origin = origin
     self.parent = parent
     self.matches = matches
+    self.confession = confession
     self.soleguild = matches[0][0].guild if all((m.guild for m,_ in matches)) else None
     self.update_list()
     self.channel_selector.placeholder = self.parent.babel(origin, 'channelprompt_placeholder')
@@ -126,9 +248,10 @@ class ChannelSelectView(disnake.ui.View):
     start = self.page*25
     self.channel_selector.options = [
       disnake.SelectOption(
-        label=channel.name + ('' if self.soleguild else f' (from {channel.guild.name})'),
+        label='#' + channel.name + ('' if self.soleguild else f' (from {channel.guild.name})'),
         value=channel.id,
-        emoji=CHANNEL_ICONS[channeltype]
+        emoji=channeltype.icon,
+        default=channel.id == self.selection.id if self.selection else False
       ) for channel,channeltype in self.matches[start:start+25]
     ]
 
@@ -148,84 +271,56 @@ class ChannelSelectView(disnake.ui.View):
         view=self
       )
       return
+    self.update_list()
     guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
     vetting = findvettingchannel(guildchannels)
     channeltype = guildchannels[self.selection.id]
     await inter.response.edit_message(
       content=self.parent.babel(
         inter, 'channelprompted', channel=self.selection.mention,
-        vetting=vetting and channeltype not in (
-          ChannelType.feedback, ChannelType.untraceablefeedback
-        )
+        vetting=vetting and 'feedback' not in channeltype.name
       ),
       view=self)
 
   @disnake.ui.button(disabled=True, style=disnake.ButtonStyle.primary)
   async def send_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
     """ Send the confession """
-    if isinstance(self.origin, disnake.Interaction):
-      raise Exception("This function is not designed for Interactions!")
-
-    if self.selection is None:
+    if self.selection is None or self.done:
       self.disable(inter)
       return
 
-    anonid = self.parent.get_anonid(self.selection.guild.id, inter.author.id)
-    lead = f"**[Anon-*{anonid}*]**"
-    channeltype = get_guildchannels(self.parent.config, self.selection.guild.id)
+    if self.confession is None:
+      self.confession = ConfessionData(self.parent)
+      self.confession.create(author=inter.author, targetchannel=self.selection)
+      self.confession.set_content(self.origin.content)
 
-    if not self.parent.check_banned(self.selection.guild.id, anonid):
-      await inter.send(self.parent.babel(inter, 'nosendbanned'))
-      await self.disable(inter)
+      if self.origin.attachments:
+        await inter.response.defer(ephemeral=True)
+        await self.confession.add_image(attachment=self.origin.attachments[0])
+    else:
+      # Override targetchannel as this has changed
+      self.confession.create(author=inter.author, targetchannel=self.selection)
+
+    if vetting := await self.confession.check_vetting(inter):
+      await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
+        inter, self.confession, vetting
+      )
+      await inter.delete_original_response()
+      return
+    if vetting is False:
       return
 
-    pendingconfession = ConfessionData(
-      self.parent, author=inter.author, origin=self.origin, targetchannel=self.selection
-    )
-    if self.origin.attachments:
-      if not self.parent.check_image(self.selection.guild.id, self.origin.attachments[0]):
-        await inter.send(self.parent.babel(inter, 'nosendimages'))
-        await self.disable(inter)
-        return
-
-    image = None
-    if self.origin.attachments:
-      image = self.origin.attachments[0].url
-      await inter.response.defer(ephemeral=True)
-
-    vetting = findvettingchannel(get_guildchannels(self.parent.config, self.selection.guild.id))
-    await pendingconfession.generate_embed(
-      anonid,
-      lead if vetting or channeltype != ChannelType.untraceable else '',
-      self.origin.content,
-      image
-    )
-
-    if vetting and channeltype not in (ChannelType.feedback, ChannelType.untraceablefeedback):
-      if 'ConfessionsModeration' in self.parent.bot.cogs:
-        await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-          inter, pendingconfession, self.origin.guild.get_channel(vetting)
-        )
-      else:
-        await inter.response.send_message(
-          self.parent.babel(inter, 'no_moderation'),
-          ephemeral=True
-        )
-      await self.disable(inter)
-      return
-
-    await pendingconfession.send_confession(inter)
-
-    self.send_button.label = self.parent.babel(inter, 'channelprompt_button_sent')
-    self.channel_selector.disabled = True
-    self.send_button.disabled = True
-    self.done = True
-    await inter.response.edit_message(
-      content=self.parent.babel(
-        inter, 'confession_sent_channel', channel=self.selection.mention
-      ),
-      view=self
-    )
+    if await self.confession.send_confession(inter):
+      self.send_button.label = self.parent.babel(inter, 'channelprompt_button_sent')
+      self.channel_selector.disabled = True
+      self.send_button.disabled = True
+      self.done = True
+      await inter.edit_original_message(
+        content=self.parent.babel(
+          inter, 'confession_sent_channel', channel=self.selection.mention
+        ),
+        view=None
+      )
 
   def change_page(self, pagediff:int):
     """ Add or remove pagediff to self.page and trigger on_page_change event """
@@ -266,16 +361,27 @@ class ChannelSelectView(disnake.ui.View):
     self.channel_selector.disabled = True
     self.send_button.disabled = True
     self.done = True
-    await inter.message.edit(view=self)
+    if inter.response.is_done():
+      await inter.message.edit(view=self)
+    else:
+      await inter.response.edit_message(view=self)
 
   async def on_timeout(self):
-    if isinstance(self.origin, disnake.Interaction):
-      raise Exception("This function is not designed for Interactions!")
     try:
+      if isinstance(self.origin, disnake.Interaction):
+        if not self.done:
+          for component in self.children:
+            if isinstance(component, (disnake.ui.Button, disnake.ui.Select)):
+              component.disabled = True
+          await self.origin.edit_original_response(
+            content=self.parent.babel(self.origin.author, 'timeouterror'),
+            view=self
+          )
+        else:
+          await self.origin.delete_original_response()
+        return
       if not self.done:
-        await self.origin.reply(
-          self.parent.babel(self.origin.author, 'timeouterror')
-        )
+        await self.origin.reply(self.parent.babel(self.origin.author, 'timeouterror'))
       async for msg in self.origin.channel.history(after=self.origin):
         if (
           isinstance(msg.reference, disnake.MessageReference) and
@@ -284,7 +390,7 @@ class ChannelSelectView(disnake.ui.View):
           await msg.delete()
           return
     except disnake.HTTPException:
-      pass
+      pass # Message was probably dismissed, don't worry about it
 
 # Data classes
 
@@ -332,179 +438,325 @@ class ConfessionData:
   """ Dataclass for Confessions """
   SCOPE = 'confessions' # exists to keep babel happy
   anonid:str | None
+  author:disnake.User
+  targetchannel:disnake.TextChannel
+  channeltype_flags:int = 0
+  content:str
+  reference_id:int = 0
+  attachment:disnake.Attachment | None = None
+  file:disnake.File | None = None
+  embed:disnake.Embed | None = None
+  channeltype:ChannelType
 
-  def __init__(
-    self,
-    parent:Union["Confessions", "ConfessionsModeration"],
-    rawdata:Optional[str] = None,
-    *,
-    author:Optional[disnake.User] = None,
-    origin:Optional[disnake.Message] = None,
-    targetchannel:Optional[disnake.TextChannel] = None,
-    embed:Optional[disnake.Embed] = None
-  ):
-
-    if rawdata:
-      self.offline = True
-
-      binary = parent.crypto.decrypt(rawdata)
-      if len(binary) != 24:
-        raise CorruptConfessionDataException()
-
-      self.author_id = int.from_bytes(binary[0:8], 'big')
-      self.origin_id = int.from_bytes(binary[8:16], 'big')
-      self.targetchannel_id = int.from_bytes(binary[16:24], 'big')
-    else:
-      self.offline = False
-      self.author = author
-      self.author_id = author.id
-      self.origin = origin
-      if isinstance(origin, disnake.Message):
-        self.origin_id = origin.id
-      self.targetchannel = targetchannel
-      self.targetchannel_id = targetchannel.id
-
+  def __init__(self, parent:Union[Confessions, ConfessionsModeration]):
+    """ Creates a ConfessionData class, from here, either use from_binary() or create() """
+    # Aliases to shorten code
     self.parent = parent
-    self.embed = embed
-    self.attachment = None
+    self.config = parent.config
+    self.babel = parent.babel
+    self.bot = parent.bot
 
+  # Data retreival
+
+  async def from_binary(self, crypto:Crypto, rawdata:str):
+    """ Creates ConfessionData from an encrypted binary string """
+    binary = crypto.decrypt(rawdata)
+    if len(binary) == 24: # TODO: Legacy format, remove eventually
+      author_id = int.from_bytes(binary[0:8], 'big')
+      targetchannel_id = int.from_bytes(binary[16:24], 'big')
+    elif len(binary) == 25:
+      author_id = int.from_bytes(binary[0:8], 'big')
+      targetchannel_id = int.from_bytes(binary[8:16], 'big')
+      # from_bytes won't take a single byte, so this hack is needed.
+      self.channeltype_flags = int.from_bytes(bytes((binary[16],)), 'big')
+      self.reference_id = int.from_bytes(binary[17:25], 'big')
+    else:
+      raise CorruptConfessionDataException()
+    self.author = await self.bot.fetch_user(author_id)
+    self.targetchannel = await self.bot.fetch_channel(targetchannel_id)
+    self.anonid = self.get_anonid(self.targetchannel.guild.id, self.author.id)
+    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
+    self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset())
+
+  def create(
+    self,
+    author:disnake.User,
+    targetchannel:disnake.TextChannel,
+    reference:Optional[disnake.Message] = None
+  ):
+    self.author = author
+    self.targetchannel = targetchannel
+    self.anonid = self.get_anonid(targetchannel.guild.id, self.author.id)
+    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
+    self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset())
+    self.reference_id = reference.id if reference else 0
+
+  def set_content(self, content:Optional[str] = '', *, embed:Optional[disnake.Embed] = None):
+    self.content = content
     if embed:
-      if embed.description.startswith('**[Anon-'):
-        self.content = embed.description[20:]
-      else:
-        self.content = embed.description
-      self.image = embed.image.url if embed.image else None
+      self.embed = embed
+      if embed.description:
+        if not content:
+          self.content = embed.description
+        # TODO: Legacy feature for older confessions, delete someday
+        if embed.description.startswith('**[Anon-'):
+          self.content = embed.description[20:]
+        else:
+          self.content = embed.description
+
+  async def add_image(self, *, attachment:disnake.Attachment | None = None, url:str | None = None):
+    """ Download image so it can be reuploaded with message """
+    async with aiohttp.ClientSession() as session:
+      async with session.get(attachment.url if attachment else url) as res:
+        if res.status == 200:
+          filename = 'file.'+res.content_type.replace('image/','')
+          self.file = disnake.File(
+            io.BytesIO(await res.read()),
+            filename
+          )
+          if self.embed:
+            self.embed.set_image(url='attachment://'+self.file.filename)
+          if attachment:
+            self.attachment = attachment
+        else:
+          raise Exception("Failed to download image!")
+
+  # Data storage
 
   def store(self) -> str:
     """ Encrypt data for secure storage """
+    # Size limit: ~100 bytes
+    bauthor = self.author.id.to_bytes(8, 'big')
+    btarget = self.targetchannel.id.to_bytes(8, 'big')
+    bmarket = self.channeltype_flags.to_bytes(1, 'big')
+    breference = self.reference_id.to_bytes(8, 'big')
 
-    if self.offline:
-      bauthor = self.author_id.to_bytes(8, 'big')
-      borigin = (self.origin_id if self.origin_id else 0).to_bytes(8, 'big')
-      btarget = self.targetchannel_id.to_bytes(8, 'big')
-    else:
-      bauthor = self.author.id.to_bytes(8, 'big')
-      borigin = (self.origin.id if self.origin else 0).to_bytes(8, 'big')
-      btarget = self.targetchannel.id.to_bytes(8, 'big')
-
-    binary = bauthor + borigin + btarget
+    binary = bauthor + btarget + bmarket + breference
     return self.parent.crypto.encrypt(binary).decode('ascii')
 
-  async def fetch(self):
-    """ Fetches referenced Discord elements for use """
-    if self.offline:
-      self.author = await self.parent.bot.fetch_user(self.author_id)
-      self.origin = None
-      if self.origin_id > 0:
-        try:
-          self.origin = await self.author.fetch_message(self.origin_id)
-        except (disnake.NotFound, disnake.Forbidden):
-          pass
-      self.targetchannel = await self.parent.bot.fetch_channel(self.targetchannel_id)
-      self.offline = False
+  # Data rehydration
 
-  async def generate_embed(self, anonid:str, lead:str, content:str, image:Optional[str] = None):
-    """ Generate the confession embed """
-    if lead:
-      self.anonid = anonid
-      embed = disnake.Embed(colour=disnake.Colour(int(anonid,16)),description=lead+' '+content)
+  def get_anonid(self, guildid:int, userid:int) -> str:
+    """ Calculates the current anon-id for a user """
+    offset = int(self.config.get(f"{guildid}_shuffle", fallback=0))
+    encrypted = self.parent.crypto.encrypt(
+      guildid.to_bytes(8, 'big') + userid.to_bytes(8, 'big') + offset.to_bytes(2, 'big')
+    )
+    return hashlib.sha256(encrypted).hexdigest()[-6:]
+
+  def generate_embed(self, vetting:bool = False):
+    """ Generate or add anonid to the confession embed """
+    if self.embed is None:
+      self.embed = disnake.Embed(description=self.content)
+    if (self.channeltype.anonid or vetting):
+      self.embed.colour = disnake.Colour(int(self.anonid,16))
+      self.embed.set_author(name=f'Anon-{self.anonid}')
     else:
       self.anonid = None
-      embed = disnake.Embed(description=content if content else '')
-    if image:
-      async with aiohttp.ClientSession() as session:
-        async with session.get(image) as res:
-          if res.status == 200:
-            filename = 'file.'+res.content_type.replace('image/','')
-            self.attachment = disnake.File(
-              io.BytesIO(await res.read()),
-              filename
-            )
-            embed.set_image(url='attachment://'+filename)
-          else:
-            if 'Log' in self.parent.bot.cogs:
-              await self.parent.bot.cogs['Log'].log_misc_message(
-                f"WARN: Failed to upload embedded image ({res.status})"
-              )
-            embed.set_image(url=image)
-    self.embed = embed
-    self.content = content
+      self.embed.set_author(name='[Anon]')
+    if self.file:
+      self.embed.set_image(url='attachment://'+self.file.filename)
 
-  async def handle_send_errors(self, ctx:Union[disnake.DMChannel, disnake.Interaction], func):
+  # Checks
+
+  def check_banned(self) -> bool:
+    """ Verify the user hasn't been banned """
+    guild_id = self.targetchannel.guild.id
+    if self.anonid in self.config.get(f"{guild_id}_banned", fallback='').split(','):
+      return False
+    return True
+
+  def check_image(self) -> bool:
+    """ Only allow images to be sent if imagesupport is enabled and the image is valid """
+    image = self.attachment
+    guild_id = self.targetchannel.guild.id
+    if image and image.content_type.startswith('image') and image.size < 25_000_000:
+      # Discord size limit
+      if bool(self.config.get(f"{guild_id}_imagesupport", fallback=True)):
+        return True
+      return False
+    raise commands.BadArgument()
+
+  def check_spam(self):
+    """ Verify message doesn't contain spam as defined in [confessions] spam_flags """
+    for spamflag in self.config.get('spam_flags', fallback=None).splitlines():
+      if self.content and re.match(spamflag, self.content):
+        return False
+    return True
+
+  async def check_vetting(
+    self,
+    inter:disnake.Interaction,
+  ) -> disnake.TextChannel | bool | None:
+    """ Check if vetting is required, this is not a part of check_all """
+    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
+    vetting = findvettingchannel(guildchannels)
+    if vetting and self.channeltype.vetted:
+      if 'ConfessionsModeration' not in self.bot.cogs:
+        await inter.send(self.babel(inter, 'no_moderation'), ephemeral=True)
+        return False
+      return self.targetchannel.guild.get_channel(vetting)
+    return None
+
+  async def check_all(self, inter:disnake.Interaction) -> bool:
+    """
+      Run all pre-send checks on this confession
+      In the event that a check fails, return the relevant babel key
+    """
+    kwargs = {'ephemeral':True}
+
+    if (
+      self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset()
+    ):
+      if self.channeltype == ChannelType.marketplace() and self.embed is None:
+        await inter.send(self.babel(
+          inter, 'wrongcommand', cmd='sell', channel=self.targetchannel.mention
+        ), **kwargs)
+        return False
+    else:
+      await inter.send(self.babel(inter, 'nosendchannel'), **kwargs)
+      return False
+
+    if not self.check_banned():
+      await inter.send(self.babel(inter, 'nosendbanned'), **kwargs)
+      return False
+
+    if self.attachment:
+      try:
+        if not self.check_image():
+          await inter.send(self.babel(inter, 'nosendimages'), **kwargs)
+          return False
+      except commands.BadArgument:
+        await inter.send(self.babel(inter, 'invalidimage'), **kwargs)
+        return False
+
+    if not self.check_spam():
+      await inter.send(self.babel(inter, 'nospam'), **kwargs)
+      return False
+
+    return True
+
+  # Sending
+
+  async def handle_send_errors(self, inter:disnake.Interaction, func):
     """
     Wraps around functions that send confessions to channels
     Adds copious amounts of error handling
     """
-    kwargs = {'ephemeral':True} if isinstance(ctx, disnake.Interaction) else {}
+    kwargs = {'ephemeral':True}
     try:
       await func
       return True
     except disnake.Forbidden:
       try:
-        #BABEL: confessions/missingperms
         await self.targetchannel.send(
-          self.parent.babel(self.targetchannel.guild, 'missingperms', perm='Embed Links')
+          self.babel(self.targetchannel.guild, 'missingperms', perm='Embed Links')
         )
-        await ctx.send(self.parent.babel(ctx, 'embederr'), **kwargs)
+        await inter.send(self.babel(inter, 'embederr'), **kwargs)
       except disnake.Forbidden:
-        #BABEL: confessions/missingchannelerr
-        await ctx.send(
-          self.parent.babel(ctx, 'missingchannelerr') + ' (403 Forbidden)',
-          **kwargs
-        )
+        await inter.send(self.babel(inter, 'missingchannelerr') + ' (403 Forbidden)', **kwargs)
     except disnake.NotFound:
-      await ctx.send(
-        self.parent.babel(ctx, 'missingchannelerr') + ' (404 Not Found)',
-        **kwargs
-      )
+      await inter.send(self.babel(inter, 'missingchannelerr') + ' (404 Not Found)', **kwargs)
     return False
 
-  async def send_confession(self, ctx:disnake.DMChannel | disnake.Interaction, smsg=False):
+  async def send_confession(
+    self,
+    inter:disnake.Interaction,
+    success_message:bool = False,
+    perform_checks:bool = True,
+    *,
+    channel:disnake.TextChannel | None = None,
+    webhook_override:bool | None = None,
+    preface_override:str | None = None,
+    **kwargs
+  ) -> bool:
     """ Send confession to the destination channel """
-    preface = self.parent.config.get(f'{self.targetchannel.guild.id}_preface', fallback='')
-    if self.parent.config.get(f'{self.targetchannel.guild.id}_webhook', None) == 'True':
-      if webhook := await self.find_or_create_webhook(self.targetchannel):
-        kwargs = {'file': self.attachment} if self.attachment else {}
-        botcolour = self.parent.bot.config['main']['themecolor'][2:]
-        func = webhook.send(
-          self.content,
-          username=(
-            (preface + ' - ' if preface else '') +
-            ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
-          ),
-          avatar_url=(
-            self.parent.config.get('pfpgen_url', '')
-            .replace('{}', botcolour if self.anonid is None else self.anonid)
-          ),
-          **kwargs
-        )
-        #TODO: add support for custom PFPs
-    else:
-      func = self.targetchannel.send(preface, embed=self.embed, file=self.attachment)
 
-    if hasattr(ctx, 'response') and not ctx.response.is_done():
-      await ctx.response.defer(ephemeral=True)
-    success = await self.handle_send_errors(ctx, func)
+    # Flag-based behaviour
+    if perform_checks:
+      if not await self.check_all(inter):
+        return False
+    if channel is None:
+      channel = self.targetchannel
+    preface = (
+      preface_override if preface_override is not None
+      else self.config.get(f'{channel.guild.id}_preface', fallback='')
+    )
+    use_webhook = (
+      webhook_override if webhook_override is not None
+      else self.config.getboolean(f'{channel.guild.id}_webhook', False)
+    )
 
-    if success and smsg:
-      #BABEL: confession_sent_below,confession_sent_channel
-      await ctx.send(
-        self.parent.babel(ctx, (
-          'confession_sent_below' if ctx.channel == self.targetchannel else 'confession_sent_channel'
-        ), channel=self.targetchannel.mention),
-        ephemeral=True
+    # Allow external modules to modify the message before sending
+    if channel == self.targetchannel:
+      # ...as long as it's not being intercepted by another mechanism - like vetting
+      if dep := self.channeltype.DEPS[self.channeltype.value]:
+        special_function = getattr(self.bot.cogs[dep], 'on_channeltype_send', None)
+        if callable(special_function):
+          result = await special_function(inter, self)
+          if result is False:
+            return False
+          if 'use_webhook' in result:
+            use_webhook = result['use_webhook']
+          if 'components' in result:
+            kwargs['components'] = result['components']
+
+    # Create kwargs based on state
+    if self.file:
+      kwargs['file'] = self.file
+    if self.reference_id and channel == self.targetchannel:
+      use_webhook = False
+      kwargs['reference'] = disnake.MessageReference(
+        message_id=self.reference_id,
+        channel_id=channel.id,
+        guild_id=channel.guild.id
       )
+
+    # Send the confession
+    if use_webhook:
+      if webhook := await self.find_or_create_webhook(channel):
+        botcolour = self.bot.config['main']['themecolor'][2:]
+        username = (
+          (preface + ' - ' if preface else '') +
+          ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
+        )
+        pfp = (
+          self.config.get('pfpgen_url', '')
+          .replace('{}', botcolour if self.anonid is None else self.anonid)
+        )
+        func = webhook.send(self.content, username=username, avatar_url=pfp, **kwargs)
+        #TODO: add support for custom PFPs
+      else:
+        return False
+    else:
+      self.generate_embed()
+      func = channel.send(preface, embed=self.embed, **kwargs)
+
+    if hasattr(inter, 'response') and not inter.response.is_done():
+      await inter.response.defer(ephemeral=True)
+    success = await self.handle_send_errors(inter, func)
+
+    # Mark the command as complete by sending a success message
+    if success and success_message:
+      if inter.channel != self.targetchannel: # confess-to
+        await inter.send(
+          self.babel(inter, 'confession_sent_channel', channel=channel.mention),
+          ephemeral=True
+        )
+      else: # confess
+        await inter.send(self.babel(inter, 'confession_sent_below'), ephemeral=True)
+    return success
 
   async def find_or_create_webhook(self, channel:disnake.TextChannel) -> disnake.Webhook | None:
     """ Tries to find a webhook, or create it, or complain about missing permissions """
     webhook:disnake.Webhook
     try:
       for webhook in await channel.webhooks():
-        if webhook.application_id == self.parent.bot.application_id:
+        if webhook.application_id == self.bot.application_id:
           return webhook
-      return await channel.create_webhook(name=self.parent.bot.config['main']['botname'])
+      return await channel.create_webhook(name=self.bot.config['main']['botname'])
     except disnake.Forbidden:
-      await channel.send(self.parent.babel(channel.guild, 'missingperms', perm='MANAGE_WEBHOOKS'))
+      await channel.send(self.babel(channel.guild, 'missingperms', perm='Manage Webhooks'))
       return None
 
 

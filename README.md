@@ -7,11 +7,9 @@
 > [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=562440687363293195&permissions=0&scope=bot%20applications.commands) to your own server
 
 ## News
-Seven languages are now supported! English, German, French, Polish, Brazilian Portugese, Tagalog, and Chinese are all available to choose with `/language set` today, but some are incomplete. *ConfessionBot now also follows your user and server language preferences by default.*
-> [See live translation stats and contribute >](https://translate.yiays.com)
+![New features you might have missed: Compact confessions; admins with premium can enable this in the /controlpanel. Consolidated control; /controlpanel can be used anywhere to tweak advanced settings. Simpler setup; setup your entire server with /setup. More moderation; right click to confess or report confessions. Built-in branding; Admins with premium can now set the text before confessions.](news/Update%20Poster%20-%20Catchup.webp)
 
-ConfessionBot v2.4.0 has launched! This update adds a context menu button for reporting confessions directly to the moderators on the official support server.
-> [Read the terms of service >](https://yiays.com/blog/confession-bot-a-side-project/#terms-of-service)
+![ConfessionBot v2.6: Confession Replies; reply to any message anonymously in the right click menu. Easier channel types; Untraceable and traceable modes have been combined into one new type (Anonymous). Marketplace; A marketplace channel type is available to users who pay for a custom bot. Click to command; click on mentioned commands to use them immediately. Second chances; If you send a confession to an unset channel, you can redirect it.](news/Update%20Poster%20-%20v2.6.webp)
 
 ## Usage
 
