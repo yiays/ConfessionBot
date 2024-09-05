@@ -331,6 +331,7 @@ class ConfessionsSetup(commands.Cog):
   # Commands
 
   @commands.default_member_permissions(manage_channels=True)
+  @commands.bot_has_permissions(read_messages=True)
   @commands.slash_command(dm_permission=False)
   async def setup(self, inter:disnake.GuildCommandInteraction):
     """
