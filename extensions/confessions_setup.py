@@ -99,7 +99,6 @@ class ConfessionsSetup(commands.Cog):
       ]
       self.remove_item(self.send_button)
       self.help.label = parent.babel(inter, 'setup_help')
-      self.toggle_anon_ids.label = parent.babel(inter, 'setup_anonids')
       if 'ControlPanel' in parent.bot.cogs:
         linkbutton = disnake.ui.Button(
           custom_id='controlpanel',
@@ -191,6 +190,9 @@ class ConfessionsSetup(commands.Cog):
     def update_state(self):
       """ Update state of all buttons and selects to match config """
       # Toggle AnonIDs button state
+      self.toggle_anon_ids.label = self.parent.babel(
+        self.origin, 'setup_anonids', anonids=self.current_mode.anonid
+      )
       self.toggle_anon_ids.disabled = self.current_mode.value not in ChannelType.SWAPS
       self.toggle_anon_ids.emoji = '🟢' if self.current_mode.anonid else '⭕'
       # modeval is only for the dropdown, the true value is still stored in current_mode
