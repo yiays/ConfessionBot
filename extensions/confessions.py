@@ -242,7 +242,9 @@ class Confessions(commands.Cog):
   @commands.message_command(name="Confession Reply", dm_permission=False)
   async def confess_message(self, inter:disnake.MessageCommandInteraction):
     """ Shorthand to start a confession modal in this channel """
-    print(inter.target.id)
+    if inter.target.is_system():
+      await inter.send(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
+      return
     await self.confess(inter, None, None, reference=inter.target)
 
   #	Slash commands
