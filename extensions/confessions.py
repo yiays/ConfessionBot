@@ -184,6 +184,8 @@ class Confessions(commands.Cog):
 
     async def callback(self, inter:disnake.ModalInteraction):
       """ Send the completed confession """
+      self.confession.set_content(inter.text_values['content'])
+
       #TODO: This is copy-pasted from /confess. Maybe this check should be in common?
       matches,_ = self.parent.listavailablechannels(inter.author)
       if self.confession.channeltype == ChannelType.unset():
@@ -191,12 +193,11 @@ class Confessions(commands.Cog):
         await inter.send(
           self.parent.babel(inter, 'channelprompt') +
           (' '+self.parent.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
-          view=ChannelSelectView(inter, self, matches, confession=self.confession),
+          view=ChannelSelectView(inter, self.parent, matches, confession=self.confession),
           ephemeral=True
         )
         return
 
-      self.confession.set_content(inter.text_values['content'])
       if vetting := await self.confession.check_vetting(inter):
         await inter.bot.cogs['ConfessionsModeration'].send_vetting(inter, self.confession, vetting)
         return
