@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import asyncio
 from typing import Optional, TYPE_CHECKING
-import disnake
-from disnake.ext import commands
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -52,9 +53,9 @@ class ConfessionsModeration(commands.Cog):
 
   async def send_vetting(
     self,
-    inter:disnake.Interaction,
+    inter:discord.Interaction,
     data:"ConfessionData",
-    vettingchannel:disnake.TextChannel
+    vettingchannel:discord.TextChannel
   ):
     """
       Send confession to a vetting channel for approval
@@ -71,41 +72,41 @@ class ConfessionsModeration(commands.Cog):
     )
 
     if success:
-      await inter.send(
+      await inter.response.send_message(
         self.babel(inter, 'confession_vetting', channel=data.targetchannel.mention),
         ephemeral=True
       )
 
   # Views
 
-  class PendingConfessionView(disnake.ui.View):
+  class PendingConfessionView(discord.ui.View):
     """ Asks moderators to approve or deny a confession as a part of vetting """
     def __init__(self, parent:ConfessionsModeration, pendingconfession:"ConfessionData"):
       super().__init__(timeout=None)
 
       guild = pendingconfession.targetchannel.guild
       data = pendingconfession.store()
-      self.add_item(disnake.ui.Button(
+      self.add_item(discord.ui.Button(
         label=parent.babel(guild, 'vetting_approve_button'),
         emoji='✅',
-        style=disnake.ButtonStyle.blurple,
+        style=discord.ButtonStyle.blurple,
         custom_id=f"pendingconfession_approve_{data}"
       ))
 
-      self.add_item(disnake.ui.Button(
+      self.add_item(discord.ui.Button(
         label=parent.babel(guild, 'vetting_deny_button'),
         emoji='❎',
-        style=disnake.ButtonStyle.danger,
+        style=discord.ButtonStyle.danger,
         custom_id=f"pendingconfession_deny_{data}"
       ))
 
-  class ReportView(disnake.ui.View):
+  class ReportView(discord.ui.View):
     """ Provides all the guidance needed before a user reports a confession """
     def __init__(
         self,
         parent:ConfessionsModeration,
-        message: disnake.Message,
-        origin: disnake.Interaction
+        message: discord.Message,
+        origin: discord.Interaction
     ):
       super().__init__(timeout=300)
 
@@ -121,10 +122,10 @@ class ConfessionsModeration(commands.Cog):
       """ Waits 5 seconds before enabling the report button to encourage the user to read """
       await asyncio.sleep(5)
       self.report_button.disabled = False
-      await self.origin.edit_original_message(view=self, suppress_embeds=True)
+      await self.origin.edit_original_response(view=self, suppress_embeds=True)
 
-    @disnake.ui.button(disabled=True, style=disnake.ButtonStyle.gray, emoji='➡️')
-    async def report_button(self, _:disnake.Button, inter:disnake.MessageInteraction):
+    @discord.ui.button(disabled=True, style=discord.ButtonStyle.gray, emoji='➡️')
+    async def report_button(self, _:discord.Button, inter:discord.Interaction):
       """ On click of continue button """
       await inter.response.send_modal(
         self.parent.ReportModal(self.parent, self.message, self.origin)
@@ -133,23 +134,23 @@ class ConfessionsModeration(commands.Cog):
 
   # Modals
 
-  class ReportModal(disnake.ui.Modal):
+  class ReportModal(discord.ui.Modal):
     """ Confirm user input before sending a report """
     def __init__(
         self,
         confessions:"Confessions",
-        message: disnake.Message,
-        origin: disnake.Interaction
+        message: discord.Message,
+        origin: discord.Interaction
     ):
       super().__init__(
         title=confessions.babel(origin, 'report_title'),
         custom_id=f'report_{message.id}',
         components=[
-          disnake.ui.TextInput(
+          discord.ui.TextInput(
             label=confessions.babel(origin, 'report_field'),
             placeholder=confessions.babel(origin, 'report_placeholder'),
             custom_id='report_reason',
-            style=disnake.TextInputStyle.paragraph,
+            style=discord.TextStyle.paragraph,
             min_length=1
           )
         ],
@@ -160,7 +161,7 @@ class ConfessionsModeration(commands.Cog):
       self.message = message
       self.origin = origin
 
-    async def callback(self, inter: disnake.ModalInteraction):
+    async def callback(self, inter: discord.Interaction):
       """ Send report to mod channel as configured """
       if self.confessions.config['report_channel']:
         reportchannel = await self.confessions.safe_fetch_channel(
@@ -171,16 +172,16 @@ class ConfessionsModeration(commands.Cog):
             self.confessions.babel(inter, 'report_failed')
           )
           return
-        embed:disnake.Embed
+        embed:discord.Embed
         if len(self.message.embeds) > 0:
           embed = self.message.embeds[0]
         else:
-          embed = disnake.Embed(description=f'**{self.message.author.name}** {self.message.content}')
+          embed = discord.Embed(description=f'**{self.message.author.name}** {self.message.content}')
         await reportchannel.send(
           self.confessions.babel(
             reportchannel.guild, 'new_report',
             server=f'{inter.guild.name} ({inter.guild.id})',
-            user=f'{inter.author.mention} ({inter.author.name}#{inter.author.discriminator})',
+            user=f'{inter.user.mention} ({inter.user.name}#{inter.user.discriminator})',
             reason=inter.text_values['report_reason']
           ),
           embed=embed,
@@ -194,7 +195,7 @@ class ConfessionsModeration(commands.Cog):
   # Events
 
   @commands.Cog.listener('on_button_click')
-  async def on_confession_review(self, inter:disnake.MessageInteraction):
+  async def on_confession_review(self, inter:discord.Interaction):
     """ Handle approving and denying confessions """
     if not inter.data.custom_id.startswith('pendingconfession_'):
       return
@@ -219,13 +220,13 @@ class ConfessionsModeration(commands.Cog):
         print(f"WARN: Unknown button action '{inter.data.custom_id}'!")
         return
     except CorruptConfessionDataException:
-      await inter.send(self.babel(inter, 'vetcorrupt'))
+      await inter.response.send_message(self.babel(inter, 'vetcorrupt'))
       self.button_lock.remove(inter.data.custom_id)
       return
-    except (disnake.NotFound, disnake.Forbidden):
+    except (discord.NotFound, discord.Forbidden):
       self.button_lock.remove(inter.data.custom_id)
       if accepted:
-        await inter.send(self.babel(
+        await inter.response.send_message(self.babel(
           inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel.id}>"
         ))
         return
@@ -240,12 +241,12 @@ class ConfessionsModeration(commands.Cog):
         await pendingconfession.add_image(attachment=inter.message.attachments[0])
       await pendingconfession.send_confession(inter, perform_checks=False)
 
-    metadata = {'user':inter.author.mention, 'channel':pendingconfession.targetchannel.mention}
+    metadata = {'user':inter.user.mention, 'channel':pendingconfession.targetchannel.mention}
     if accepted:
       msg = self.babel(inter.guild, 'vetaccepted', **metadata)
     else:
       msg = self.babel(inter.guild, 'vetdenied', **metadata)
-    await inter.message.edit(msg, view=None)
+    await inter.message.edit(content=msg, view=None)
     self.button_lock.remove(inter.data.custom_id)
 
     #BABEL: confession_vetting_accepted,confession_vetting_denied
@@ -259,14 +260,14 @@ class ConfessionsModeration(commands.Cog):
         if not pendingconfession.author.dm_channel:
           await pendingconfession.author.create_dm()
         await pendingconfession.author.send(content)
-      except disnake.Forbidden:
+      except discord.Forbidden:
         pass
 
   # Context menu commands
 
   @commands.cooldown(1, 60)
   @commands.message_command(name="Report confession", dm_permission=False)
-  async def report(self, inter:disnake.MessageCommandInteraction):
+  async def report(self, inter:discord.Interaction):
     """ Reports a confession to the bot owners """
     if (
       (
@@ -293,11 +294,12 @@ class ConfessionsModeration(commands.Cog):
 
   # Commands
 
-  @commands.default_member_permissions(moderate_members=True)
-  @commands.slash_command(aliases=['ban'], dm_permission=False)
+  @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.default_permissions(moderate_members=True)
   async def block(
     self,
-    inter:disnake.GuildCommandInteraction,
+    inter:discord.Interaction,
     anonid:Optional[str] = commands.Param(None),
     unblock:Optional[bool] = False
   ):
@@ -314,9 +316,9 @@ class ConfessionsModeration(commands.Cog):
     if anonid is None:
       if banlist_split:
         printedlist = '\n```'+'\n'.join(banlist_split)+'```'
-        await inter.send(self.babel(inter, 'banlist') + printedlist)
+        await inter.response.send_message(self.babel(inter, 'banlist') + printedlist)
       else:
-        await inter.send(self.babel(inter, 'emptybanlist'))
+        await inter.response.send_message(self.babel(inter, 'emptybanlist'))
       return
 
     anonid = anonid.lower()
@@ -325,10 +327,10 @@ class ConfessionsModeration(commands.Cog):
     try:
       int(anonid, 16)
     except ValueError:
-      await inter.send(self.babel(inter, 'invalidanonid'))
+      await inter.response.send_message(self.babel(inter, 'invalidanonid'))
       return
     if anonid in banlist_split and not unblock:
-      await inter.send(self.babel(inter, 'doublebananonid'))
+      await inter.response.send_message(self.babel(inter, 'doublebananonid'))
       return
     #BABEL: nomatchanonid
     #TODO: keeping this string around in case a new way to check is found
@@ -342,7 +344,7 @@ class ConfessionsModeration(commands.Cog):
     self.bot.config.save()
 
     #BABEL: unbansuccess,bansuccess
-    await inter.send(
+    await inter.response.send_message(
       self.babel(inter, ('un' if unblock else '')+'bansuccess', user=anonid)
     )
 

@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import re, time
 from typing import Optional, Union, TYPE_CHECKING
-import disnake
-from disnake.ext import commands
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -73,8 +74,8 @@ class Confessions(commands.Cog):
 
   def generate_list(
     self,
-    user:disnake.User,
-    matches:list[tuple[disnake.TextChannel, ChannelType]],
+    user:discord.User,
+    matches:list[tuple[discord.TextChannel, ChannelType]],
     vetting:bool
   ) -> str:
     """ Returns a formatted list of available confession targets """
@@ -83,18 +84,18 @@ class Confessions(commands.Cog):
     for match in matches:
       targets.append(
         f'{match[1].icon} <#{match[0].id}>' +
-        (' ('+match[0].guild.name+')' if not isinstance(user, disnake.Member) else '')
+        (' ('+match[0].guild.name+')' if not isinstance(user, discord.Member) else '')
       )
     vettingwarning = ('\n\n'+self.babel(user, 'vetting') if vetting else '')
 
     return '\n'.join(targets) + vettingwarning
 
   def scanguild(
-    self, member:disnake.Member
-  ) -> tuple[list[tuple[disnake.TextChannel, ChannelType]], bool]:
+    self, member:discord.Member
+  ) -> tuple[list[tuple[discord.TextChannel, ChannelType]], bool]:
     """ Scans a guild for any targets that a member can use for confessions """
 
-    matches:list[tuple[disnake.TextChannel, ChannelType]] = []
+    matches:list[tuple[discord.TextChannel, ChannelType]] = []
     vetting = False
     guildchannels = get_guildchannels(self.config, member.guild.id)
     for channel in member.guild.channels:
@@ -117,14 +118,14 @@ class Confessions(commands.Cog):
 
   def listavailablechannels(
       self,
-      user:Union[disnake.User, disnake.Member]
-    ) -> tuple[list[tuple[disnake.TextChannel, ChannelType]], bool]:
+      user:Union[discord.User, discord.Member]
+    ) -> tuple[list[tuple[discord.TextChannel, ChannelType]], bool]:
     """
       List all available targets on a server for a member
       List all available targets on all mutual servers for a user
     """
 
-    if isinstance(user, disnake.Member):
+    if isinstance(user, discord.Member):
       matches, vetting = self.scanguild(user)
     else:
       if not self.bot.intents.members:
@@ -141,14 +142,14 @@ class Confessions(commands.Cog):
 
   async def safe_fetch_channel(
     self,
-    inter:disnake.GuildCommandInteraction,
+    inter:discord.Interaction,
     channel_id:int
-  ) -> Optional[disnake.TextChannel]:
+  ) -> Optional[discord.TextChannel]:
     """ Gracefully handles whenever a confession target isn't available """
     try:
       return await self.bot.fetch_channel(channel_id)
-    except disnake.Forbidden:
-      await inter.send(
+    except discord.Forbidden:
+      await inter.response.send_message(
         self.babel(inter, 'missingchannelerr') + ' (fetch)',
         ephemeral=True
       )
@@ -156,23 +157,23 @@ class Confessions(commands.Cog):
 
   # Modals
 
-  class ConfessionModal(disnake.ui.Modal):
+  class ConfessionModal(discord.ui.Modal):
     """ Modal for completing an incomplete confession """
     def __init__(
       self,
       parent:"Confessions",
-      origin:disnake.Interaction,
+      origin:discord.Interaction,
       data:ConfessionData
     ):
       super().__init__(
         title=parent.babel(origin, 'editor_title'),
         custom_id="confession_modal",
         components=[
-          disnake.ui.TextInput(
+          discord.ui.TextInput(
             label=parent.babel(origin, 'editor_message_label'),
             placeholder=parent.babel(origin, 'editor_message_placeholder'),
             custom_id="content",
-            style=disnake.TextInputStyle.paragraph,
+            style=discord.TextStyle.paragraph,
             min_length=1,
             max_length=3900
           )
@@ -182,15 +183,15 @@ class Confessions(commands.Cog):
       self.parent = parent
       self.confession = data
 
-    async def callback(self, inter:disnake.ModalInteraction):
+    async def callback(self, inter:discord.Interaction):
       """ Send the completed confession """
       self.confession.set_content(inter.text_values['content'])
 
       #TODO: This is copy-pasted from /confess. Maybe this check should be in common?
-      matches,_ = self.parent.listavailablechannels(inter.author)
+      matches,_ = self.parent.listavailablechannels(inter.user)
       if self.confession.channeltype == ChannelType.unset():
         # User used /confess in the wrong channel, give them a chance to choose another
-        await inter.send(
+        await inter.response.send_message(
           self.parent.babel(inter, 'channelprompt') +
           (' '+self.parent.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
           view=ChannelSelectView(inter, self.parent, matches, confession=self.confession),
@@ -208,7 +209,7 @@ class Confessions(commands.Cog):
   #	Events
 
   @commands.Cog.listener('on_button_click')
-  async def on_confession_review(self, inter:disnake.MessageInteraction):
+  async def on_confession_review(self, inter:discord.Interaction):
     """ Notify users when handling vetting is not possible """
     if (
       inter.data.custom_id.startswith('pendingconfession_') and
@@ -217,9 +218,9 @@ class Confessions(commands.Cog):
       await inter.response.send_message(self.babel(inter, 'no_moderation'))
 
   @commands.Cog.listener('on_message')
-  async def confession_request(self, msg:disnake.Message):
+  async def confession_request(self, msg:discord.Message):
     """ Handle plain DM messages as confessions """
-    if isinstance(msg.channel, disnake.DMChannel) and msg.author != self.bot.user:
+    if isinstance(msg.channel, discord.DMChannel) and msg.author != self.bot.user:
       if msg.channel in self.ignore:
         self.ignore.remove(msg.channel)
         return
@@ -254,20 +255,20 @@ class Confessions(commands.Cog):
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   @commands.message_command(name="Confession Reply", dm_permission=False)
-  async def confess_message(self, inter:disnake.MessageCommandInteraction):
+  async def confess_message(self, inter:discord.Interaction):
     """ Shorthand to start a confession modal in this channel """
     if inter.target.is_system():
-      await inter.send(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
       return
     await self.confess(inter, None, None, reference=inter.target)
 
   #	Slash commands
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)
-  @commands.slash_command()
+  )
   async def confess(
     self,
-    inter:disnake.GuildCommandInteraction,
+    inter:discord.Interaction,
     content:Optional[str] = commands.Param(default=None, max_length=3900),
     image:Optional[disnake.Attachment] = None,
     **kwargs
@@ -288,22 +289,22 @@ class Confessions(commands.Cog):
       reference = kwargs['reference']
 
     pendingconfession = ConfessionData(self)
-    pendingconfession.create(inter.author, channel, reference=reference)
+    pendingconfession.create(inter.user, channel, reference=reference)
     pendingconfession.set_content(content)
     if image:
       await inter.response.defer(ephemeral=True)
       await pendingconfession.add_image(attachment=image)
 
     # --- From here, all state should be in pendingconfession, not in parameters ---
-    matches,_ = self.listavailablechannels(inter.author)
+    matches,_ = self.listavailablechannels(inter.user)
     if not matches:
-      await inter.send(self.babel(inter, 'inaccessiblelocal'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'inaccessiblelocal'), ephemeral=True)
       return
 
     if pendingconfession.content or pendingconfession.file:
       if pendingconfession.channeltype == ChannelType.unset():
         # User used /confess in the wrong channel, give them a chance to choose another
-        await inter.send(
+        await inter.response.send_message(
           self.babel(inter, 'channelprompt') +
           (' ' + self.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
           view=ChannelSelectView(inter, self, matches, confession=pendingconfession),
@@ -323,10 +324,10 @@ class Confessions(commands.Cog):
       )
 
   @commands.cooldown(1, 1, type=commands.BucketType.user)
-  @commands.slash_command(name='confess-to')
+  name='confess-to')
   async def confess_to(
     self,
-    inter:disnake.GuildCommandInteraction,
+    inter:discord.Interaction,
     channel:str,
     content:Optional[str] = commands.Param(default=None, max_length=3900),
     image:Optional[disnake.Attachment] = None
@@ -350,13 +351,13 @@ class Confessions(commands.Cog):
     raise commands.BadArgument("Channel must be selected from the list")
 
   @confess_to.autocomplete('channel')
-  async def channel_ac(self, inter:disnake.GuildCommandInteraction, search:str):
+  async def channel_ac(self, inter:discord.Interaction, search:str):
     """ Lists available channels, allows searching by name """
-    if not isinstance(inter.author, disnake.Member):
+    if not isinstance(inter.user, discord.Member):
       return [self.bot.babel(inter, 'error', 'noprivatemessage').replace('*','')]
 
     results = []
-    matches, _ = self.scanguild(inter.author)
+    matches, _ = self.scanguild(inter.user)
     for match in matches:
       if search in match[0].name:
         results.append(f"{match[1].icon} #{match[0].name} ({match[0].id})")
@@ -364,32 +365,32 @@ class Confessions(commands.Cog):
       ['this list is incomplete, use /list to see all'] if len(results) > 25 else []
     )
 
-  @commands.slash_command()
-  async def list(self, inter:disnake.GuildCommandInteraction):
+  )
+  async def list(self, inter:discord.Interaction):
     """
     List all anonymous channels available here
     """
     try:
-      matches, vetting = self.listavailablechannels(inter.author)
+      matches, vetting = self.listavailablechannels(inter.user)
     except NoMemberCacheError:
-      await inter.send(self.babel(inter, 'dmconfessiondisabled'))
+      await inter.response.send_message(self.babel(inter, 'dmconfessiondisabled'))
       return
 
     # Warn users when the channel list isn't complete
-    local = isinstance(inter.author, disnake.Member)
+    local = isinstance(inter.user, discord.Member)
     if not self.bot.is_ready() and not local:
-      await inter.send(self.babel(inter, 'cachebuilding'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'cachebuilding'), ephemeral=True)
     elif len(matches) == 0:
-      await inter.send(
+      await inter.response.send_message(
         self.babel(inter, 'inaccessiblelocal' if local else 'inaccessible'),
         ephemeral=True
       )
     # Send the list of channels, complete or not
     if len(matches) > 0:
       #BABEL: listtitlelocal,listtitle
-      await inter.send((
+      await inter.response.send_message((
         self.babel(inter, 'listtitlelocal' if local else 'listtitle') + '\n' +
-        self.generate_list(inter.author, matches, vetting) +
+        self.generate_list(inter.user, matches, vetting) +
         (
           # Hint on how to confess to a feedback channel
           '\n\n' + self.babel(inter, 'confess_to_feedback')

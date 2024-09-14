@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
-import disnake
-from disnake.ext import commands
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -36,10 +37,10 @@ class ConfessionsMarketplace(commands.Cog):
 
   # Modals
 
-  class OfferModal(disnake.ui.Modal):
+  class OfferModal(discord.ui.Modal):
     """ Modal that appears when a user wants to make an offer on a listing """
     def __init__(
-      self, parent:"ConfessionsMarketplace", origin:disnake.MessageInteraction
+      self, parent:"ConfessionsMarketplace", origin:discord.Interaction
     ):
       self.parent = parent
       self.origin = origin
@@ -47,35 +48,35 @@ class ConfessionsMarketplace(commands.Cog):
         title=parent.babel(origin, 'button_offer', listing=origin.message.embeds[0].title),
         custom_id="listing_offer",
         components=[
-          disnake.ui.TextInput(
+          discord.ui.TextInput(
             label=parent.babel(origin, 'offer_price_label'),
             placeholder=parent.babel(origin, 'offer_price_example'),
             custom_id='offer_price',
-            style=disnake.TextInputStyle.single_line,
+            style=discord.TextStyle.short,
             min_length=3,
             max_length=30
           ),
-          disnake.ui.TextInput(
+          discord.ui.TextInput(
             label=parent.babel(origin, 'offer_method_label'),
             placeholder=parent.babel(origin, 'offer_method_example'),
             custom_id='offer_method',
-            style=disnake.TextInputStyle.single_line,
+            style=discord.TextStyle.short,
             min_length=3,
             max_length=30
           )
         ]
       )
 
-    async def callback(self, inter:disnake.ModalInteraction):
+    async def callback(self, inter:discord.Interaction):
       guildchannels = get_guildchannels(self.parent.config, inter.guild_id)
       if (
         inter.channel_id not in guildchannels or
         guildchannels[inter.channel_id] != ChannelType.marketplace()
       ):
-        await inter.send(self.parent.babel(inter, 'nosendchannel'), ephemeral=True)
+        await inter.response.send_message(self.parent.babel(inter, 'nosendchannel'), ephemeral=True)
         return
 
-      embed = disnake.Embed(
+      embed = discord.Embed(
         title=self.parent.babel(self.origin, 'offer_for', listing=self.origin.message.embeds[0].title)
       )
       embed.add_field('Offer price:', inter.text_values['offer_price'], inline=True)
@@ -83,7 +84,7 @@ class ConfessionsMarketplace(commands.Cog):
       embed.set_footer(text=self.parent.babel(inter, 'shop_disclaimer'))
 
       pendingconfession = ConfessionData(self.parent.bot.cogs['Confessions'])
-      pendingconfession.create(inter.author, inter.channel, reference=self.origin.message)
+      pendingconfession.create(inter.user, inter.channel, reference=self.origin.message)
       pendingconfession.set_content(embed=embed)
       pendingconfession.channeltype_flags = 2
 
@@ -99,7 +100,7 @@ class ConfessionsMarketplace(commands.Cog):
   # Events
 
   @commands.Cog.listener('on_button_click')
-  async def check_button_click(self, inter:disnake.MessageInteraction):
+  async def check_button_click(self, inter:discord.Interaction):
     """ Check the button press events and handle relevant ones """
     if inter.data.custom_id.startswith('confessionmarketplace_offer'):
       return await self.on_create_offer(inter)
@@ -108,40 +109,42 @@ class ConfessionsMarketplace(commands.Cog):
     if inter.data.custom_id.startswith('confessionmarketplace_withdraw'):
       return await self.on_withdraw(inter)
 
-  async def on_create_offer(self, inter:disnake.MessageInteraction):
+  async def on_create_offer(self, inter:discord.Interaction):
     """ Open the offer form when a user wants to make an offer on a listing """
     if len(inter.message.embeds) == 0:
-      await inter.send(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
       return
     if len(inter.data.custom_id) < 30:
-      await inter.send(self.babel(inter, 'error_old_offer'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'error_old_offer'), ephemeral=True)
       return
     id_seller = inter.data.custom_id[28:]
     id_buyer = (
-      self.bot.cogs['Confessions'].crypto.encrypt(inter.author.id.to_bytes(8, 'big')).decode('ascii')
+      self.bot.cogs['Confessions'].crypto.encrypt(inter.user.id.to_bytes(8, 'big')).decode('ascii')
     )
     if id_seller == id_buyer:
-      await inter.send(self.babel(inter, 'error_self_offer'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'error_self_offer'), ephemeral=True)
       return
     await inter.response.send_modal(self.OfferModal(self, inter))
 
-  async def on_accept_offer(self, inter:disnake.MessageInteraction):
+  async def on_accept_offer(self, inter:discord.Interaction):
     listing = await inter.channel.fetch_message(inter.message.reference.message_id)
     if len(listing.embeds) == 0 or len(inter.message.embeds) == 0:
-      await inter.send(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
       return
     if len(inter.data.custom_id) < 31:
-      await inter.send(self.babel(inter, 'error_old_offer'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'error_old_offer'), ephemeral=True)
       return
     encrypted_data = inter.data.custom_id[29:].split('_')
 
     seller_id = int.from_bytes(self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[0]), 'big')
     buyer_id = int.from_bytes(self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[1]), 'big')
-    if seller_id == inter.author.id:
-      seller = inter.author
+    if seller_id == inter.user.id:
+      seller = inter.user
       buyer = await inter.guild.getch_member(buyer_id)
     else:
-      await inter.send(self.babel(inter, 'error_wrong_person', buy=True), ephemeral=True)
+      await inter.response.send_message(
+        self.babel(inter, 'error_wrong_person', buy=True), ephemeral=True
+      )
       return
     receipts = [listing.embeds[0], inter.message.embeds[0]]
     await inter.response.defer()
@@ -159,11 +162,13 @@ class ConfessionsMarketplace(commands.Cog):
     ), embeds=receipts)
     await inter.message.edit(content=self.babel(inter, 'offer_accepted'), components=None)
 
-  async def on_withdraw(self, inter:disnake.MessageInteraction):
+  async def on_withdraw(self, inter:discord.Interaction):
     encrypted_data = inter.data.custom_id[31:].split('_')
     owner_id = int.from_bytes(self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[-1]), 'big')
-    if owner_id != inter.author.id:
-      await inter.send(self.babel(inter, 'error_wrong_person', buy=False), ephemeral=True)
+    if owner_id != inter.user.id:
+      await inter.response.send_message(
+        self.babel(inter, 'error_wrong_person', buy=False), ephemeral=True
+      )
       return
     if len(encrypted_data) == 1: # listing
       await inter.message.edit(
@@ -180,16 +185,16 @@ class ConfessionsMarketplace(commands.Cog):
 
   # Slash commands
 
+  @app_commands.command()
   @commands.cooldown(1, 1, type=commands.BucketType.user)
-  @commands.slash_command()
   async def sell(
     self,
-    inter: disnake.GuildCommandInteraction,
+    inter: discord.Interaction,
     title: str = commands.Param(max_length=80),
     starting_price: str = commands.Param(max_length=10),
     payment_methods: str = commands.Param(min_length=3, max_length=60),
     description: Optional[str] = commands.Param(default=None, max_length=1000),
-    image: Optional[disnake.Attachment] = None
+    image: Optional[discord.Attachment] = None
   ):
     """
       Start an anonymous listing
@@ -204,22 +209,22 @@ class ConfessionsMarketplace(commands.Cog):
     """
     guildchannels = get_guildchannels(self.config, inter.guild_id)
     if inter.channel_id not in guildchannels:
-      await inter.send(self.babel(inter, 'nosendchannel'), ephemeral=True)
+      await inter.response.send_message(self.babel(inter, 'nosendchannel'), ephemeral=True)
       return
     if guildchannels[inter.channel_id] != ChannelType.marketplace():
-      await inter.send(self.babel(
+      await inter.response.send_message(self.babel(
         inter, 'wrongcommand', cmd='confess', channel=inter.channel.mention
       ), ephemeral=True)
       return
 
     clean_desc = description.replace('# ', '') if description else '' # TODO: do this with regex
-    embed = disnake.Embed(title=title, description=clean_desc)
+    embed = discord.Embed(title=title, description=clean_desc)
     embed.add_field('Starting price:', starting_price, inline=True)
     embed.add_field('Accepted payment methods:', payment_methods, inline=True)
     embed.set_footer(text=self.babel(inter, 'shop_disclaimer'))
 
     pendingconfession = ConfessionData(self.bot.cogs['Confessions'])
-    pendingconfession.create(inter.author, inter.channel)
+    pendingconfession.create(inter.user, inter.channel)
     pendingconfession.set_content(embed=embed)
     if image:
       await inter.response.defer(ephemeral=True)
@@ -235,22 +240,22 @@ class ConfessionsMarketplace(commands.Cog):
 
   # Special ChannelType code
   async def on_channeltype_send(
-    self, inter:disnake.Interaction, data:ConfessionData
+    self, inter:discord.Interaction, data:ConfessionData
   ) -> dict[str] | bool:
     """ Add some custom buttons below messages headed for a marketplace channnel """
     if data.channeltype_flags == 1:
       id_seller = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big')).decode('ascii')
       return {
         'use_webhook': False,
-        'components': [disnake.ui.Button(
+        'components': [discord.ui.Button(
           label=self.babel(inter.guild, 'button_offer', listing=None),
           custom_id='confessionmarketplace_offer_'+id_seller,
           emoji='💵',
-          style=disnake.ButtonStyle.blurple
-        ), disnake.ui.Button(
+          style=discord.ButtonStyle.blurple
+        ), discord.ui.Button(
           label=self.babel(inter.guild, 'button_withdraw', sell=True),
           custom_id='confessionmarketplace_withdraw_'+id_seller,
-          style=disnake.ButtonStyle.grey
+          style=discord.ButtonStyle.grey
         )]
       }
     elif data.channeltype_flags == 2:
@@ -259,15 +264,15 @@ class ConfessionsMarketplace(commands.Cog):
       id_buyer = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big')).decode('ascii')
       return {
         'use_webhook': False,
-        'components': [disnake.ui.Button(
+        'components': [discord.ui.Button(
           label=self.babel(inter.guild, 'button_accept', listing=None),
           custom_id='confessionmarketplace_accept_'+id_seller+'_'+id_buyer,
           emoji='✅',
-          style=disnake.ButtonStyle.gray
-        ), disnake.ui.Button(
+          style=discord.ButtonStyle.gray
+        ), discord.ui.Button(
           label=self.babel(inter.guild, 'button_withdraw', sell=False),
           custom_id='confessionmarketplace_withdraw_'+id_buyer,
-          style=disnake.ButtonStyle.grey
+          style=discord.ButtonStyle.grey
         )]
       }
     else:

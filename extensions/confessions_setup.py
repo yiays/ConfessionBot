@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-import disnake
-from disnake.ext import commands
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -50,9 +51,9 @@ class ConfessionsSetup(commands.Cog):
       if not bot.quiet:
         print(" - WARN: Without Confessions enabled, users won't be able to confess!")
 
-  def controlpanel_settings(self, inter:disnake.Interaction):
+  def controlpanel_settings(self, inter:discord.Interaction):
     # ControlPanel integration
-    out = [Listable(self.SCOPE, 'dm_notifications', 'dm_notifications', str(inter.author.id))]
+    out = [Listable(self.SCOPE, 'dm_notifications', 'dm_notifications', str(inter.user.id))]
     if inter.guild is None:
       return out
     if inter.permissions.administrator:
@@ -64,20 +65,20 @@ class ConfessionsSetup(commands.Cog):
       ]
     return out
 
-  def controlpanel_theme(self) -> tuple[str, disnake.ButtonStyle]:
+  def controlpanel_theme(self) -> tuple[str, discord.ButtonStyle]:
     # Controlpanel custom theme for buttons
-    return (self.SCOPE, disnake.ButtonStyle.blurple)
+    return (self.SCOPE, discord.ButtonStyle.blurple)
 
   class SetupView(ChannelSelectView):
     """ Configure channels and shortcuts to configure guild settings """
-    current_channel: disnake.TextChannel
+    current_channel: discord.TextChannel
     current_mode: ChannelType
 
     def __init__(
       self,
-      inter:disnake.GuildCommandInteraction,
+      inter:discord.Interaction,
       parent:ConfessionsSetup,
-      channel:disnake.TextChannel
+      channel:discord.TextChannel
     ):
       """
         A SetupView extends upon ChannelSelectView
@@ -90,7 +91,7 @@ class ConfessionsSetup(commands.Cog):
       self.channel_selector.callback = self.channel_selector_override
       self.channel_selector.placeholder = self.parent.babel(inter, 'setup_placeholder')
       self.mode_selector.options = [
-        disnake.SelectOption(
+        discord.SelectOption(
           label=mode.localname(babel=parent.bot.babel, target=inter, long=False),
           value=mode.value,
           emoji=mode.icon
@@ -100,10 +101,10 @@ class ConfessionsSetup(commands.Cog):
       self.remove_item(self.send_button)
       self.help.label = parent.babel(inter, 'setup_help')
       if 'ControlPanel' in parent.bot.cogs:
-        linkbutton = disnake.ui.Button(
+        linkbutton = discord.ui.Button(
           custom_id='controlpanel',
           label=parent.babel(inter, 'setup_controlpanel'),
-          style=disnake.ButtonStyle.grey,
+          style=discord.ButtonStyle.grey,
           emoji='💡',
           row=4
         )
@@ -116,20 +117,20 @@ class ConfessionsSetup(commands.Cog):
       self.update_state()
 
     def regenerate_matches(
-      self, parent:ConfessionsSetup, guild:disnake.Guild
-    ) -> tuple[disnake.TextChannel, ChannelType]:
+      self, parent:ConfessionsSetup, guild:discord.Guild
+    ) -> tuple[discord.TextChannel, ChannelType]:
       """ Create a list of all channels on the server sorted by categories and position """
       if len(guild.channels) == 0:
         return []
       botmember = guild.get_member(parent.bot.user.id)
       guildchannels = get_guildchannels(parent.config, guild.id)
       out = [(c, guildchannels.get(c.id, ChannelType.unset())) for c in guild.channels if (
-        isinstance(c, disnake.TextChannel) and c.permissions_for(botmember).read_messages
+        isinstance(c, discord.TextChannel) and c.permissions_for(botmember).read_messages
       )]
       out.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
       return out
 
-    async def controlpanel_shortcut(self, inter:disnake.MessageInteraction):
+    async def controlpanel_shortcut(self, inter:discord.Interaction):
       """
         Invite the user to change server-wide settings in the controlpanel
 
@@ -141,25 +142,25 @@ class ConfessionsSetup(commands.Cog):
       await self.parent.bot.cogs['ControlPanel'].controlpanel(inter)
 
     async def set(
-      self, inter:disnake.MessageInteraction, channel:disnake.TextChannel, mode:ChannelType
+      self, inter:discord.Interaction, channel:discord.TextChannel, mode:ChannelType
     ) -> bool:
       """ Tries to change settings as requested and handles all rules and requirements """
       guildchannels = get_guildchannels(self.parent.config, channel.guild.id)
       wastype = int(guildchannels.get(channel.id, ChannelType.unset()))
       if mode == ChannelType.unset():
         if wastype == ChannelType.unset():
-          await inter.send(self.parent.babel(inter, 'unsetfailure'), ephemeral=True)
+          await inter.response.send_message(self.parent.babel(inter, 'unsetfailure'), ephemeral=True)
           return False
         guildchannels.pop(channel.id)
       elif mode == ChannelType.vetting():
         if 'ConfessionsModeration' not in self.parent.bot.cogs:
-          await inter.send(self.parent.babel(inter, 'no_moderation'), ephemeral=True)
+          await inter.response.send_message(self.parent.babel(inter, 'no_moderation'), ephemeral=True)
           return False
         if findvettingchannel(guildchannels):
-          await inter.send(self.parent.babel(inter, 'singlechannel'), ephemeral=True)
+          await inter.response.send_message(self.parent.babel(inter, 'singlechannel'), ephemeral=True)
           return False
       if wastype == mode:
-        await inter.send(self.parent.babel(inter, 'no_change'), ephemeral=True)
+        await inter.response.send_message(self.parent.babel(inter, 'no_change'), ephemeral=True)
         return False
       if mode != ChannelType.unset():
         guildchannels[channel.id] = mode
@@ -177,7 +178,7 @@ class ConfessionsSetup(commands.Cog):
           self.parent.babel(inter.guild, 'setundo' if mode != ChannelType.unset() else 'unsetundo') +
           ('\n'+self.parent.babel(inter.guild, 'setcta') if mode != ChannelType.unset() else '')
         )
-      except disnake.Forbidden:
+      except discord.Forbidden:
         pass
       # Update appearance of SetupView to reflect changes
       self.current_mode = mode
@@ -208,7 +209,7 @@ class ConfessionsSetup(commands.Cog):
           int(option.value) == modeval
         )
 
-    async def update_message(self, inter:disnake.MessageInteraction):
+    async def update_message(self, inter:discord.Interaction):
       modename = self.current_mode.localname(self.parent.bot.babel, inter)
       self.timeout = 180
       self.help.disabled = True
@@ -220,19 +221,19 @@ class ConfessionsSetup(commands.Cog):
         + '\n' + self.parent.babel(inter, 'state_cta')
       ), view=self)
 
-    async def channel_selector_override(self, inter:disnake.MessageInteraction):
+    async def channel_selector_override(self, inter:discord.Interaction):
       """ Update the message to preview the selected target """
       if inter.user != self.origin.author:
-        await inter.send(self.parent.bot.babel(inter, 'error', 'wronguser'))
+        await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
       self.send_button.disabled = False
       try:
         self.current_channel = await self.parent.bot.fetch_channel(int(inter.values[0]))
-      except disnake.Forbidden:
+      except discord.Forbidden:
         self.current_mode = ChannelType.unset()
         self.update_state()
         await self.update_message(inter)
-        await inter.send(
+        await inter.response.send_message(
           content=self.parent.babel(inter, 'setup_state_missing', channel_id=inter.values[0]),
           ephemeral=True
         )
@@ -243,33 +244,33 @@ class ConfessionsSetup(commands.Cog):
       self.update_state()
       await self.update_message(inter)
 
-    @disnake.ui.button(emoji='❓', row=4)
-    async def help(self, _:disnake.ui.Button, inter:disnake.MessageInteraction):
+    @discord.ui.button(emoji='❓', row=4)
+    async def help(self, _:discord.ui.Button, inter:discord.Interaction):
       self.update_state()
       await self.update_message(inter)
 
-    @disnake.ui.button(emoji='🟢', row=4)
-    async def toggle_anon_ids(self, _:disnake.ui.Button, inter:disnake.MessageInteraction):
+    @discord.ui.button(emoji='🟢', row=4)
+    async def toggle_anon_ids(self, _:discord.ui.Button, inter:discord.Interaction):
       if self.current_mode.value in ChannelType.SWAPS.keys():
         self.current_mode = ChannelType(ChannelType.SWAPS[self.current_mode.value])
         await self.set(inter, self.current_channel, self.current_mode)
 
-    @disnake.ui.select()
-    async def mode_selector(self, _:disnake.ui.Select, inter:disnake.MessageInteraction):
+    @discord.ui.select()
+    async def mode_selector(self, _:discord.ui.Select, inter:discord.Interaction):
       if inter.user != self.origin.author:
-        await inter.send(self.parent.bot.babel(inter, 'error', 'wronguser'))
+        await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
 
       await self.set(inter, self.current_channel, ChannelType(int(inter.values[0])))
 
     async def on_timeout(self):
       for component in self.children:
-        if isinstance(component, (disnake.ui.Button, disnake.ui.Select)):
+        if isinstance(component, (discord.ui.Button, discord.ui.Select)):
           component.disabled = True
       try:
-        msg = await self.origin.original_message()
+        msg = await self.origin.original_response()
         await msg.edit(view=self)
-      except disnake.HTTPException:
+      except discord.HTTPException:
         pass
 
   # Events
@@ -307,7 +308,7 @@ class ConfessionsSetup(commands.Cog):
       print("Completed lost guild search")
 
   @commands.Cog.listener('on_guild_remove')
-  async def guild_cleanup(self, guild:disnake.Guild):
+  async def guild_cleanup(self, guild:discord.Guild):
     """ Automatically remove data related to a guild on removal """
     removed = False
     for key in list(k for k in self.config if k.startswith(str(guild.id)+'_')):
@@ -318,7 +319,7 @@ class ConfessionsSetup(commands.Cog):
       print("Removed guild", guild.id, "from config.")
 
   @commands.Cog.listener('on_guild_channel_delete')
-  async def channel_cleanup(self, channel:disnake.TextChannel):
+  async def channel_cleanup(self, channel:discord.TextChannel):
     """ Automatically remove data related to a channel on delete """
     guildchannels = get_guildchannels(self.config, channel.guild.id)
     if channel.id in guildchannels:
@@ -330,10 +331,11 @@ class ConfessionsSetup(commands.Cog):
 
   # Commands
 
-  @commands.default_member_permissions(manage_channels=True)
+  @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.default_permissions(manage_channels=True)
   @commands.bot_has_permissions(read_messages=True)
-  @commands.slash_command(dm_permission=False)
-  async def setup(self, inter:disnake.GuildCommandInteraction):
+  async def setup(self, inter:discord.Interaction):
     """
       Change confessions settings on this server
     """
@@ -342,23 +344,24 @@ class ConfessionsSetup(commands.Cog):
       self.babel(inter, 'setup_start'), view=self.SetupView(inter, self, channel), ephemeral=True
     )
 
-  @commands.default_member_permissions(moderate_members=True)
-  @commands.slash_command(dm_permission=False)
-  async def shuffle(self, inter:disnake.GuildCommandInteraction):
+  @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.default_permissions(moderate_members=True)
+  async def shuffle(self, inter:discord.Interaction):
     """
       Change all anon-ids on a server
     """
     if str(inter.guild.id)+'_banned' in self.config:
-      await inter.send(self.babel(inter, 'shufflebanresetwarning'))
+      await inter.response.send_message(self.babel(inter, 'shufflebanresetwarning'))
 
-      def check(m:disnake.Message):
+      def check(m:discord.Message):
         return m.channel == inter.channel and\
-               m.author == inter.author and\
+               m.author == inter.user and\
                m.content.lower() == 'yes'
       try:
         await self.bot.wait_for('message', check=check, timeout=30)
       except asyncio.TimeoutError:
-        await inter.send(self.babel(inter, 'timeouterror'))
+        await inter.response.send_message(self.babel(inter, 'timeouterror'))
       else:
         self.config.pop(str(inter.guild.id)+'_banned')
 
@@ -366,11 +369,12 @@ class ConfessionsSetup(commands.Cog):
     self.bot.config.set(self.SCOPE, str(inter.guild.id)+'_shuffle', str(shuffle + 1))
     self.bot.config.save()
 
-    await inter.send(self.babel(inter, 'shufflesuccess'))
+    await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
 
-  @commands.default_member_permissions(administrator=True)
-  @commands.slash_command(dm_permission=False)
-  async def imagesupport(self, inter:disnake.GuildCommandInteraction):
+  @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.default_permissions(administrator=True)
+  async def imagesupport(self, inter:discord.Interaction):
     """
       Enable or disable images in confessions
     """
@@ -378,9 +382,10 @@ class ConfessionsSetup(commands.Cog):
     if 'Help' in self.bot.cogs:
       await self.bot.cogs['Help'].help(inter, 'imagesupport', ephemeral=True)
 
-  @commands.default_member_permissions(administrator=True)
-  @commands.slash_command(dm_permission=False)
-  async def botmod(self, inter:disnake.GuildCommandInteraction):
+  @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.default_permissions(administrator=True)
+  async def botmod(self, inter:discord.Interaction):
     """
       Grant or take away botmod powers from a user
     """
