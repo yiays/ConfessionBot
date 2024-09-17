@@ -371,27 +371,6 @@ class ConfessionsSetup(commands.Cog):
 
     await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
 
-  @app_commands.command()
-  @app_commands.allowed_contexts(guilds=True, private_channels=False)
-  @app_commands.default_permissions(administrator=True)
-  async def imagesupport(self, inter:discord.Interaction):
-    """
-      Enable or disable images in confessions
-    """
-    #TODO: delete this in time as users adjust
-    if 'Help' in self.bot.cogs:
-      await self.bot.cogs['Help'].help(inter, 'imagesupport', ephemeral=True)
-
-  @app_commands.command()
-  @app_commands.allowed_contexts(guilds=True, private_channels=False)
-  @app_commands.default_permissions(administrator=True)
-  async def botmod(self, inter:discord.Interaction):
-    """
-      Grant or take away botmod powers from a user
-    """
-    #TODO: delete this in time as users adjust
-    await inter.response.send_message(self.babel(inter, 'botmod_removed'))
-
 
 def setup(bot:MerelyBot) -> None:
   """ Bind this cog to the bot """
