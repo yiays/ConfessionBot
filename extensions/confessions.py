@@ -90,7 +90,7 @@ class Confessions(commands.Cog):
       await inter.response.send_message(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
       return
     data = ConfessionData(self)
-    data.create(inter.user, inter.channel, message)
+    data.create(author=inter.user, targetchannel=inter.channel, reference=message)
     await self.verify_and_send(inter, data)
 
   #	Utility functions
@@ -313,7 +313,7 @@ class Confessions(commands.Cog):
       Send an anonymous message to this channel
     """
     pendingconfession = ConfessionData(self)
-    pendingconfession.create(inter.user, inter.channel)
+    pendingconfession.create(author=inter.user, targetchannel=inter.channel)
     pendingconfession.set_content(content)
     if image:
       await inter.response.defer(ephemeral=True)
@@ -340,7 +340,7 @@ class Confessions(commands.Cog):
     if channel.isdigit() and int(channel):
       if targetchannel := await self.safe_fetch_channel(inter, int(channel)):
         pendingconfession = ConfessionData(self)
-        pendingconfession.create(inter.user, targetchannel)
+        pendingconfession.create(author=inter.user, targetchannel=targetchannel)
         pendingconfession.set_content(content)
         if image:
           await inter.response.defer(ephemeral=True)

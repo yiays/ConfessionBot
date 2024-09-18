@@ -300,7 +300,7 @@ class ChannelSelectView(discord.ui.View):
         await self.confession.add_image(attachment=self.origin.attachments[0])
     else:
       # Override targetchannel as this has changed
-      self.confession.create(author=inter.user, targetchannel=self.selection)
+      self.confession.create(targetchannel=self.selection)
 
     if vetting := await self.confession.check_vetting(inter):
       await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
@@ -482,16 +482,20 @@ class ConfessionData:
 
   def create(
     self,
-    author:discord.User,
-    targetchannel:discord.TextChannel,
-    reference:Optional[discord.Message] = None
+    *,
+    author:discord.User | None = None,
+    targetchannel:discord.TextChannel | None = None,
+    reference:discord.Message | None = None
   ):
-    self.author = author
-    self.targetchannel = targetchannel
-    self.anonid = self.get_anonid(targetchannel.guild.id, self.author.id)
-    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
-    self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset())
-    self.reference_id = reference.id if reference else 0
+    if author:
+      self.author = author
+    if targetchannel:
+      self.targetchannel = targetchannel
+      self.anonid = self.get_anonid(targetchannel.guild.id, self.author.id)
+      guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
+      self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset())
+    if reference:
+      self.reference_id = reference.id if reference else 0
 
   def set_content(self, content:Optional[str] = '', *, embed:Optional[discord.Embed] = None):
     self.content = content
@@ -708,13 +712,36 @@ class ConfessionData:
     # Create kwargs based on state
     if self.file:
       kwargs['file'] = self.file
-    if self.reference_id and channel == self.targetchannel:
-      use_webhook = False
-      kwargs['reference'] = discord.MessageReference(
-        message_id=self.reference_id,
-        channel_id=channel.id,
-        guild_id=channel.guild.id
-      )
+    if self.reference_id:
+      # A best effort to always show replies, even if Discord's API doesn't allow for it
+      if channel == self.targetchannel:
+        # Discord does not allow webhooks to reply, disable it
+        use_webhook = False
+        kwargs['reference'] = discord.MessageReference(
+          message_id=self.reference_id,
+          channel_id=channel.id,
+          guild_id=channel.guild.id
+        )
+      else:
+        # Discord does not allow replies to span multiple channels, reference in plaintext instead
+        #TODO: this doesn't seem to be working
+        reference = None
+        for rchannel in channel.guild.text_channels:
+          # There could be as many as 500 channels, so try and slim down the number of requests
+          # This feature is very demanding on the API, hopefully this is fine because it shouldn't
+          #   happen often
+          try:
+            if (
+              rchannel.permissions_for(channel.guild.get_member(self.bot.user.id)).read_messages and
+              rchannel.permissions_for(channel.guild.get_member(self.author.id)).read_messages
+            ):
+              reference = await rchannel.fetch_message(self.reference_id)
+              break
+          except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            continue
+        if reference:
+          use_webhook = False
+          preface = self.babel(channel.guild, 'reply_to', reference=reference.jump_url)
 
     # Send the confession
     if use_webhook:
