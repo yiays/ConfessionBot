@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-import re, time
+import time
 from typing import Optional, Union, TYPE_CHECKING
 import discord
 from discord import app_commands
@@ -69,6 +69,29 @@ class Confessions(commands.Cog):
     self.crypto.key = self.config['secret']
     self.ignore = set()
     self.confession_cooldown = dict()
+
+    self.confess_reply = app_commands.ContextMenu(
+      name="Confession Reply",
+      allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
+      allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
+      callback=self.confess_reply_callback
+    )
+    bot.tree.add_command(self.confess_reply)
+
+  async def cog_unload(self):
+    self.bot.tree.remove_command(self.confess_reply.name, type=discord.AppCommandType.message)
+
+  # Context menu commands
+
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
+  async def confess_reply_callback(self, inter:discord.Interaction, message:discord.Message):
+    """ Start a confession in this channel replying to this message """
+    if message.is_system():
+      await inter.response.send_message(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
+      return
+    data = ConfessionData(self)
+    data.create(inter.user, inter.channel, message)
+    await self.verify_and_send(inter, data)
 
   #	Utility functions
 
@@ -155,6 +178,44 @@ class Confessions(commands.Cog):
       )
       return None
 
+  async def verify_and_send(
+    self,
+    inter:discord.Interaction,
+    data:ConfessionData | None = None
+  ):
+    """ Ensure Confession is in a valid state to send and handle all contingencies """
+    send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
+
+    matches,_ = self.listavailablechannels(inter.user)
+    if not matches:
+      await send(self.babel(inter, 'inaccessiblelocal'), ephemeral=True)
+      return
+
+    if data.content or data.file:
+      if data.channeltype == ChannelType.unset():
+        # User chose an invalid channel, give them a chance to choose another
+        await send(
+          self.babel(inter, 'channelprompt') +
+          (' '+self.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
+          view=ChannelSelectView(inter, self, matches, confession=data),
+          ephemeral=True
+        )
+        return
+
+      # Check for vetting
+      if vettingchannel := await data.check_vetting(inter):
+        await self.bot.cogs['ConfessionsModeration'].send_vetting(inter, data, vettingchannel)
+        return
+      if vettingchannel is False:
+        return
+
+      # Let ConfessionData take it from here
+      await data.send_confession(inter, success_message=True)
+
+    else:
+      # User never input any message, give them a paragraph editor
+      await inter.response.send_modal(self.ConfessionModal(self, inter, data))
+
   # Modals
 
   class ConfessionModal(discord.ui.Modal):
@@ -167,52 +228,35 @@ class Confessions(commands.Cog):
     ):
       super().__init__(
         title=parent.babel(origin, 'editor_title'),
-        custom_id="confession_modal",
-        components=[
-          discord.ui.TextInput(
-            label=parent.babel(origin, 'editor_message_label'),
-            placeholder=parent.babel(origin, 'editor_message_placeholder'),
-            custom_id="content",
-            style=discord.TextStyle.paragraph,
-            min_length=1,
-            max_length=3900
-          )
-        ]
+        custom_id="confession_modal"
       )
+      self.content = discord.ui.TextInput(
+        label=parent.babel(origin, 'editor_message_label'),
+        placeholder=parent.babel(origin, 'editor_message_placeholder'),
+        custom_id="content",
+        style=discord.TextStyle.paragraph,
+        min_length=1,
+        max_length=3900
+      )
+      self.add_item(self.content)
 
       self.parent = parent
       self.confession = data
 
-    async def callback(self, inter:discord.Interaction):
+    async def on_submit(self, inter:discord.Interaction):
       """ Send the completed confession """
-      self.confession.set_content(inter.text_values['content'])
-
-      #TODO: This is copy-pasted from /confess. Maybe this check should be in common?
-      matches,_ = self.parent.listavailablechannels(inter.user)
-      if self.confession.channeltype == ChannelType.unset():
-        # User used /confess in the wrong channel, give them a chance to choose another
-        await inter.response.send_message(
-          self.parent.babel(inter, 'channelprompt') +
-          (' '+self.parent.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
-          view=ChannelSelectView(inter, self.parent, matches, confession=self.confession),
-          ephemeral=True
-        )
-        return
-
-      if vetting := await self.confession.check_vetting(inter):
-        await inter.bot.cogs['ConfessionsModeration'].send_vetting(inter, self.confession, vetting)
-        return
-      if vetting is False:
-        return
-      await self.confession.send_confession(inter, success_message=True)
+      self.confession.set_content(self.content.value)
+      await self.parent.verify_and_send(inter, data=self.confession)
 
   #	Events
 
-  @commands.Cog.listener('on_button_click')
+  @commands.Cog.listener('on_interaction')
   async def on_confession_review(self, inter:discord.Interaction):
     """ Notify users when handling vetting is not possible """
+    if inter.type != discord.InteractionType.component:
+      return
     if (
-      inter.data.custom_id.startswith('pendingconfession_') and
+      inter.data.get('custom_id').startswith('pendingconfession_') and
       'ConfessionsModeration' not in self.bot.cogs
     ):
       await inter.response.send_message(self.babel(inter, 'no_moderation'))
@@ -251,102 +295,57 @@ class Confessions(commands.Cog):
         view=ChannelSelectView(msg, self, matches)
       )
 
-  # Context menu commands
-
-  @commands.cooldown(1, 1, type=commands.BucketType.user)
-  @commands.message_command(name="Confession Reply", dm_permission=False)
-  async def confess_message(self, inter:discord.Interaction):
-    """ Shorthand to start a confession modal in this channel """
-    if inter.target.is_system():
-      await inter.response.send_message(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
-      return
-    await self.confess(inter, None, None, reference=inter.target)
-
   #	Slash commands
 
-  @commands.cooldown(1, 1, type=commands.BucketType.user)
+  @app_commands.command()
+  @app_commands.describe(
+    content="The text of your anonymous message, leave blank for a paragraph editor",
+    image="An optional image that appears below the text"
   )
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess(
     self,
     inter:discord.Interaction,
-    content:Optional[str] = commands.Param(default=None, max_length=3900),
-    image:Optional[disnake.Attachment] = None,
-    **kwargs
+    content:Optional[app_commands.Range[str, 0, 3900]] = None,
+    image:Optional[discord.Attachment] = None
   ):
     """
-    Send an anonymous message to this channel
-
-    Parameters
-    ----------
-    content: The text of your anonymous message, leave blank for a paragraph editor
-    image: An optional image that appears below the text
+      Send an anonymous message to this channel
     """
-    channel = inter.channel
-    if 'channel' in kwargs:
-      channel = kwargs['channel']
-    reference = None
-    if 'reference' in kwargs:
-      reference = kwargs['reference']
-
     pendingconfession = ConfessionData(self)
-    pendingconfession.create(inter.user, channel, reference=reference)
+    pendingconfession.create(inter.user, inter.channel)
     pendingconfession.set_content(content)
     if image:
       await inter.response.defer(ephemeral=True)
       await pendingconfession.add_image(attachment=image)
+    await self.verify_and_send(inter, pendingconfession)
 
-    # --- From here, all state should be in pendingconfession, not in parameters ---
-    matches,_ = self.listavailablechannels(inter.user)
-    if not matches:
-      await inter.response.send_message(self.babel(inter, 'inaccessiblelocal'), ephemeral=True)
-      return
-
-    if pendingconfession.content or pendingconfession.file:
-      if pendingconfession.channeltype == ChannelType.unset():
-        # User used /confess in the wrong channel, give them a chance to choose another
-        await inter.response.send_message(
-          self.babel(inter, 'channelprompt') +
-          (' ' + self.babel(inter, 'channelprompt_pager', page=1) if len(matches) > 25 else ''),
-          view=ChannelSelectView(inter, self, matches, confession=pendingconfession),
-          ephemeral=True
-        )
-        return
-      if vetting := await pendingconfession.check_vetting(inter):
-        await self.bot.cogs['ConfessionsModeration'].send_vetting(inter, pendingconfession, vetting)
-        return
-      if vetting is False:
-        return
-      await pendingconfession.send_confession(inter, success_message=True)
-
-    else:
-      await inter.response.send_modal(
-        modal=self.ConfessionModal(self, inter, pendingconfession)
-      )
-
+  @app_commands.command(name='confess-to')
+  @app_commands.describe(
+    channel="The target channel, can include anonymous feedback channels that you can't see",
+    content="The text of your anonymous message, leave blank for a paragraph editor",
+    image="An optional image that appears below the text"
+  )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
-  name='confess-to')
   async def confess_to(
     self,
     inter:discord.Interaction,
     channel:str,
-    content:Optional[str] = commands.Param(default=None, max_length=3900),
-    image:Optional[disnake.Attachment] = None
+    content:Optional[app_commands.Range[str, 0, 3900]] = None,
+    image:Optional[discord.Attachment] = None
   ):
     """
-    Send an anonymous message to a specified channel
-
-    Parameters
-    ----------
-    channel: The target channel, can include anonymous feedback channels that you can't see
-    content: The text of your anonymous message, leave blank for a paragraph editor
-    image: An optional image that appears below the text
+      Send an anonymous message to a specified channel
     """
-
-    search = re.search(r".*\((\d+)\)$", channel)
-    if search:
-      channel_id = search.groups()[0]
-      if targetchannel := await self.safe_fetch_channel(inter, channel_id):
-        await self.confess(inter, content, image, channel=targetchannel)
+    if channel.isdigit() and int(channel):
+      if targetchannel := await self.safe_fetch_channel(inter, int(channel)):
+        pendingconfession = ConfessionData(self)
+        pendingconfession.create(inter.user, targetchannel)
+        pendingconfession.set_content(content)
+        if image:
+          await inter.response.defer(ephemeral=True)
+          await pendingconfession.add_image(attachment=image)
+        await self.verify_and_send(inter, pendingconfession)
         return
     raise commands.BadArgument("Channel must be selected from the list")
 
@@ -354,18 +353,24 @@ class Confessions(commands.Cog):
   async def channel_ac(self, inter:discord.Interaction, search:str):
     """ Lists available channels, allows searching by name """
     if not isinstance(inter.user, discord.Member):
-      return [self.bot.babel(inter, 'error', 'noprivatemessage').replace('*','')]
+      return [app_commands.Choice(
+        name=self.bot.babel(inter, 'error', 'noprivatemessage').replace('*',''),
+        value='-1'
+      )]
 
     results = []
     matches, _ = self.scanguild(inter.user)
     for match in matches:
       if search in match[0].name:
-        results.append(f"{match[1].icon} #{match[0].name} ({match[0].id})")
+        results.append(
+          app_commands.Choice(name=f"{match[1].icon} #{match[0].name}", value=str(match[0].id))
+        )
     return results[0:24] + (
-      ['this list is incomplete, use /list to see all'] if len(results) > 25 else []
+      [app_commands.Choice(name='this list is incomplete, use /list to see all', value='0')]
+      if len(results) > 25 else []
     )
 
-  )
+  @app_commands.command()
   async def list(self, inter:discord.Interaction):
     """
     List all anonymous channels available here
@@ -399,6 +404,6 @@ class Confessions(commands.Cog):
       ), ephemeral=True)
 
 
-def setup(bot:MerelyBot) -> None:
+async def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
-  bot.add_cog(Confessions(bot))
+  await bot.add_cog(Confessions(bot))

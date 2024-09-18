@@ -1,6 +1,6 @@
 ![ConfessionBot Logo](profile.png)
 # ConfessionBot
-**ConfessionBot is the most advanced anonymous messaging bot on Discord, with mod tools, multiple anonymous channel types, image support, and much more!** - Powered by the [merely framework](https://github.com/MerelyServices/Merely-Framework) and [disnake](https://github.com/DisnakeDev/disnake).
+**ConfessionBot is the most advanced anonymous messaging bot on Discord, with mod tools, multiple anonymous channel types, image support, and much more!** - Powered by the [merely framework](https://github.com/MerelyServices/Merely-Framework) and [Discord.py](https://github.com/Rapptz/discord.py).
 
 > Try ConfessionBot on the [Official Bot Discord server](https://discord.gg/wfKx24kDUR)
 
@@ -37,7 +37,7 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
 I have built a website which makes it easier to translate my projects, including ConfessionBot. [Babel Translator](https://translate.yiays.com).
 
 ### Code contribution
-ConfessionBot is written in Python with the help of the disnake API wrapper (like discord.py). Refer to the [Project roadmap](https://github.com/yiays/ConfessionBot-2.0/projects/1) for future features we'd like to implement. All contributions are welcome and support can be given in the [Discord server](https://discord.gg/wfKx24kDUR).
+ConfessionBot is written in Python with the help of the Discord.py API wrapper. Refer to the [Project roadmap](https://github.com/yiays/ConfessionBot-2.0/projects/1) for future features we'd like to implement. All contributions are welcome and support can be given in the [Discord server](https://discord.gg/wfKx24kDUR).
 
 ### Design
 As the Babel language framework is being used, there's no need to provide strings for your code. Myself and the volunteer translators can add strings later. In place of strings, simply invent a meaningful key, for example;
@@ -53,6 +53,6 @@ self.bot.babel('confessions', 'confession_vetting_accepted', channel=channel.men
 **This repository depends on the Merely Framework.** Clone this repo into an overlay folder inside of [Merely Framework](https://github.com/MerelyServices/Merely-Framework) to run this code *(you will need to create the overlay folder)*. Afterwards, any improvements made to the framework can be comitted back upstream without any merge conflicts. *- Contributions to the framework are greatly appreciated!*
 
 ### Code structure
-`confessions.py` implements the [`disnake.ext.commands.Cog`](https://docs.disnake.dev/en/latest/ext/commands/api.html#cog) class. Read the documentation to learn how to write new commands or improve existing ones with this structure.
+`confessions.py` implements the [`discord.ext.commands.Cog`](https://discordpy.readthedocs.io/en/latest/ext/commands/api.html#cog) class. Read the documentation to learn how to write new commands or improve existing ones with this structure.
 
 If you wish to provide strings, add them to `babel/confessionbot_en.ini`.

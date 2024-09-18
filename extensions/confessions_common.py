@@ -256,14 +256,15 @@ class ChannelSelectView(discord.ui.View):
     ]
 
   @discord.ui.select()
-  async def channel_selector(self, _:discord.ui.Select, inter:discord.Interaction):
+  async def channel_selector(self, inter:discord.Interaction, _:discord.ui.Select):
     """ Update the message to preview the selected target """
-    if inter.user != self.origin.author:
+    originuser = (self.origin.author if isinstance(self.origin,discord.Message) else self.origin.user)
+    if inter.user != originuser:
       await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
       return
     self.send_button.disabled = False
     try:
-      self.selection = await self.parent.bot.fetch_channel(int(inter.values[0]))
+      self.selection = await self.parent.bot.fetch_channel(int(inter.data.get('values')[0]))
     except discord.Forbidden:
       self.send_button.disabled = True
       await inter.response.edit_message(
@@ -283,7 +284,7 @@ class ChannelSelectView(discord.ui.View):
       view=self)
 
   @discord.ui.button(disabled=True, style=discord.ButtonStyle.primary)
-  async def send_button(self, _:discord.Button, inter:discord.Interaction):
+  async def send_button(self, inter:discord.Interaction, _:discord.Button):
     """ Send the confession """
     if self.selection is None or self.done:
       self.disable(inter)
@@ -367,6 +368,7 @@ class ChannelSelectView(discord.ui.View):
       await inter.response.edit_message(view=self)
 
   async def on_timeout(self):
+    originuser = (self.origin.author if isinstance(self.origin,discord.Message) else self.origin.user)
     try:
       if isinstance(self.origin, discord.Interaction):
         if not self.done:
@@ -374,14 +376,14 @@ class ChannelSelectView(discord.ui.View):
             if isinstance(component, (discord.ui.Button, discord.ui.Select)):
               component.disabled = True
           await self.origin.edit_original_response(
-            content=self.parent.babel(self.origin.author, 'timeouterror'),
+            content=self.parent.babel(self.origin.user, 'timeouterror'),
             view=self
           )
         else:
           await self.origin.delete_original_response()
         return
       if not self.done:
-        await self.origin.reply(self.parent.babel(self.origin.author, 'timeouterror'))
+        await self.origin.reply(self.parent.babel(originuser, 'timeouterror'))
       async for msg in self.origin.channel.history(after=self.origin):
         if (
           isinstance(msg.reference, discord.MessageReference) and
@@ -392,8 +394,8 @@ class ChannelSelectView(discord.ui.View):
     except discord.HTTPException:
       pass # Message was probably dismissed, don't worry about it
 
-# Data classes
 
+# Data classes
 
 class Crypto:
   """ Handles encryption and decryption of sensitive data """
@@ -441,7 +443,7 @@ class ConfessionData:
   author:discord.User
   targetchannel:discord.TextChannel
   channeltype_flags:int = 0
-  content:str
+  content:str | None = None
   reference_id:int = 0
   attachment:discord.Attachment | None = None
   file:discord.File | None = None
@@ -589,11 +591,12 @@ class ConfessionData:
     inter:discord.Interaction,
   ) -> discord.TextChannel | bool | None:
     """ Check if vetting is required, this is not a part of check_all """
+    send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
     guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
     vetting = findvettingchannel(guildchannels)
     if vetting and self.channeltype.vetted:
       if 'ConfessionsModeration' not in self.bot.cogs:
-        await inter.response.send_message(self.babel(inter, 'no_moderation'), ephemeral=True)
+        await send(self.babel(inter, 'no_moderation'), ephemeral=True)
         return False
       return self.targetchannel.guild.get_channel(vetting)
     return None
@@ -603,35 +606,36 @@ class ConfessionData:
       Run all pre-send checks on this confession
       In the event that a check fails, return the relevant babel key
     """
+    send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
     kwargs = {'ephemeral':True}
 
     if (
       self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset()
     ):
       if self.channeltype == ChannelType.marketplace() and self.embed is None:
-        await inter.response.send_message(self.babel(
+        await send(self.babel(
           inter, 'wrongcommand', cmd='sell', channel=self.targetchannel.mention
         ), **kwargs)
         return False
     else:
-      await inter.response.send_message(self.babel(inter, 'nosendchannel'), **kwargs)
+      await send(self.babel(inter, 'nosendchannel'), **kwargs)
       return False
 
     if not self.check_banned():
-      await inter.response.send_message(self.babel(inter, 'nosendbanned'), **kwargs)
+      await send(self.babel(inter, 'nosendbanned'), **kwargs)
       return False
 
     if self.attachment:
       try:
         if not self.check_image():
-          await inter.response.send_message(self.babel(inter, 'nosendimages'), **kwargs)
+          await send(self.babel(inter, 'nosendimages'), **kwargs)
           return False
       except commands.BadArgument:
-        await inter.response.send_message(self.babel(inter, 'invalidimage'), **kwargs)
+        await send(self.babel(inter, 'invalidimage'), **kwargs)
         return False
 
     if not self.check_spam():
-      await inter.response.send_message(self.babel(inter, 'nospam'), **kwargs)
+      await send(self.babel(inter, 'nospam'), **kwargs)
       return False
 
     return True
@@ -643,6 +647,7 @@ class ConfessionData:
     Wraps around functions that send confessions to channels
     Adds copious amounts of error handling
     """
+    send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
     kwargs = {'ephemeral':True}
     try:
       await func
@@ -652,15 +657,11 @@ class ConfessionData:
         await self.targetchannel.send(
           self.babel(self.targetchannel.guild, 'missingperms', perm='Embed Links')
         )
-        await inter.response.send_message(self.babel(inter, 'embederr'), **kwargs)
+        await send(self.babel(inter, 'embederr'), **kwargs)
       except discord.Forbidden:
-        await inter.response.send_message(
-          self.babel(inter, 'missingchannelerr') + ' (403 Forbidden)', **kwargs
-        )
+        await send(self.babel(inter, 'missingchannelerr') + ' (403 Forbidden)', **kwargs)
     except discord.NotFound:
-      await inter.response.send_message(
-        self.babel(inter, 'missingchannelerr') + ' (404 Not Found)', **kwargs
-      )
+      await send(self.babel(inter, 'missingchannelerr') + ' (404 Not Found)', **kwargs)
     return False
 
   async def send_confession(
@@ -675,7 +676,6 @@ class ConfessionData:
     **kwargs
   ) -> bool:
     """ Send confession to the destination channel """
-
     # Flag-based behaviour
     if perform_checks:
       if not await self.check_all(inter):
@@ -702,8 +702,8 @@ class ConfessionData:
             return False
           if 'use_webhook' in result:
             use_webhook = result['use_webhook']
-          if 'components' in result:
-            kwargs['components'] = result['components']
+          if 'view' in result:
+            kwargs['view'] = result['view']
 
     # Create kwargs based on state
     if self.file:
@@ -736,19 +736,20 @@ class ConfessionData:
       self.generate_embed()
       func = channel.send(preface, embed=self.embed, **kwargs)
 
-    if hasattr(inter, 'response') and not inter.response.is_done():
+    # From this point onwards, responses must be inter.followup.send().
+    if not inter.response.is_done():
       await inter.response.defer(ephemeral=True)
     success = await self.handle_send_errors(inter, func)
 
     # Mark the command as complete by sending a success message
     if success and success_message:
       if inter.channel != self.targetchannel: # confess-to
-        await inter.response.send_message(
+        await inter.followup.send(
           self.babel(inter, 'confession_sent_channel', channel=channel.mention),
           ephemeral=True
         )
       else: # confess
-        await inter.response.send_message(self.babel(inter, 'confession_sent_below'), ephemeral=True)
+        await inter.followup.send(self.babel(inter, 'confession_sent_below'), ephemeral=True)
     return success
 
   async def find_or_create_webhook(self, channel:discord.TextChannel) -> discord.Webhook | None:
@@ -756,7 +757,7 @@ class ConfessionData:
     webhook:discord.Webhook
     try:
       for webhook in await channel.webhooks():
-        if webhook.application_id == self.bot.application_id:
+        if webhook.user == self.bot.user:
           return webhook
       return await channel.create_webhook(name=self.bot.config['main']['botname'])
     except discord.Forbidden:
@@ -764,6 +765,6 @@ class ConfessionData:
       return None
 
 
-def setup(_):
+async def setup(_):
   """ Refuse to bind this cog to the bot """
   raise Exception("This module is not meant to be imported as an extension!")
