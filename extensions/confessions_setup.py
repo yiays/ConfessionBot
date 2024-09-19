@@ -1,6 +1,6 @@
 """
   Confessions Setup - Easy setup experience for anonymous messaging
-  Note: Contains generic command names like setup, list, and block
+  Note: Contains generic command names like setup
     As a result, this only really suits a singlular purpose bot
 """
 from __future__ import annotations
@@ -139,7 +139,9 @@ class ConfessionsSetup(commands.Cog):
       """
       if 'ControlPanel' not in self.parent.bot.cogs:
         raise Exception("ControlPanel was unloaded")
-      await self.parent.bot.cogs['ControlPanel'].controlpanel(inter)
+      await self.parent.bot.cogs['ControlPanel'].controlpanel.callback(
+        self.parent.bot.cogs['ControlPanel'], inter
+      )
 
     async def set(
       self, inter:discord.Interaction, channel:discord.TextChannel, mode:ChannelType
@@ -176,7 +178,8 @@ class ConfessionsSetup(commands.Cog):
         await channel.send(
           self.parent.babel(inter.guild, modestring) + ' ' +
           self.parent.babel(inter.guild, 'setundo' if mode != ChannelType.unset() else 'unsetundo') +
-          ('\n'+self.parent.babel(inter.guild, 'setcta') if mode != ChannelType.unset() else '')
+          ('\n\n'+self.parent.babel(inter.guild, 'setcta')
+           if mode != ChannelType.unset() and mode != ChannelType.vetting() else '')
         )
       except discord.Forbidden:
         pass
@@ -215,7 +218,7 @@ class ConfessionsSetup(commands.Cog):
       self.help.disabled = True
       #BABEL: state_desc_#
       descmode = 'state_desc_' + str(self.current_mode.value)
-      await inter.response.edit_message((
+      await inter.response.edit_message(content=(
         self.parent.babel(inter, 'setup_state', channel=self.current_channel.mention, state=modename)
         + '\n' + self.parent.babel(inter, descmode)
         + '\n' + self.parent.babel(inter, 'state_cta')
@@ -223,45 +226,45 @@ class ConfessionsSetup(commands.Cog):
 
     async def channel_selector_override(self, inter:discord.Interaction):
       """ Update the message to preview the selected target """
-      if inter.user != self.origin.author:
+      if inter.user != self.origin.user:
         await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
       self.send_button.disabled = False
+      channel_id = int(self.channel_selector.values[0])
       try:
-        self.current_channel = await self.parent.bot.fetch_channel(int(inter.values[0]))
+        self.current_channel = await self.parent.bot.fetch_channel(channel_id)
       except discord.Forbidden:
         self.current_mode = ChannelType.unset()
         self.update_state()
         await self.update_message(inter)
         await inter.response.send_message(
-          content=self.parent.babel(inter, 'setup_state_missing', channel_id=inter.values[0]),
+          content=self.parent.babel(inter, 'setup_state_missing', channel_id=channel_id),
           ephemeral=True
         )
         return
-      c = self.current_channel
-      guildchannels = get_guildchannels(self.parent.config, c.guild.id)
-      self.current_mode = guildchannels.get(c.id, ChannelType.unset())
+      guildchannels = get_guildchannels(self.parent.config, self.current_channel.guild.id)
+      self.current_mode = guildchannels.get(self.current_channel.id, ChannelType.unset())
       self.update_state()
       await self.update_message(inter)
 
     @discord.ui.button(emoji='❓', row=4)
-    async def help(self, _:discord.ui.Button, inter:discord.Interaction):
+    async def help(self, inter:discord.Interaction, _:discord.ui.Button):
       self.update_state()
       await self.update_message(inter)
 
     @discord.ui.button(emoji='🟢', row=4)
-    async def toggle_anon_ids(self, _:discord.ui.Button, inter:discord.Interaction):
+    async def toggle_anon_ids(self, inter:discord.Interaction, _:discord.ui.Button):
       if self.current_mode.value in ChannelType.SWAPS.keys():
         self.current_mode = ChannelType(ChannelType.SWAPS[self.current_mode.value])
         await self.set(inter, self.current_channel, self.current_mode)
 
     @discord.ui.select()
-    async def mode_selector(self, _:discord.ui.Select, inter:discord.Interaction):
-      if inter.user != self.origin.author:
+    async def mode_selector(self, inter:discord.Interaction, this:discord.ui.Select):
+      if inter.user != self.origin.user:
         await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
 
-      await self.set(inter, self.current_channel, ChannelType(int(inter.values[0])))
+      await self.set(inter, self.current_channel, ChannelType(int(this.values[0])))
 
     async def on_timeout(self):
       for component in self.children:
@@ -355,9 +358,7 @@ class ConfessionsSetup(commands.Cog):
       await inter.response.send_message(self.babel(inter, 'shufflebanresetwarning'))
 
       def check(m:discord.Message):
-        return m.channel == inter.channel and\
-               m.author == inter.user and\
-               m.content.lower() == 'yes'
+        return m.channel == inter.channel and m.author == inter.user and m.content.lower() == 'yes'
       try:
         await self.bot.wait_for('message', check=check, timeout=30)
       except asyncio.TimeoutError:
@@ -372,6 +373,6 @@ class ConfessionsSetup(commands.Cog):
     await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
 
 
-def setup(bot:MerelyBot) -> None:
+async def setup(bot:MerelyBot):
   """ Bind this cog to the bot """
-  bot.add_cog(ConfessionsSetup(bot))
+  await bot.add_cog(ConfessionsSetup(bot))

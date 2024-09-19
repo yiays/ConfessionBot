@@ -2,7 +2,7 @@
   Confessions - Anonymous messaging cog
   Features: bot banning, vetting, image support
   Dependencies: Auth, Help
-  Note: Contains generic command names like setup, list, and block
+  Note: Contains generic command names like list
     As a result, this only really suits a singlular purpose bot
 """
 

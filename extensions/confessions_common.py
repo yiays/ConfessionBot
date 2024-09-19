@@ -257,7 +257,7 @@ class ChannelSelectView(discord.ui.View):
     ]
 
   @discord.ui.select()
-  async def channel_selector(self, inter:discord.Interaction, _:discord.ui.Select):
+  async def channel_selector(self, inter:discord.Interaction, this:discord.ui.Select):
     """ Update the message to preview the selected target """
     originuser = (self.origin.author if isinstance(self.origin,discord.Message) else self.origin.user)
     if inter.user != originuser:
@@ -265,7 +265,7 @@ class ChannelSelectView(discord.ui.View):
       return
     self.send_button.disabled = False
     try:
-      self.selection = await self.parent.bot.fetch_channel(int(inter.data.get('values')[0]))
+      self.selection = await self.parent.bot.fetch_channel(int(this.values[0]))
     except discord.Forbidden:
       self.send_button.disabled = True
       await inter.response.edit_message(
@@ -542,8 +542,8 @@ class ConfessionData:
     bauthor = self.author.id.to_bytes(8, 'big')
     btarget = self.targetchannel.id.to_bytes(8, 'big')
     bmarket = self.channeltype_flags.to_bytes(1, 'big')
-    breference = self.reference.id.to_bytes(8, 'big')
     if self.reference:
+      breference = self.reference.id.to_bytes(8, 'big')
       # Store in cache so it can be restored
       referenced_message_cache[self.reference.id] = self.reference
       # Prevent a memory leak
@@ -551,6 +551,8 @@ class ConfessionData:
         # Chances are older items in this list are not going to be approved or denied
         # It's also possible the vet message is deleted
         referenced_message_cache.popitem(last=False)
+    else:
+      breference = int(0).to_bytes(8, 'big')
 
     binary = bauthor + btarget + bmarket + breference
     return self.parent.crypto.encrypt(binary).decode('ascii')
@@ -734,13 +736,9 @@ class ConfessionData:
     if self.reference:
       # A best effort to always show replies, even if Discord's API doesn't allow for it
       use_webhook = False
-      if self.reference.channel == self.targetchannel:
+      if self.reference.channel == channel:
         # Discord does not allow webhooks to reply, disable it
-        kwargs['reference'] = discord.MessageReference(
-          message_id=self.reference,
-          channel_id=channel.id,
-          guild_id=channel.guild.id
-        )
+        kwargs['reference'] = self.reference
       else:
         # Discord does not allow replies to span multiple channels, reference in plaintext instead
         preface += '\n' + self.babel(channel.guild, 'reply_to', reference=self.reference.jump_url)
