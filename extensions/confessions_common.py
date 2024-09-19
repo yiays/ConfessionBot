@@ -9,6 +9,7 @@ import io, os, base64, hashlib, re
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from typing import Optional, Union, TYPE_CHECKING
+from collections import OrderedDict
 import discord
 from discord.ext import commands
 import aiohttp
@@ -436,6 +437,9 @@ class Crypto:
     return rawdata
 
 
+referenced_message_cache:OrderedDict[int, discord.Message] = {}
+
+
 class ConfessionData:
   """ Dataclass for Confessions """
   SCOPE = 'confessions' # exists to keep babel happy
@@ -444,7 +448,7 @@ class ConfessionData:
   targetchannel:discord.TextChannel
   channeltype_flags:int = 0
   content:str | None = None
-  reference_id:int = 0
+  reference:discord.Message | None = None
   attachment:discord.Attachment | None = None
   file:discord.File | None = None
   embed:discord.Embed | None = None
@@ -471,7 +475,7 @@ class ConfessionData:
       targetchannel_id = int.from_bytes(binary[8:16], 'big')
       # from_bytes won't take a single byte, so this hack is needed.
       self.channeltype_flags = int.from_bytes(bytes((binary[16],)), 'big')
-      self.reference_id = int.from_bytes(binary[17:25], 'big')
+      reference_id = int.from_bytes(binary[17:25], 'big')
     else:
       raise CorruptConfessionDataException()
     self.author = await self.bot.fetch_user(author_id)
@@ -479,6 +483,9 @@ class ConfessionData:
     self.anonid = self.get_anonid(self.targetchannel.guild.id, self.author.id)
     guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
     self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset())
+    # References must exist in the cache, meaning confession replies will not survive a restart
+    # Note: this assumes the data will only be retreived once
+    self.reference = referenced_message_cache.pop(reference_id, None)
 
   def create(
     self,
@@ -495,7 +502,7 @@ class ConfessionData:
       guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
       self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset())
     if reference:
-      self.reference_id = reference.id if reference else 0
+      self.reference = reference
 
   def set_content(self, content:Optional[str] = '', *, embed:Optional[discord.Embed] = None):
     self.content = content
@@ -535,7 +542,15 @@ class ConfessionData:
     bauthor = self.author.id.to_bytes(8, 'big')
     btarget = self.targetchannel.id.to_bytes(8, 'big')
     bmarket = self.channeltype_flags.to_bytes(1, 'big')
-    breference = self.reference_id.to_bytes(8, 'big')
+    breference = self.reference.id.to_bytes(8, 'big')
+    if self.reference:
+      # Store in cache so it can be restored
+      referenced_message_cache[self.reference.id] = self.reference
+      # Prevent a memory leak
+      if len(referenced_message_cache) > 100:
+        # Chances are older items in this list are not going to be approved or denied
+        # It's also possible the vet message is deleted
+        referenced_message_cache.popitem(last=False)
 
     binary = bauthor + btarget + bmarket + breference
     return self.parent.crypto.encrypt(binary).decode('ascii')
@@ -680,6 +695,10 @@ class ConfessionData:
     **kwargs
   ) -> bool:
     """ Send confession to the destination channel """
+    # Defer now in case it takes a while
+    if not inter.response.is_done():
+      await inter.response.defer(ephemeral=True)
+
     # Flag-based behaviour
     if perform_checks:
       if not await self.check_all(inter):
@@ -712,36 +731,19 @@ class ConfessionData:
     # Create kwargs based on state
     if self.file:
       kwargs['file'] = self.file
-    if self.reference_id:
+    if self.reference:
       # A best effort to always show replies, even if Discord's API doesn't allow for it
-      if channel == self.targetchannel:
+      use_webhook = False
+      if self.reference.channel == self.targetchannel:
         # Discord does not allow webhooks to reply, disable it
-        use_webhook = False
         kwargs['reference'] = discord.MessageReference(
-          message_id=self.reference_id,
+          message_id=self.reference,
           channel_id=channel.id,
           guild_id=channel.guild.id
         )
       else:
         # Discord does not allow replies to span multiple channels, reference in plaintext instead
-        #TODO: this doesn't seem to be working
-        reference = None
-        for rchannel in channel.guild.text_channels:
-          # There could be as many as 500 channels, so try and slim down the number of requests
-          # This feature is very demanding on the API, hopefully this is fine because it shouldn't
-          #   happen often
-          try:
-            if (
-              rchannel.permissions_for(channel.guild.get_member(self.bot.user.id)).read_messages and
-              rchannel.permissions_for(channel.guild.get_member(self.author.id)).read_messages
-            ):
-              reference = await rchannel.fetch_message(self.reference_id)
-              break
-          except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-            continue
-        if reference:
-          use_webhook = False
-          preface = self.babel(channel.guild, 'reply_to', reference=reference.jump_url)
+        preface += '\n' + self.babel(channel.guild, 'reply_to', reference=self.reference.jump_url)
 
     # Send the confession
     if use_webhook:
@@ -762,10 +764,6 @@ class ConfessionData:
     else:
       self.generate_embed()
       func = channel.send(preface, embed=self.embed, **kwargs)
-
-    # From this point onwards, responses must be inter.followup.send().
-    if not inter.response.is_done():
-      await inter.response.defer(ephemeral=True)
     success = await self.handle_send_errors(inter, func)
 
     # Mark the command as complete by sending a success message

@@ -79,7 +79,7 @@ class Confessions(commands.Cog):
     bot.tree.add_command(self.confess_reply)
 
   async def cog_unload(self):
-    self.bot.tree.remove_command(self.confess_reply.name, type=discord.AppCommandType.message)
+    self.bot.tree.remove_command(self.confess_reply.name, type=self.confess_reply.type)
 
   # Context menu commands
 
