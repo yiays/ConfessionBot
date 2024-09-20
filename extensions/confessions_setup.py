@@ -113,7 +113,7 @@ class ConfessionsSetup(commands.Cog):
 
       self.current_channel = channel
       guildchannels = get_guildchannels(parent.config, inter.guild.id)
-      self.current_mode = guildchannels.get(channel.id, ChannelType.unset())
+      self.current_mode = guildchannels.get(channel.id, ChannelType.unset)
       self.update_state()
 
     def regenerate_matches(
@@ -124,7 +124,7 @@ class ConfessionsSetup(commands.Cog):
         return []
       botmember = guild.get_member(parent.bot.user.id)
       guildchannels = get_guildchannels(parent.config, guild.id)
-      out = [(c, guildchannels.get(c.id, ChannelType.unset())) for c in guild.channels if (
+      out = [(c, guildchannels.get(c.id, ChannelType.unset)) for c in guild.channels if (
         isinstance(c, discord.TextChannel) and c.permissions_for(botmember).read_messages
       )]
       out.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
@@ -148,39 +148,46 @@ class ConfessionsSetup(commands.Cog):
     ) -> bool:
       """ Tries to change settings as requested and handles all rules and requirements """
       guildchannels = get_guildchannels(self.parent.config, channel.guild.id)
-      wastype = int(guildchannels.get(channel.id, ChannelType.unset()))
-      if mode == ChannelType.unset():
-        if wastype == ChannelType.unset():
+      old_mode = guildchannels.get(channel.id, ChannelType.unset)
+      if mode == ChannelType.unset:
+        if old_mode == ChannelType.unset:
           await inter.response.send_message(self.parent.babel(inter, 'unsetfailure'), ephemeral=True)
           return False
         guildchannels.pop(channel.id)
-      elif mode == ChannelType.vetting():
+      elif mode == ChannelType.vetting:
         if 'ConfessionsModeration' not in self.parent.bot.cogs:
           await inter.response.send_message(self.parent.babel(inter, 'no_moderation'), ephemeral=True)
           return False
         if findvettingchannel(guildchannels):
           await inter.response.send_message(self.parent.babel(inter, 'singlechannel'), ephemeral=True)
           return False
-      if wastype == mode:
+      if old_mode == mode:
         await inter.response.send_message(self.parent.babel(inter, 'no_change'), ephemeral=True)
         return False
-      if mode != ChannelType.unset():
+      if mode != ChannelType.unset:
         guildchannels[channel.id] = mode
       set_guildchannels(self.parent.config, channel.guild.id, guildchannels)
       self.parent.bot.config.save()
 
       #BABEL: setsuccess#,unsetsuccess#
       modestring = (
-        f'setsuccess{mode.value}' if mode != ChannelType.unset() else f'unsetsuccess{wastype}'
+        f'setsuccess{mode.value}' if mode != ChannelType.unset else f'unsetsuccess{old_mode}'
       )
-      #BABEL: setundo,unsetundo
+      tutorial = self.parent.babel(inter.guild, modestring) + ' '
+      if mode == ChannelType.unset and old_mode in (
+        ChannelType.traceable, ChannelType.untraceable
+      ):
+        tutorial += self.parent.babel(inter.guild, 'unsetundo')
+      else:
+        tutorial += self.parent.babel(inter.guild, 'setundo') + '\n\n'
+        if mode == ChannelType.vetting:
+          pass
+        elif mode == ChannelType.marketplace:
+          tutorial += self.parent.babel(inter.guild, 'setcta', cmd1='sell', cmd2='')
+        else:
+          tutorial += self.parent.babel(inter.guild, 'setcta', cmd1='confess', cmd2='confess-to')
       try:
-        await channel.send(
-          self.parent.babel(inter.guild, modestring) + ' ' +
-          self.parent.babel(inter.guild, 'setundo' if mode != ChannelType.unset() else 'unsetundo') +
-          ('\n\n'+self.parent.babel(inter.guild, 'setcta')
-           if mode != ChannelType.unset() and mode != ChannelType.vetting() else '')
-        )
+        await channel.send(tutorial)
       except discord.Forbidden:
         pass
       # Update appearance of SetupView to reflect changes
@@ -197,12 +204,12 @@ class ConfessionsSetup(commands.Cog):
       self.toggle_anon_ids.label = self.parent.babel(
         self.origin, 'setup_anonids', anonids=self.current_mode.anonid
       )
-      self.toggle_anon_ids.disabled = self.current_mode.value not in ChannelType.SWAPS
+      self.toggle_anon_ids.disabled = self.current_mode.swap is None
       self.toggle_anon_ids.emoji = '🟢' if self.current_mode.anonid else '⭕'
       # modeval is only for the dropdown, the true value is still stored in current_mode
       modeval = self.current_mode.value
-      if self.current_mode.value in ChannelType.SWAPS and not self.current_mode.anonid:
-        modeval = ChannelType.SWAPS[modeval]
+      if self.current_mode.swap and not self.current_mode.anonid:
+        modeval = self.current_mode.swap
       # Channel selector state
       for option in self.channel_selector.options:
         option.default = bool(int(option.value) == self.current_channel.id)
@@ -234,7 +241,7 @@ class ConfessionsSetup(commands.Cog):
       try:
         self.current_channel = await self.parent.bot.fetch_channel(channel_id)
       except discord.Forbidden:
-        self.current_mode = ChannelType.unset()
+        self.current_mode = ChannelType.unset
         self.update_state()
         await self.update_message(inter)
         await inter.response.send_message(
@@ -243,7 +250,7 @@ class ConfessionsSetup(commands.Cog):
         )
         return
       guildchannels = get_guildchannels(self.parent.config, self.current_channel.guild.id)
-      self.current_mode = guildchannels.get(self.current_channel.id, ChannelType.unset())
+      self.current_mode = guildchannels.get(self.current_channel.id, ChannelType.unset)
       self.update_state()
       await self.update_message(inter)
 
@@ -254,8 +261,8 @@ class ConfessionsSetup(commands.Cog):
 
     @discord.ui.button(emoji='🟢', row=4)
     async def toggle_anon_ids(self, inter:discord.Interaction, _:discord.ui.Button):
-      if self.current_mode.value in ChannelType.SWAPS.keys():
-        self.current_mode = ChannelType(ChannelType.SWAPS[self.current_mode.value])
+      if self.current_mode.swap:
+        self.current_mode = self.current_mode.swap
         await self.set(inter, self.current_channel, self.current_mode)
 
     @discord.ui.select()
@@ -264,7 +271,7 @@ class ConfessionsSetup(commands.Cog):
         await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
 
-      await self.set(inter, self.current_channel, ChannelType(int(this.values[0])))
+      await self.set(inter, self.current_channel, ChannelType.from_value(this.values[0]))
 
     async def on_timeout(self):
       for component in self.children:

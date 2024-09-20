@@ -72,7 +72,7 @@ class ConfessionsMarketplace(commands.Cog):
       guildchannels = get_guildchannels(self.parent.config, inter.guild_id)
       if (
         inter.channel_id not in guildchannels or
-        guildchannels[inter.channel_id] != ChannelType.marketplace()
+        guildchannels[inter.channel_id] != ChannelType.marketplace
       ):
         await inter.response.send_message(self.parent.babel(inter, 'nosendchannel'), ephemeral=True)
         return

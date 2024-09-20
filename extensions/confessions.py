@@ -123,7 +123,7 @@ class Confessions(commands.Cog):
     guildchannels = get_guildchannels(self.config, member.guild.id)
     for channel in member.guild.channels:
       if channel.id in guildchannels:
-        if guildchannels[channel.id] == ChannelType.vetting():
+        if guildchannels[channel.id] == ChannelType.vetting:
           vetting = True
           continue
         channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
@@ -192,7 +192,7 @@ class Confessions(commands.Cog):
       return
 
     if data.content or data.file:
-      if data.channeltype == ChannelType.unset():
+      if data.channeltype == ChannelType.unset:
         # User chose an invalid channel, give them a chance to choose another
         await send(
           self.babel(inter, 'channelprompt') +

@@ -26,116 +26,66 @@ if TYPE_CHECKING:
 # Data Classes
 
 class ChannelType:
-  """ Channel Types as they are stored """
-
+  """ Anonymous channel types and their properties """
   name:str
   value:int
   icon:str
   anonid:bool
   vetted:bool
+  dep:str
+  swap:ChannelType | None = None
 
-  NAMES = {
-    -1: 'unset',
-    0: 'untraceable',
-    1: 'traceable',
-    2: 'vetting',
-    3: 'feedback',
-    4: 'untraceablefeedback',
-    5: 'marketplace'
-  }
+  _lookup:dict[int, ChannelType]
 
-  ICONS = {
-    -1: '❓',
-    0: '👻',
-    1: '💬',
-    2: '🧑‍⚖️',
-    3: '📢',
-    4: '💨',
-    5:  '🛒'
-  }
+  unset:ChannelType
+  untraceable:ChannelType
+  traceable:ChannelType
+  vetting:ChannelType
+  feedback:ChannelType
+  untraceablefeedback:ChannelType
+  marketplace:ChannelType
 
-  ANONIDS = {
-    -1: False,
-    0: False,
-    1: True,
-    2: True,
-    3: True,
-    4: False,
-    5: True
-  }
+  NAMES = None
+  ICONS = None
+  ANONIDS = None
+  VETTED = None
+  DEPS = None
 
-  VETTED = {
-    -1: False,
-    0: True,
-    1: True,
-    2: True,
-    3: False,
-    4: False,
-    5: True
-  }
+  def __init__(self, name:str, value:int, icon:str, anonid:bool, vetted:bool, dep:str | None = None):
+    """
+      Create a Confessions Channel Type
 
-  DEPS = {
-    -1: None,
-    0: None,
-    1: None,
-    2: 'ConfessionsModeration',
-    3: None,
-    4: None,
-    5: 'ConfessionsMarketplace'
-  }
+      Parameters
+      ----------
+      name: The internal name of a channeltype, before babel
+      value: The number a channeltype is stored as internally
+      icon: The emoji that represents a channeltype
+      anonid: If anonids are shown in this channeltype
+      vetted: If messages headed to this channel can be intercepted by vetting channels
+      dep: Any modules that must be loaded in order for this channeltype to work
+    """
+    self.name = name
+    self.value = value
+    self.icon = icon
+    self.anonid = anonid
+    self.vetted = vetted
+    self.dep = dep
 
-  SWAPS = {0:1, 1:0, 3:4, 4:3}
+    ChannelType._lookup[value] = self
 
-  def __init__(self, i:int):
-    self.name = self.NAMES[i]
-    self.value = i
-    self.icon = self.ICONS[i]
-    self.anonid = self.ANONIDS[i]
-    self.vetted = self.VETTED[i]
+  @classmethod
+  def walk(cls) -> tuple[ChannelType]:
+    return (c for c in cls._lookup.values())
 
-  def __getitem__(self, i:str) -> ChannelType:
-    return ChannelType({v:k for k,v in self.NAMES.items()}[i])
+  @classmethod
+  def from_value(cls, i) -> ChannelType:
+    return cls._lookup[int(i)]
 
   def __int__(self):
     return self.value
 
   def __eq__(self, other):
     return isinstance(other, ChannelType) and other.value == self.value
-
-  @classmethod
-  def unset(cls) -> ChannelType:
-    """ A channel that has no config """
-    return cls(-1)
-
-  @classmethod
-  def untraceable(cls) -> ChannelType:
-    """ A channel that has anonymous messages, but no Anon-IDs """
-    return cls(0)
-
-  @classmethod
-  def traceable(cls) -> ChannelType:
-    """ A channel that has anonymous messages, with Anon-IDs """
-    return cls(1)
-
-  @classmethod
-  def vetting(cls) -> ChannelType:
-    """ A channel that intercepts messages headed to other channels """
-    return cls(2)
-
-  @classmethod
-  def feedback(cls) -> ChannelType:
-    """ A channel that has anonymous feedback messages, with Anon-IDs """
-    return cls(3)
-
-  @classmethod
-  def untraceablefeedback(cls) -> ChannelType:
-    """ A channel that has anonymous feedback messages, but no Anon-IDs """
-    return cls(4)
-
-  @classmethod
-  def marketplace(cls) -> ChannelType:
-    """ A channel that hosts an anonymous marketplace """
-    return cls(5)
 
   def localname(self, babel:Babel, target:Resolvable, long:bool = True) -> str:
     """ Find name of the current ChannelType in Babel """
@@ -150,7 +100,7 @@ class ChannelType:
           name = babel(target, 'confessions', key)
           break
     ext = None
-    if long and self.value in self.SWAPS.keys():
+    if long and self.swap:
       if self.anonid:
         ext = babel(target, 'confessions', 'channeltype_traceable')
       else:
@@ -158,24 +108,44 @@ class ChannelType:
     return name + (' ' + ext if ext else '')
 
 
+# Declare all possible channeltypes
+ChannelType._lookup = {}
+
+ChannelType.unset = ChannelType('unset', -1, '❓', False, False)
+
+ChannelType.untraceable = ChannelType('untraceable', 0, '👻', False, True)
+ChannelType.traceable = ChannelType('traceable', 1, '💬', True, True)
+ChannelType.untraceable.swap = ChannelType.traceable
+ChannelType.traceable.swap = ChannelType.untraceable
+
+ChannelType.vetting = ChannelType('vetting', 2, '🧑‍⚖️', True, False, 'ConfessionsModeration')
+
+ChannelType.feedback = ChannelType('feedback', 3, '📢', True, False)
+ChannelType.untraceablefeedback = ChannelType('untraceablefeedback', 4, '💨', False, False)
+ChannelType.feedback.swap = ChannelType.untraceablefeedback
+ChannelType.untraceablefeedback.swap = ChannelType.feedback
+
+ChannelType.marketplace = ChannelType('marketplace', 5, '🛒', True, True, 'ConfessionsMarketplace')
+
+
 # Utility functions
 
 def get_channeltypes(cogs:Mapping[str, commands.Cog]) -> list[ChannelType]:
   """ Provide a selection of ChannelTypes based on the currently active modules """
-  return [ChannelType(int(i)) for i, d in ChannelType.DEPS.items() if d is None or d in cogs]
+  return [c for c in ChannelType.walk() if c.dep is None or c.dep in cogs]
 
 
 def findvettingchannel(guildchannels:dict[int, ChannelType]) -> Optional[int]:
   """ Check if guild has a vetting channel and return it """
   for channel_id in guildchannels:
-    if guildchannels[channel_id] == ChannelType.vetting():
+    if guildchannels[channel_id] == ChannelType.vetting:
       return channel_id
   return None
 
 
 def get_guildchannels(config:SectionProxy, guild_id:int) -> dict[int, ChannelType]:
   """ Returns a dictionary of {channel_id: channel_type} for the provided guild """
-  return {int(k):ChannelType(int(v)) for k,v in (
+  return {int(k):ChannelType.from_value(v) for k,v in (
     e.split('=') for e in config.get(f'{guild_id}_channels', fallback='').split(',') if e
   )}
 
@@ -482,7 +452,7 @@ class ConfessionData:
     self.targetchannel = await self.bot.fetch_channel(targetchannel_id)
     self.anonid = self.get_anonid(self.targetchannel.guild.id, self.author.id)
     guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
-    self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset())
+    self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset)
     # References must exist in the cache, meaning confession replies will not survive a restart
     # Note: this assumes the data will only be retreived once
     self.reference = referenced_message_cache.pop(reference_id, None)
@@ -500,7 +470,7 @@ class ConfessionData:
       self.targetchannel = targetchannel
       self.anonid = self.get_anonid(targetchannel.guild.id, self.author.id)
       guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
-      self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset())
+      self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset)
     if reference:
       self.reference = reference
 
@@ -631,9 +601,9 @@ class ConfessionData:
     kwargs = {'ephemeral':True}
 
     if (
-      self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset()
+      self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset
     ):
-      if self.channeltype == ChannelType.marketplace() and self.embed is None:
+      if self.channeltype == ChannelType.marketplace and self.embed is None:
         await send(self.babel(
           inter, 'wrongcommand', cmd='sell', channel=self.targetchannel.mention
         ), **kwargs)
@@ -719,7 +689,10 @@ class ConfessionData:
     # Allow external modules to modify the message before sending
     if channel == self.targetchannel:
       # ...as long as it's not being intercepted by another mechanism - like vetting
-      if dep := self.channeltype.DEPS[self.channeltype.value]:
+      if dep := self.channeltype.dep:
+        if dep not in self.bot.cogs:
+          await inter.followup.send(self.babel(inter, 'vet_error_module', module=dep), ephemeral=True)
+          return False
         special_function = getattr(self.bot.cogs[dep], 'on_channeltype_send', None)
         if callable(special_function):
           result = await special_function(inter, self)
