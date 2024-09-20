@@ -1,2 +1,2 @@
+discord.py==2.4.0
 cryptography
-disnake==2.8.1
