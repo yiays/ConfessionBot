@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-import asyncio
+import asyncio, re
 from typing import Optional, TYPE_CHECKING
 import discord
 from discord import app_commands
@@ -45,6 +45,7 @@ class ConfessionsModeration(commands.Cog):
   def __init__(self, bot:MerelyBot):
     self.bot = bot
     self.button_lock:list[str] = []
+    self.jump_url_pattern = re.compile(r"https://discord\.com/channels/(\d+)/(\d+)/(\d+)")
 
     if not bot.config.getboolean('extensions', 'confessions', fallback=False):
       raise Exception("Module `confessions` must be enabled!")
@@ -242,7 +243,9 @@ class ConfessionsModeration(commands.Cog):
     if not custom_id.startswith('pendingconfession_'):
       return
     if custom_id in self.button_lock:
-      # The button was double-pressed. Ignore.
+      await inter.response.send_message(
+        "Somebody else has already pressed this button!", ephemeral=True
+      )
       return
 
     await inter.response.defer()
@@ -252,43 +255,60 @@ class ConfessionsModeration(commands.Cog):
         pendingconfession = ConfessionData(self)
         await pendingconfession.from_binary(self.crypto, custom_id[26:])
         pendingconfession.set_content(embed=inter.message.embeds[0])
+        if pendingconfession.reference is None:
+          # Try and recover reference if it's lost
+          if match := self.jump_url_pattern.search(inter.message.content):
+            _, channel_id, message_id = map(int, match.groups())
+            channel = inter.guild.get_channel(channel_id)
+            reference = channel.get_partial_message(message_id)
+            pendingconfession.create(reference=reference)
         accepted = True
       elif custom_id.startswith('pendingconfession_deny_'):
         pendingconfession = ConfessionData(self)
         await pendingconfession.from_binary(self.crypto, custom_id[23:])
         accepted = False
       else:
-        self.button_lock.remove(custom_id)
         print(f"WARN: Unknown button action '{custom_id}'!")
+        self.button_lock.remove(custom_id)
         return
     except CorruptConfessionDataException:
       await inter.followup.send(self.babel(inter, 'vetcorrupt'))
       self.button_lock.remove(custom_id)
       return
     except (discord.NotFound, discord.Forbidden):
-      self.button_lock.remove(custom_id)
       if accepted:
         await inter.followup.send(self.babel(
           inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel.id}>"
         ))
+        self.button_lock.remove(custom_id)
         return
 
     if accepted:
-      if inter.message.embeds[0].image:
-        await pendingconfession.add_image(url=inter.message.embeds[0].image.url)
-      elif (
-        len(inter.message.attachments) and
-        inter.message.attachments[0].content_type.startswith('image')
-      ):
-        await pendingconfession.add_image(attachment=inter.message.attachments[0])
-      await pendingconfession.send_confession(inter, perform_checks=False)
+      try:
+        if inter.message.embeds[0].image:
+          await pendingconfession.add_image(url=inter.message.embeds[0].image.url)
+        elif (
+          len(inter.message.attachments) and
+          inter.message.attachments[0].content_type.startswith('image')
+        ):
+          await pendingconfession.add_image(attachment=inter.message.attachments[0])
+        if not await pendingconfession.send_confession(inter, perform_checks=False):
+          self.button_lock.remove(custom_id)
+          return
+      except Exception as e:
+        self.button_lock.remove(custom_id)
+        raise e
 
     metadata = {'user':inter.user.mention, 'channel':pendingconfession.targetchannel.mention}
     if accepted:
       msg = self.babel(inter.guild, 'vetaccepted', **metadata)
     else:
       msg = self.babel(inter.guild, 'vetdenied', **metadata)
-    await inter.message.edit(content=msg, view=None)
+    try:
+      await inter.message.edit(content=msg, view=None)
+    except Exception as e:
+      self.button_lock.remove(custom_id)
+      raise e
     self.button_lock.remove(custom_id)
 
     #BABEL: confession_vetting_accepted,confession_vetting_denied

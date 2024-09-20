@@ -448,7 +448,7 @@ class ConfessionData:
   targetchannel:discord.TextChannel
   channeltype_flags:int = 0
   content:str | None = None
-  reference:discord.Message | None = None
+  reference:discord.Message | discord.PartialMessage | None = None
   attachment:discord.Attachment | None = None
   file:discord.File | None = None
   embed:discord.Embed | None = None
@@ -735,10 +735,12 @@ class ConfessionData:
       kwargs['file'] = self.file
     if self.reference:
       # A best effort to always show replies, even if Discord's API doesn't allow for it
+      # Discord does not allow webhooks to reply, disable it
       use_webhook = False
       if self.reference.channel == channel:
-        # Discord does not allow webhooks to reply, disable it
-        kwargs['reference'] = self.reference
+        kwargs['reference'] = discord.MessageReference(
+          message_id=self.reference.id, channel_id=channel.id, fail_if_not_exists=False
+        )
       else:
         # Discord does not allow replies to span multiple channels, reference in plaintext instead
         preface += '\n' + self.babel(channel.guild, 'reply_to', reference=self.reference.jump_url)
