@@ -158,6 +158,22 @@ def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int,
     config.pop(f'{guild_id}_channels')
 
 
+async def safe_fetch_channel(
+  parent:Confessions | ConfessionsModeration,
+  inter:discord.Interaction,
+  channel_id:int
+) -> Optional[discord.TextChannel]:
+  """ Gracefully handles whenever a confession target isn't available """
+  try:
+    return await parent.bot.fetch_channel(channel_id)
+  except discord.Forbidden:
+    await inter.response.send_message(
+      parent.babel(inter, 'missingchannelerr') + ' (fetch)',
+      ephemeral=True
+    )
+    return None
+
+
 # Exceptions
 
 class CorruptConfessionDataException(Exception):

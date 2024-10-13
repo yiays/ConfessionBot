@@ -18,7 +18,9 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions import Confessions
   from overlay.extensions.confessions_common import Crypto
 
-from overlay.extensions.confessions_common import ConfessionData, CorruptConfessionDataException
+from overlay.extensions.confessions_common import (
+  ConfessionData, CorruptConfessionDataException, safe_fetch_channel
+)
 
 
 class ConfessionsModeration(commands.Cog):
@@ -163,7 +165,7 @@ class ConfessionsModeration(commands.Cog):
       """ Waits 5 seconds before enabling the report button to encourage the user to read """
       await asyncio.sleep(5)
       self.report_button.disabled = False
-      await self.origin.edit_original_response(view=self, suppress_embeds=True)
+      await self.origin.edit_original_response(view=self)
 
     @discord.ui.button(disabled=True, style=discord.ButtonStyle.gray, emoji='➡️')
     async def report_button(self, inter:discord.Interaction, _:discord.Button):
@@ -179,37 +181,37 @@ class ConfessionsModeration(commands.Cog):
     """ Confirm user input before sending a report """
     def __init__(
         self,
-        confessions:"Confessions",
+        parent:"Confessions",
         message: discord.Message,
         origin: discord.Interaction
     ):
       super().__init__(
-        title=confessions.babel(origin, 'report_title'),
+        title=parent.babel(origin, 'report_title'),
         custom_id=f'report_{message.id}',
         timeout=600
       )
       self.report_reason = discord.ui.TextInput(
-        label=confessions.babel(origin, 'report_field'),
-        placeholder=confessions.babel(origin, 'report_placeholder'),
+        label=parent.babel(origin, 'report_field'),
+        placeholder=parent.babel(origin, 'report_placeholder'),
         custom_id='report_reason',
         style=discord.TextStyle.paragraph,
         min_length=1
       )
       self.add_item(self.report_reason)
 
-      self.confessions = confessions
+      self.parent = parent
       self.message = message
       self.origin = origin
 
     async def on_submit(self, inter: discord.Interaction):
       """ Send report to mod channel as configured """
-      if self.confessions.config['report_channel']:
-        reportchannel = await self.confessions.safe_fetch_channel(
-          inter, int(self.confessions.config.get('report_channel'))
+      if self.parent.config['report_channel']:
+        reportchannel = await safe_fetch_channel(
+          self.parent, inter, int(self.parent.config.get('report_channel'))
         )
         if reportchannel is None:
           await inter.response.send_message(
-            self.confessions.babel(inter, 'report_failed')
+            self.parent.babel(inter, 'report_failed')
           )
           return
         embed:discord.Embed
@@ -218,7 +220,7 @@ class ConfessionsModeration(commands.Cog):
         else:
           embed = discord.Embed(description=f'**{self.message.author.name}** {self.message.content}')
         await reportchannel.send(
-          self.confessions.babel(
+          self.parent.babel(
             reportchannel.guild, 'new_report',
             server=f'{inter.guild.name} ({inter.guild.id})',
             user=f'{inter.user.mention} ({inter.user.name}#{inter.user.discriminator})',
@@ -227,7 +229,7 @@ class ConfessionsModeration(commands.Cog):
           embed=embed,
         )
         await inter.response.send_message(
-          self.confessions.babel(inter, 'report_success'),
+          self.parent.babel(inter, 'report_success'),
           ephemeral=True,
           suppress_embeds=True
         )

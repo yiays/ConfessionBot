@@ -20,7 +20,8 @@ if TYPE_CHECKING:
   from configparser import SectionProxy
 
 from overlay.extensions.confessions_common import (
-  ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto, get_guildchannels
+  ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto, get_guildchannels,
+  safe_fetch_channel
 )
 
 
@@ -162,21 +163,6 @@ class Confessions(commands.Cog):
           vetting = vetting or newvetting
 
     return matches, vetting
-
-  async def safe_fetch_channel(
-    self,
-    inter:discord.Interaction,
-    channel_id:int
-  ) -> Optional[discord.TextChannel]:
-    """ Gracefully handles whenever a confession target isn't available """
-    try:
-      return await self.bot.fetch_channel(channel_id)
-    except discord.Forbidden:
-      await inter.response.send_message(
-        self.babel(inter, 'missingchannelerr') + ' (fetch)',
-        ephemeral=True
-      )
-      return None
 
   async def verify_and_send(
     self,
@@ -338,7 +324,7 @@ class Confessions(commands.Cog):
       Send an anonymous message to a specified channel
     """
     if channel.isdigit() and int(channel):
-      if targetchannel := await self.safe_fetch_channel(inter, int(channel)):
+      if targetchannel := await safe_fetch_channel(self, inter, int(channel)):
         pendingconfession = ConfessionData(self)
         pendingconfession.create(author=inter.user, targetchannel=targetchannel)
         pendingconfession.set_content(content)
