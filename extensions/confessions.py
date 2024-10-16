@@ -68,7 +68,6 @@ class Confessions(commands.Cog):
         print(" - WARN: Without `confessions_moderation` enabled, vetting channels won't work")
 
     self.crypto.key = self.config['secret']
-    self.ignore = set()
     self.confession_cooldown = dict()
 
     self.confess_reply = app_commands.ContextMenu(
@@ -251,9 +250,6 @@ class Confessions(commands.Cog):
   async def confession_request(self, msg:discord.Message):
     """ Handle plain DM messages as confessions """
     if isinstance(msg.channel, discord.DMChannel) and msg.author != self.bot.user:
-      if msg.channel in self.ignore:
-        self.ignore.remove(msg.channel)
-        return
       if msg.author in self.confession_cooldown and\
          self.confession_cooldown[msg.author] > time.time():
         return

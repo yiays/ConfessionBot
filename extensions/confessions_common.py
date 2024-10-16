@@ -203,6 +203,7 @@ class ChannelSelectView(discord.ui.View):
     self.origin = origin
     self.parent = parent
     self.matches = matches
+    self.selection = matches[0][0]
     self.confession = confession
     self.soleguild = matches[0][0].guild if all((m.guild for m,_ in matches)) else None
     self.update_list()
@@ -250,15 +251,7 @@ class ChannelSelectView(discord.ui.View):
       await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
       return
     self.send_button.disabled = False
-    try:
-      self.selection = await self.parent.bot.fetch_channel(int(this.values[0]))
-    except discord.Forbidden:
-      self.send_button.disabled = True
-      await inter.response.edit_message(
-        content=self.parent.babel(inter, 'missingchannelerr')+' (select)',
-        view=self
-      )
-      return
+    self.selection = self.parent.bot.get_channel(int(this.values[0]))
     self.update_list()
     guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
     vetting = findvettingchannel(guildchannels)
@@ -270,7 +263,7 @@ class ChannelSelectView(discord.ui.View):
       ),
       view=self)
 
-  @discord.ui.button(disabled=True, style=discord.ButtonStyle.primary)
+  @discord.ui.button(disabled=False, style=discord.ButtonStyle.primary, emoji='📨')
   async def send_button(self, inter:discord.Interaction, _:discord.Button):
     """ Send the confession """
     if self.selection is None or self.done:
