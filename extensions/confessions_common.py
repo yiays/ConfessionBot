@@ -554,6 +554,7 @@ class ConfessionData:
       self.embed.colour = discord.Colour(int(self.anonid,16))
       self.embed.set_author(name=f'Anon-{self.anonid}')
     else:
+      self.embed.colour = discord.Colour(int(self.bot.config['main']['themecolor'], 16))
       self.embed.set_author(name='[Anon]')
     if self.file:
       self.embed.set_image(url='attachment://'+self.file.filename)
