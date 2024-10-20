@@ -684,7 +684,7 @@ class ConfessionData:
       channel = self.targetchannel
     # Update channeltype, in case this channel is different
     guildchannels = get_guildchannels(self.config, channel.guild.id)
-    self.channeltype = guildchannels.get(channel, ChannelType.unset)
+    self.channeltype = guildchannels.get(channel.id, ChannelType.unset)
     if perform_checks:
       if not await self.check_all(inter):
         return False
@@ -736,7 +736,7 @@ class ConfessionData:
         show_anonid = self.anonid and self.channeltype.anonid
         username = (
           (preface + ' - ' if preface else '') +
-          ('[Anon]' if show_anonid else '[Anon-' + self.anonid + ']')
+          (f'[Anon-{self.anonid}]' if show_anonid else '[Anon]')
         )
         pfp = (
           self.config.get('pfpgen_url', '')
