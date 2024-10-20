@@ -733,14 +733,13 @@ class ConfessionData:
     if use_webhook:
       if webhook := await self.find_or_create_webhook(channel):
         botcolour = self.bot.config['main']['themecolor'][2:]
-        show_anonid = self.anonid and self.channeltype.anonid
         username = (
           (preface + ' - ' if preface else '') +
-          (f'[Anon-{self.anonid}]' if show_anonid else '[Anon]')
+          (f'[Anon-{self.anonid}]' if self.channeltype.anonid else '[Anon]')
         )
         pfp = (
           self.config.get('pfpgen_url', '')
-          .replace('{}', botcolour if show_anonid else self.anonid)
+          .replace('{}', self.anonid if self.channeltype.anonid else botcolour)
         )
         func = webhook.send(self.content, username=username, avatar_url=pfp, **kwargs)
         #TODO: add support for custom PFPs
@@ -750,6 +749,13 @@ class ConfessionData:
       self.generate_embed()
       func = channel.send(preface, embed=self.embed, **kwargs)
     success = await self.handle_send_errors(inter, func)
+
+    if 'Log' in self.bot.cogs and channel == self.targetchannel:
+      logentry = (
+        f'{inter.guild.name}/{self.anonid}: {self.bot.utilities.truncate(self.content)}' +
+        (' (attachment)' if self.file else '')
+      )
+      await self.bot.cogs['Log'].log_misc_str(content=logentry)
 
     # Mark the command as complete by sending a success message
     if success and success_message:
