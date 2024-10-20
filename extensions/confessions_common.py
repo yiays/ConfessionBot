@@ -546,15 +546,14 @@ class ConfessionData:
     )
     return hashlib.sha256(encrypted).hexdigest()[-6:]
 
-  def generate_embed(self, vetting:bool = False):
+  def generate_embed(self):
     """ Generate or add anonid to the confession embed """
     if self.embed is None:
       self.embed = discord.Embed(description=self.content)
-    if (self.channeltype.anonid or vetting):
+    if self.channeltype.anonid:
       self.embed.colour = discord.Colour(int(self.anonid,16))
       self.embed.set_author(name=f'Anon-{self.anonid}')
     else:
-      self.anonid = None
       self.embed.set_author(name='[Anon]')
     if self.file:
       self.embed.set_image(url='attachment://'+self.file.filename)
@@ -681,11 +680,14 @@ class ConfessionData:
       await inter.response.defer(ephemeral=True)
 
     # Flag-based behaviour
+    if channel is None:
+      channel = self.targetchannel
+    # Update channeltype, in case this channel is different
+    guildchannels = get_guildchannels(self.config, channel.guild.id)
+    self.channeltype = guildchannels.get(channel, ChannelType.unset)
     if perform_checks:
       if not await self.check_all(inter):
         return False
-    if channel is None:
-      channel = self.targetchannel
     preface = (
       preface_override if preface_override is not None
       else self.config.get(f'{channel.guild.id}_preface', fallback='')
@@ -731,13 +733,14 @@ class ConfessionData:
     if use_webhook:
       if webhook := await self.find_or_create_webhook(channel):
         botcolour = self.bot.config['main']['themecolor'][2:]
+        show_anonid = self.anonid and self.channeltype.anonid
         username = (
           (preface + ' - ' if preface else '') +
-          ('[Anon]' if self.anonid is None else '[Anon-' + self.anonid + ']')
+          ('[Anon]' if show_anonid else '[Anon-' + self.anonid + ']')
         )
         pfp = (
           self.config.get('pfpgen_url', '')
-          .replace('{}', botcolour if self.anonid is None else self.anonid)
+          .replace('{}', botcolour if show_anonid else self.anonid)
         )
         func = webhook.send(self.content, username=username, avatar_url=pfp, **kwargs)
         #TODO: add support for custom PFPs
