@@ -171,7 +171,7 @@ class ConfessionsSetup(commands.Cog):
 
       #BABEL: setsuccess#,unsetsuccess#
       modestring = (
-        f'setsuccess{mode.value}' if mode != ChannelType.unset else f'unsetsuccess{old_mode}'
+        f'setsuccess{mode.value}' if mode != ChannelType.unset else f'unsetsuccess{old_mode.value}'
       )
       tutorial = self.parent.babel(inter.guild, modestring) + ' '
       if mode == ChannelType.unset and old_mode in (
