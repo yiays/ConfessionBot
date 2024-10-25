@@ -753,8 +753,8 @@ class ConfessionData:
 
     if 'Log' in self.bot.cogs and channel == self.targetchannel:
       logentry = (
-        f'{inter.guild.name}/{self.anonid}: {self.bot.utilities.truncate(self.content)}' +
-        (' (attachment)' if self.file else '')
+        f'{inter.guild.name}/{self.anonid} ({self.author.name}): ' +
+        self.bot.utilities.truncate(self.content) + (' (attachment)' if self.file else '')
       )
       await self.bot.cogs['Log'].log_misc_str(content=logentry)
 
