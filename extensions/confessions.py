@@ -226,12 +226,12 @@ class Confessions(commands.Cog):
       self.add_item(self.content)
 
       self.parent = parent
-      self.confession = data
+      self.data = data
 
     async def on_submit(self, inter:discord.Interaction):
       """ Send the completed confession """
-      self.confession.set_content(self.content.value)
-      await self.parent.verify_and_send(inter, data=self.confession)
+      self.data.set_content(self.content.value)
+      await self.parent.verify_and_send(inter, data=self.data)
 
   #	Events
 

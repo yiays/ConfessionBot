@@ -280,7 +280,7 @@ class ChannelSelectView(discord.ui.View):
         await self.confession.add_image(attachment=self.origin.attachments[0])
     else:
       # Override targetchannel as this has changed
-      self.confession.create(targetchannel=self.selection)
+      self.confession.create(author=inter.user, targetchannel=self.selection)
 
     if vetting := await self.confession.check_vetting(inter):
       await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
@@ -473,9 +473,12 @@ class ConfessionData:
     targetchannel:discord.TextChannel | None = None,
     reference:discord.Message | None = None
   ):
+    if (author and not targetchannel) or (targetchannel and not author):
+      raise Exception("Both author and targetchannel must be provided at the same time")
     if author:
+      if self.author and self.author != author:
+        raise Exception("Attempted to change confession author from", self.author, "to", author, "!")
       self.author = author
-    if targetchannel:
       self.targetchannel = targetchannel
       self.anonid = self.get_anonid(targetchannel.guild.id, self.author.id)
       guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
