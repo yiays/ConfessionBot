@@ -213,7 +213,7 @@ class Confessions(commands.Cog):
     ):
       super().__init__(
         title=parent.babel(origin, 'editor_title'),
-        custom_id="confession_modal"
+        custom_id="confession_modal_"+str(origin.id)
       )
       self.content = discord.ui.TextInput(
         label=parent.babel(origin, 'editor_message_label'),
