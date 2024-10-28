@@ -174,10 +174,9 @@ class ConfessionsSetup(commands.Cog):
         f'setsuccess{mode.value}' if mode != ChannelType.unset else f'unsetsuccess{old_mode.value}'
       )
       tutorial = self.parent.babel(inter.guild, modestring) + ' '
-      if mode == ChannelType.unset and old_mode in (
-        ChannelType.traceable, ChannelType.untraceable
-      ):
-        tutorial += self.parent.babel(inter.guild, 'unsetundo')
+      if mode == ChannelType.unset:
+        if old_mode in (ChannelType.traceable, ChannelType.untraceable):
+          tutorial += self.parent.babel(inter.guild, 'unsetundo')
       else:
         tutorial += self.parent.babel(inter.guild, 'setundo') + '\n\n'
         if mode == ChannelType.vetting:
