@@ -476,11 +476,11 @@ class ConfessionData:
     if (author and not targetchannel) or (targetchannel and not author):
       raise Exception("Both author and targetchannel must be provided at the same time")
     if author:
-      if self.author and self.author != author:
+      if hasattr(self, 'author') and self.author != author:
         raise Exception("Attempted to change confession author from", self.author, "to", author, "!")
       self.author = author
       self.targetchannel = targetchannel
-      self.anonid = self.get_anonid(targetchannel.guild.id, self.author.id)
+      self.anonid = self.get_anonid(targetchannel.guild.id, author.id)
       guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
       self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset)
     if reference:
