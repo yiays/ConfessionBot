@@ -175,6 +175,12 @@ class ConfessionsModeration(commands.Cog):
       )
       await inter.delete_original_response()
 
+    async def on_timeout(self):
+      try:
+        await self.origin.delete_original_response()
+      except discord.HTTPException:
+        pass # Message was probably dismissed, don't worry about it
+
   # Modals
 
   class ReportModal(discord.ui.Modal):
@@ -351,8 +357,9 @@ class ConfessionsModeration(commands.Cog):
       if not banlist_raw:
         await inter.response.send_message(self.babel(inter, 'emptybanlist'))
         return
-      printedlist = '\n```'+'\n'.join(banlist)+'```'
+      printedlist = '\n```\n' + ('\n'.join(banlist)) + '```'
       await inter.response.send_message(self.babel(inter, 'banlist') + printedlist)
+      return
 
     anonid = anonid.lower()
     try:

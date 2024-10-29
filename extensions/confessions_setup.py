@@ -282,6 +282,30 @@ class ConfessionsSetup(commands.Cog):
       except discord.HTTPException:
         pass
 
+  class BanResetView(discord.ui.View):
+    """ Warns user about the ban reset before shuffle is performed """
+    def __init__(self, parent:ConfessionsSetup, origin:discord.Interaction):
+      super().__init__(timeout=300)
+
+      self.parent = parent
+      self.origin = origin
+
+      self.continue_button.label = parent.babel(origin, 'shufflebanresetconfirm')
+
+    @discord.ui.button(style=discord.ButtonStyle.green, emoji='➡️', custom_id='shufflebanreset_yes')
+    async def continue_button(self, inter:discord.Interaction, _:discord.Button):
+      """ On click of continue button """
+      self.parent.config.pop(str(inter.guild.id)+'_banned')
+      self.parent.perform_shuffle(inter.guild_id)
+      await inter.response.send_message(self.parent.babel(inter, 'shufflesuccess'))
+      await self.origin.delete_original_response()
+
+    async def on_timeout(self):
+      try:
+        await self.origin.delete_original_response()
+      except discord.HTTPException:
+        pass # Message was probably dismissed, don't worry about it
+
   # Events
 
   @commands.Cog.listener('on_ready')
@@ -361,22 +385,20 @@ class ConfessionsSetup(commands.Cog):
       Change all anon-ids on a server
     """
     if str(inter.guild.id)+'_banned' in self.config:
-      await inter.response.send_message(self.babel(inter, 'shufflebanresetwarning'))
+      await inter.response.send_message(
+        self.babel(inter, 'shufflebanresetwarning'),
+        view=self.BanResetView(self, inter),
+        ephemeral=True
+      )
+      return
 
-      def check(m:discord.Message):
-        return m.channel == inter.channel and m.author == inter.user and m.content.lower() == 'yes'
-      try:
-        await self.bot.wait_for('message', check=check, timeout=30)
-      except asyncio.TimeoutError:
-        await inter.response.send_message(self.babel(inter, 'timeouterror'))
-      else:
-        self.config.pop(str(inter.guild.id)+'_banned')
-
-    shuffle = int(self.config.get(f'{inter.guild.id}_shuffle', fallback=0))
-    self.bot.config.set(self.SCOPE, str(inter.guild.id)+'_shuffle', str(shuffle + 1))
-    self.bot.config.save()
-
+    self.perform_shuffle(inter.guild_id)
     await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
+
+  def perform_shuffle(self, guild_id:int):
+    shuffle = int(self.config.get(str(guild_id) + '_shuffle', fallback=0))
+    self.bot.config.set(self.SCOPE, str(guild_id) + '_shuffle', str(shuffle + 1))
+    self.bot.config.save()
 
 
 async def setup(bot:MerelyBot):
