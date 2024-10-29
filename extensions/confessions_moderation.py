@@ -167,7 +167,9 @@ class ConfessionsModeration(commands.Cog):
       self.report_button.disabled = False
       await self.origin.edit_original_response(view=self)
 
-    @discord.ui.button(disabled=True, style=discord.ButtonStyle.gray, emoji='➡️')
+    @discord.ui.button(
+      disabled=True, style=discord.ButtonStyle.gray, emoji='➡️', custom_id='confessionreport_confirm'
+    )
     async def report_button(self, inter:discord.Interaction, _:discord.Button):
       """ On click of continue button """
       await inter.response.send_modal(

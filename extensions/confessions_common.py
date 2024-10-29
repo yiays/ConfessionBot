@@ -243,7 +243,7 @@ class ChannelSelectView(discord.ui.View):
       ) for channel,channeltype in self.matches[start:start+25]
     ]
 
-  @discord.ui.select()
+  @discord.ui.select(custom_id='channelselect_selector')
   async def channel_selector(self, inter:discord.Interaction, this:discord.ui.Select):
     """ Update the message to preview the selected target """
     originuser = (self.origin.author if isinstance(self.origin,discord.Message) else self.origin.user)
@@ -263,7 +263,9 @@ class ChannelSelectView(discord.ui.View):
       ),
       view=self)
 
-  @discord.ui.button(disabled=False, style=discord.ButtonStyle.primary, emoji='📨')
+  @discord.ui.button(
+    disabled=False, style=discord.ButtonStyle.primary, emoji='📨', custom_id='confessionchannel_send'
+  )
   async def send_button(self, inter:discord.Interaction, _:discord.Button):
     """ Send the confession """
     if self.selection is None or self.done:

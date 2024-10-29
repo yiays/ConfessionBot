@@ -253,18 +253,18 @@ class ConfessionsSetup(commands.Cog):
       self.update_state()
       await self.update_message(inter)
 
-    @discord.ui.button(emoji='❓', row=4)
+    @discord.ui.button(emoji='❓', row=4, custom_id='confessionsetup_help')
     async def help(self, inter:discord.Interaction, _:discord.ui.Button):
       self.update_state()
       await self.update_message(inter)
 
-    @discord.ui.button(emoji='🟢', row=4)
+    @discord.ui.button(emoji='🟢', row=4, custom_id='confessionsetup_anonid')
     async def toggle_anon_ids(self, inter:discord.Interaction, _:discord.ui.Button):
       if self.current_mode.swap:
         self.current_mode = self.current_mode.swap
         await self.set(inter, self.current_channel, self.current_mode)
 
-    @discord.ui.select()
+    @discord.ui.select(custom_id='confessionsetup_mode')
     async def mode_selector(self, inter:discord.Interaction, this:discord.ui.Select):
       if inter.user != self.origin.user:
         await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
