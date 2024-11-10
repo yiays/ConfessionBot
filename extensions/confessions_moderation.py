@@ -260,8 +260,10 @@ class ConfessionsModeration(commands.Cog):
 
     await inter.response.defer()
     self.button_lock.append(custom_id)
+    accepted = False
     try:
       if custom_id.startswith('pendingconfession_approve_'):
+        accepted = True
         pendingconfession = ConfessionData(self)
         await pendingconfession.from_binary(self.crypto, custom_id[26:])
         pendingconfession.set_content(embed=inter.message.embeds[0])
@@ -272,26 +274,21 @@ class ConfessionsModeration(commands.Cog):
             channel = inter.guild.get_channel(channel_id)
             reference = channel.get_partial_message(message_id)
             pendingconfession.create(reference=reference)
-        accepted = True
       elif custom_id.startswith('pendingconfession_deny_'):
         pendingconfession = ConfessionData(self)
         await pendingconfession.from_binary(self.crypto, custom_id[23:])
-        accepted = False
       else:
-        print(f"WARN: Unknown button action '{custom_id}'!")
         self.button_lock.remove(custom_id)
-        return
+        raise Exception("Unknown button action", custom_id)
     except CorruptConfessionDataException:
       await inter.followup.send(self.babel(inter, 'vetcorrupt'))
       self.button_lock.remove(custom_id)
       return
     except (discord.NotFound, discord.Forbidden):
       if accepted:
-        await inter.followup.send(self.babel(
-          inter, 'vettingrequiredmissing', channel=f"<#{pendingconfession.targetchannel.id}>"
-        ))
-        self.button_lock.remove(custom_id)
-        return
+        await inter.followup.send(self.babel(inter, 'vettingrequiredmissing'))
+      self.button_lock.remove(custom_id)
+      return
 
     if accepted:
       try:
