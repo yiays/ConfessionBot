@@ -32,7 +32,8 @@ class ChannelType:
   icon:str
   anonid:bool
   vetted:bool
-  dep:str
+  special_cmd:str | None
+  dep:str | None
   swap:ChannelType | None = None
 
   _lookup:dict[int, ChannelType]
@@ -51,7 +52,17 @@ class ChannelType:
   VETTED = None
   DEPS = None
 
-  def __init__(self, name:str, value:int, icon:str, anonid:bool, vetted:bool, dep:str | None = None):
+  def __init__(
+    self,
+    *,
+    name:str,
+    value:int,
+    icon:str,
+    anonid:bool,
+    vetted:bool,
+    special_cmd:str | None = None,
+    dep:str | None = None
+  ):
     """
       Create a Confessions Channel Type
 
@@ -69,6 +80,7 @@ class ChannelType:
     self.icon = icon
     self.anonid = anonid
     self.vetted = vetted
+    self.special_cmd = special_cmd
     self.dep = dep
 
     ChannelType._lookup[value] = self
@@ -111,21 +123,36 @@ class ChannelType:
 # Declare all possible channeltypes
 ChannelType._lookup = {}
 
-ChannelType.unset = ChannelType('unset', -1, '❓', False, False)
+ChannelType.unset = ChannelType(
+  name='unset', value=-1, icon='❓', anonid=False, vetted=False
+)
 
-ChannelType.untraceable = ChannelType('untraceable', 0, '👻', False, True)
-ChannelType.traceable = ChannelType('traceable', 1, '💬', True, True)
+ChannelType.untraceable = ChannelType(
+  name='untraceable', value=0, icon='👻', anonid=False, vetted=True
+)
+ChannelType.traceable = ChannelType(
+  name='traceable', value=1, icon='💬', anonid=True, vetted=True
+)
 ChannelType.untraceable.swap = ChannelType.traceable
 ChannelType.traceable.swap = ChannelType.untraceable
 
-ChannelType.vetting = ChannelType('vetting', 2, '🧑‍⚖️', True, False, 'ConfessionsModeration')
+ChannelType.vetting = ChannelType(
+  name='vetting', value=2, icon='🧑‍⚖️', anonid=True, vetted=False, dep='ConfessionsModeration'
+)
 
-ChannelType.feedback = ChannelType('feedback', 3, '📢', True, False)
-ChannelType.untraceablefeedback = ChannelType('untraceablefeedback', 4, '💨', False, False)
+ChannelType.feedback = ChannelType(
+  name='feedback', value=3, icon='📢', anonid=True, vetted=False
+)
+ChannelType.untraceablefeedback = ChannelType(
+  name='untraceablefeedback', value=4, icon='💨', anonid=False, vetted=False
+)
 ChannelType.feedback.swap = ChannelType.untraceablefeedback
 ChannelType.untraceablefeedback.swap = ChannelType.feedback
 
-ChannelType.marketplace = ChannelType('marketplace', 5, '🛒', True, True, 'ConfessionsMarketplace')
+ChannelType.marketplace = ChannelType(
+  name='marketplace', value=5, icon='🛒', anonid=True, vetted=True,
+  special_cmd='sell', dep='ConfessionsMarketplace'
+)
 
 
 # Utility functions
@@ -434,6 +461,7 @@ class ConfessionData:
   file:discord.File | None = None
   embed:discord.Embed | None = None
   channeltype:ChannelType
+  targetchanneltype:ChannelType
 
   def __init__(self, parent:Union[Confessions, ConfessionsModeration]):
     """ Creates a ConfessionData class, from here, either use from_binary() or create() """
@@ -464,6 +492,7 @@ class ConfessionData:
     self.anonid = self.get_anonid(self.targetchannel.guild.id, self.author.id)
     guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
     self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset)
+    self.targetchanneltype = self.channeltype
     # References must exist in the cache, meaning confession replies will not survive a restart
     # Note: this assumes the data will only be retreived once
     self.reference = referenced_message_cache.pop(reference_id, None)
@@ -485,6 +514,7 @@ class ConfessionData:
       self.anonid = self.get_anonid(targetchannel.guild.id, author.id)
       guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
       self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset)
+      self.targetchanneltype = self.channeltype
     if reference:
       self.reference = reference
 
@@ -599,7 +629,7 @@ class ConfessionData:
     send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
     guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
     vetting = findvettingchannel(guildchannels)
-    if vetting and self.channeltype.vetted:
+    if vetting and self.targetchanneltype.vetted:
       if 'ConfessionsModeration' not in self.bot.cogs:
         await send(self.babel(inter, 'no_moderation'), ephemeral=True)
         return False
@@ -615,11 +645,17 @@ class ConfessionData:
     kwargs = {'ephemeral':True}
 
     if (
-      self.channeltype in get_channeltypes(self.bot.cogs) and self.channeltype != ChannelType.unset
+      self.targetchanneltype in get_channeltypes(self.bot.cogs)
+      and self.targetchanneltype != ChannelType.unset
     ):
-      if self.channeltype == ChannelType.marketplace and self.embed is None:
+      if (
+        self.targetchanneltype.special_cmd
+        and (inter.command is None or inter.command.name != self.targetchanneltype.special_cmd)
+      ):
+        # Assume that special_cmd can only be called directly as this is most likely true
         await send(self.babel(
-          inter, 'wrongcommand', cmd='sell', channel=self.targetchannel.mention
+          inter, 'wrongcommand',
+          cmd=self.targetchanneltype.special_cmd, channel=self.targetchannel.mention
         ), **kwargs)
         return False
     else:
@@ -680,7 +716,17 @@ class ConfessionData:
     preface_override:str | None = None,
     **kwargs
   ) -> bool:
-    """ Send confession to the destination channel """
+    """
+      Send confession to the destination channel
+
+      Parameters:
+      -----------
+      success_message: Respond to the interaction if the confession is successfully sent
+      perform_checks: Run check_all internally and respond to the interaction if checks fail
+      channel: If the destination channel is not inter.channel, specify it here
+      webhook_override: Override server preference for sending as a webhook
+      preface_override: Override server preference for text before confession
+    """
     # Defer now in case it takes a while
     if not inter.response.is_done():
       await inter.response.defer(ephemeral=True)

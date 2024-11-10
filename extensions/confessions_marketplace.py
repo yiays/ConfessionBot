@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
+from enum import IntEnum
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -14,6 +15,12 @@ if TYPE_CHECKING:
   from configparser import SectionProxy
 
 from overlay.extensions.confessions_common import ChannelType, get_guildchannels, ConfessionData
+
+
+class MarketplaceFlags(IntEnum):
+  UNSET = 0
+  LISTING = 1
+  OFFER = 2
 
 
 class ConfessionsMarketplace(commands.Cog):
@@ -69,6 +76,7 @@ class ConfessionsMarketplace(commands.Cog):
       self.add_item(self.method)
 
     async def on_submit(self, inter:discord.Interaction):
+      """ User has completed making their offer """
       guildchannels = get_guildchannels(self.parent.config, inter.guild_id)
       if (
         inter.channel_id not in guildchannels or
@@ -89,7 +97,7 @@ class ConfessionsMarketplace(commands.Cog):
         author=inter.user, targetchannel=inter.channel, reference=self.origin.message
       )
       pendingconfession.set_content(embed=embed)
-      pendingconfession.channeltype_flags = 2
+      pendingconfession.channeltype_flags = MarketplaceFlags.OFFER
 
       if vetting := await pendingconfession.check_vetting(inter):
         await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
@@ -154,9 +162,6 @@ class ConfessionsMarketplace(commands.Cog):
     """ Open the offer form when a user wants to make an offer on a listing """
     if len(inter.message.embeds) == 0:
       await inter.response.send_message(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
-      return
-    if len(inter.data.get('custom_id')) < 30:
-      await inter.response.send_message(self.babel(inter, 'error_old_offer'), ephemeral=True)
       return
     id_seller = inter.data.get('custom_id')[28:]
     id_buyer = (
@@ -269,7 +274,7 @@ class ConfessionsMarketplace(commands.Cog):
     if image:
       await inter.response.defer(ephemeral=True)
       await pendingconfession.add_image(attachment=image)
-    pendingconfession.channeltype_flags = 1
+    pendingconfession.channeltype_flags = MarketplaceFlags.LISTING
 
     if vetting := await pendingconfession.check_vetting(inter):
       await self.bot.cogs['ConfessionsModeration'].send_vetting(inter, pendingconfession, vetting)
@@ -283,13 +288,13 @@ class ConfessionsMarketplace(commands.Cog):
     self, inter:discord.Interaction, data:ConfessionData
   ) -> dict[str] | bool:
     """ Add a view for headed for a marketplace channnel """
-    if data.channeltype_flags == 1: # Listing
+    if data.channeltype_flags == MarketplaceFlags.LISTING:
       id_seller = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big')).decode('ascii')
       return {
         'use_webhook': False,
         'view': self.ListingView(self, inter, id_seller)
       }
-    elif data.channeltype_flags == 2: # Offer
+    elif data.channeltype_flags == MarketplaceFlags.OFFER:
       listing = await data.targetchannel.fetch_message(data.reference.id)
       id_seller = listing.components[0].children[0].custom_id[28:]
       id_buyer = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big')).decode('ascii')
