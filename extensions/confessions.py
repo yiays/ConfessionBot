@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import time
+from base64 import b64encode
 from typing import Optional, Union, TYPE_CHECKING
 import discord
 from discord import app_commands
@@ -50,7 +51,7 @@ class Confessions(commands.Cog):
     if 'report_channel' not in self.config:
       self.config['report_channel'] = ''
     if 'secret' not in self.config or self.config['secret'] == '':
-      self.config['secret'] = self.crypto.keygen(32)
+      self.config['secret'] = b64encode(self.crypto.srandom_token(32)).decode('ascii')
       if not bot.quiet:
         print(
           " - WARN: Your security key has been regenerated. Old confessions are now incompatible"

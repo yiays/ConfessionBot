@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
 from enum import IntEnum
+from base64 import b64encode, b64decode
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -164,9 +165,8 @@ class ConfessionsMarketplace(commands.Cog):
       await inter.response.send_message(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
       return
     id_seller = inter.data.get('custom_id')[28:]
-    id_buyer = (
-      self.bot.cogs['Confessions'].crypto.encrypt(inter.user.id.to_bytes(8, 'big')).decode('ascii')
-    )
+    raw_buyer = self.bot.cogs['Confessions'].crypto.encrypt(inter.user.id.to_bytes(8, 'big'))
+    id_buyer = b64encode(raw_buyer).decode('ascii')
     if id_seller == id_buyer:
       await inter.response.send_message(self.babel(inter, 'error_self_offer'), ephemeral=True)
       return
@@ -182,8 +182,10 @@ class ConfessionsMarketplace(commands.Cog):
       return
     encrypted_data = inter.data.get('custom_id')[29:].split('_')
 
-    seller_id = int.from_bytes(self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[0]), 'big')
-    buyer_id = int.from_bytes(self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[1]), 'big')
+    raw_seller_id = self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[0])
+    seller_id = int.from_bytes(b64decode(raw_seller_id), 'big')
+    raw_buyer_id = self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[1])
+    buyer_id = int.from_bytes(b64decode(raw_buyer_id), 'big')
     if seller_id == inter.user.id:
       seller = inter.user
       buyer = await inter.guild.fetch_member(buyer_id)
@@ -210,7 +212,8 @@ class ConfessionsMarketplace(commands.Cog):
 
   async def on_withdraw(self, inter:discord.Interaction):
     encrypted_data = inter.data.get('custom_id')[31:].split('_')
-    owner_id = int.from_bytes(self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[-1]), 'big')
+    raw_owner_id = self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[-1])
+    owner_id = int.from_bytes(b64decode(raw_owner_id), 'big')
     if owner_id != inter.user.id:
       await inter.response.send_message(
         self.babel(inter, 'error_wrong_person', buy=False), ephemeral=True
@@ -290,7 +293,8 @@ class ConfessionsMarketplace(commands.Cog):
   ) -> dict[str] | bool:
     """ Add a view for headed for a marketplace channnel """
     if data.channeltype_flags == MarketplaceFlags.LISTING:
-      id_seller = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big')).decode('ascii')
+      raw_seller = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big'))
+      id_seller = b64encode(raw_seller).decode('ascii')
       return {
         'use_webhook': False,
         'view': self.ListingView(self, inter, id_seller)
@@ -298,7 +302,8 @@ class ConfessionsMarketplace(commands.Cog):
     elif data.channeltype_flags == MarketplaceFlags.OFFER:
       listing = await data.targetchannel.fetch_message(data.reference.id)
       id_seller = listing.components[0].children[0].custom_id[28:]
-      id_buyer = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big')).decode('ascii')
+      raw_buyer = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big'))
+      id_buyer = b64encode(raw_buyer).decode('ascii')
       return {
         'use_webhook': False,
         'view': self.OfferView(self, inter, id_seller, id_buyer)

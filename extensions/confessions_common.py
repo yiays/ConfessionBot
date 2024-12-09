@@ -5,9 +5,10 @@
 """
 from __future__ import annotations
 
-import io, os, base64, hashlib, re
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+import io, re, secrets
+from base64 import b64encode, b64decode
+from Crypto.Cipher import AES
+from Crypto.Hash import SHA
 from typing import Optional, Union, TYPE_CHECKING
 from collections import OrderedDict
 import discord
@@ -409,6 +410,7 @@ class ChannelSelectView(discord.ui.View):
 class Crypto:
   """ Handles encryption and decryption of sensitive data """
   _key = None
+  NONCE_LEN = 16 # 128 bits
 
   @property
   def key(self) -> str:
@@ -418,30 +420,37 @@ class Crypto:
   @key.setter
   def key(self, value:str):
     """ Key setter """
-    self._key = base64.decodebytes(bytes(value, encoding='ascii'))
+    self._key = b64decode(value)
 
-  def setup(self, nonce:bytes = b'\xae[Et\xcd\n\x01\xf4\x95\x9c|No\x03\x81\x98'):
+  def setup(self, nonce:bytes):
     """ Initializes the AES-256 scheme """
-    backend = default_backend()
-    cipher = Cipher(algorithms.AES(self._key), modes.CTR(nonce), backend=backend)
-    return (cipher.encryptor(), cipher.decryptor())
+    return AES.new(self._key, AES.MODE_OFB, nonce)
 
-  def keygen(self, length:int = 32) -> str:
-    """ Generates a key for storage """
-    return base64.encodebytes(os.urandom(length)).decode('ascii')
+  def srandom_token(self, length:int = 16) -> bytes:
+    """ Generates a secure random token """
+    return secrets.token_bytes(length)
+
+  def hash(self, data:bytes, salt:bytes) -> bytes:
+    hash = SHA.new(data + salt)
+    return hash.digest()
 
   def encrypt(self, data:bytes) -> bytes:
-    """ Encodes data and returns a base64 string ready for storage """
-    encryptor, _ = self.setup()
-    encrypted = encryptor.update(data) + encryptor.finalize()
-    encodedata = base64.b64encode(encrypted)
-    return encodedata
+    """
+      Encodes data and returns secure bytes for storage
+      The encrypted data will be 16 bytes longer
+    """
+    nonce = self.srandom_token(self.NONCE_LEN)
+    cypher = self.setup(nonce)
+    encrypted = cypher.encrypt(data)
+    encodedata = encrypted
+    return nonce + encodedata
 
-  def decrypt(self, data:str) -> bytes:
+  def decrypt(self, data:bytes) -> bytes:
     """ Read encoded data and return the raw bytes that created it """
-    _, decryptor = self.setup()
-    encrypted = base64.b64decode(data)
-    rawdata = decryptor.update(encrypted) + decryptor.finalize()
+    nonce = data[:self.NONCE_LEN]
+    cypher = self.setup(nonce)
+    encrypted = data[self.NONCE_LEN:]
+    rawdata = cypher.decrypt(encrypted)
     return rawdata
 
 
@@ -451,6 +460,7 @@ referenced_message_cache:OrderedDict[int, discord.Message] = {}
 class ConfessionData:
   """ Dataclass for Confessions """
   SCOPE = 'confessions' # exists to keep babel happy
+  DATA_VERSION = 2
   anonid:str | None
   author:discord.User
   targetchannel:discord.TextChannel
@@ -475,18 +485,20 @@ class ConfessionData:
 
   async def from_binary(self, crypto:Crypto, rawdata:str):
     """ Creates ConfessionData from an encrypted binary string """
-    binary = crypto.decrypt(rawdata)
-    if len(binary) == 24: # TODO: Legacy format, remove eventually
-      author_id = int.from_bytes(binary[0:8], 'big')
-      targetchannel_id = int.from_bytes(binary[16:24], 'big')
-    elif len(binary) == 25:
-      author_id = int.from_bytes(binary[0:8], 'big')
-      targetchannel_id = int.from_bytes(binary[8:16], 'big')
+    binary = crypto.decrypt(b64decode(rawdata))
+    if len(binary) == 26:
+      data_version = int.from_bytes(bytes((binary[0],)), 'big')
+      if data_version != self.DATA_VERSION:
+        raise CorruptConfessionDataException(
+          "Data version mismatch;", data_version, "!=", self.DATA_VERSION
+        )
+      author_id = int.from_bytes(binary[1:9], 'big')
+      targetchannel_id = int.from_bytes(binary[9:17], 'big')
       # from_bytes won't take a single byte, so this hack is needed.
-      self.channeltype_flags = int.from_bytes(bytes((binary[16],)), 'big')
-      reference_id = int.from_bytes(binary[17:25], 'big')
+      self.channeltype_flags = int.from_bytes(bytes((binary[17],)), 'big')
+      reference_id = int.from_bytes(binary[18:26], 'big')
     else:
-      raise CorruptConfessionDataException()
+      raise CorruptConfessionDataException("Data format incorrect;", len(binary), "!=", 26)
     self.author = await self.bot.fetch_user(author_id)
     self.targetchannel = await self.bot.fetch_channel(targetchannel_id)
     self.anonid = self.get_anonid(self.targetchannel.guild.id, self.author.id)
@@ -553,9 +565,10 @@ class ConfessionData:
   def store(self) -> str:
     """ Encrypt data for secure storage """
     # Size limit: ~100 bytes
+    bversion = self.DATA_VERSION.to_bytes(1, 'big')
     bauthor = self.author.id.to_bytes(8, 'big')
     btarget = self.targetchannel.id.to_bytes(8, 'big')
-    bmarket = self.channeltype_flags.to_bytes(1, 'big')
+    bflags = self.channeltype_flags.to_bytes(1, 'big')
     if self.reference:
       breference = self.reference.id.to_bytes(8, 'big')
       # Store in cache so it can be restored
@@ -568,18 +581,21 @@ class ConfessionData:
     else:
       breference = int(0).to_bytes(8, 'big')
 
-    binary = bauthor + btarget + bmarket + breference
-    return self.parent.crypto.encrypt(binary).decode('ascii')
+    binary = bversion + bauthor + btarget + bflags + breference
+    return b64encode(self.parent.crypto.encrypt(binary)).decode('ascii')
 
   # Data rehydration
 
   def get_anonid(self, guildid:int, userid:int) -> str:
     """ Calculates the current anon-id for a user """
-    offset = int(self.config.get(f"{guildid}_shuffle", fallback=0))
-    encrypted = self.parent.crypto.encrypt(
-      guildid.to_bytes(8, 'big') + userid.to_bytes(8, 'big') + offset.to_bytes(2, 'big')
+    salt = b64decode(self.config.get(f"{guildid}_shuffle", fallback=''))
+    if len(salt) < 16: # If server does not yet have a salt
+      salt = self.parent.crypto.srandom_token()
+      self.config[f"{guildid}_shuffle"] = b64encode(salt).decode('ascii')
+    hashed = self.parent.crypto.hash(
+      guildid.to_bytes(8, 'big') + userid.to_bytes(8, 'big'), salt
     )
-    return hashlib.sha256(encrypted).hexdigest()[-6:]
+    return hashed.hex()[-6:]
 
   def generate_embed(self):
     """ Generate or add anonid to the confession embed """

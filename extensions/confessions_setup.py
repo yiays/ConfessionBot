@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+from base64 import b64encode
 from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
@@ -396,8 +397,8 @@ class ConfessionsSetup(commands.Cog):
     await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
 
   def perform_shuffle(self, guild_id:int):
-    shuffle = int(self.config.get(str(guild_id) + '_shuffle', fallback=0))
-    self.bot.config.set(self.SCOPE, str(guild_id) + '_shuffle', str(shuffle + 1))
+    salt = self.parent.crypto.srandom_token()
+    self.bot.config.set(self.SCOPE, str(guild_id) + '_shuffle', b64encode(salt).decode('ascii'))
     self.bot.config.save()
 
 
