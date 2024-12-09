@@ -232,6 +232,7 @@ class ConfessionsMarketplace(commands.Cog):
   # Slash commands
 
   @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
     title="A short summary of the item you are selling",
     starting_price="The price you would like to start bidding at, in whatever currency you accept",

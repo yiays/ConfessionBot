@@ -365,7 +365,7 @@ class ConfessionsSetup(commands.Cog):
   # Commands
 
   @app_commands.command()
-  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.allowed_contexts(guilds=True)
   @app_commands.default_permissions(manage_channels=True)
   @commands.bot_has_permissions(read_messages=True)
   async def setup(self, inter:discord.Interaction):
@@ -378,7 +378,7 @@ class ConfessionsSetup(commands.Cog):
     )
 
   @app_commands.command()
-  @app_commands.allowed_contexts(guilds=True, private_channels=False)
+  @app_commands.allowed_contexts(guilds=True)
   @app_commands.default_permissions(moderate_members=True)
   async def shuffle(self, inter:discord.Interaction):
     """

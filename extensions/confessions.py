@@ -280,6 +280,7 @@ class Confessions(commands.Cog):
   #	Slash commands
 
   @app_commands.command()
+  @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
     content="The text of your anonymous message, leave blank for a paragraph editor",
     image="An optional image that appears below the text"
@@ -303,6 +304,7 @@ class Confessions(commands.Cog):
     await self.verify_and_send(inter, pendingconfession)
 
   @app_commands.command(name='confess-to')
+  @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
     channel="The target channel, can include anonymous feedback channels that you can't see",
     content="The text of your anonymous message, leave blank for a paragraph editor",
