@@ -397,7 +397,7 @@ class ConfessionsSetup(commands.Cog):
     await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
 
   def perform_shuffle(self, guild_id:int):
-    salt = self.parent.crypto.srandom_token()
+    salt = self.bot.cogs['Confessions'].crypto.srandom_token()
     self.bot.config.set(self.SCOPE, str(guild_id) + '_shuffle', b64encode(salt).decode('ascii'))
     self.bot.config.save()
 
