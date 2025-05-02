@@ -800,16 +800,18 @@ class ConfessionData:
     # Send the confession
     if use_webhook:
       if webhook := await self.find_or_create_webhook(channel):
+        mentions_in_preface = re.findall(r'<[@!&]+\d+>', preface)
         botcolour = self.bot.config['main']['themecolor'][2:]
         username = (
-          (preface + ' - ' if preface else '') +
+          (preface + ' - ' if preface and not mentions_in_preface else '') +
           (f'[Anon-{self.anonid}]' if self.channeltype.anonid else '[Anon]')
         )
         pfp = (
           self.config.get('pfpgen_url', '')
           .replace('{}', self.anonid if self.channeltype.anonid else botcolour)
         )
-        func = webhook.send(self.content, username=username, avatar_url=pfp, **kwargs)
+        content = ('> ' + preface + '\n' if mentions_in_preface else '') + self.content
+        func = webhook.send(content, username=username, avatar_url=pfp, **kwargs)
         #TODO: add support for custom PFPs
       else:
         return False
