@@ -234,14 +234,17 @@ class ConfessionsMarketplace(commands.Cog):
 
   # Slash commands
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('command_sell', scope=SCOPE),
+    description=app_commands.locale_str('command_sell_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    title="A short summary of the item you are selling",
-    starting_price="The price you would like to start bidding at, in whatever currency you accept",
-    payment_methods="Payment methods you will accept, PayPal, Venmo, Crypto, etc.",
-    description="Further details about the item you are selling",
-    image="A picture of the item you are selling"
+    title=app_commands.locale_str('command_sell_title_desc', scope=SCOPE),
+    starting_price=app_commands.locale_str('command_sell_starting_price_desc', scope=SCOPE),
+    payment_methods=app_commands.locale_str('command_sell_payment_methods_desc', scope=SCOPE),
+    description=app_commands.locale_str('command_sell_description_desc', scope=SCOPE),
+    image=app_commands.locale_str('command_sell_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def sell(

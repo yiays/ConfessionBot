@@ -365,7 +365,10 @@ class ConfessionsSetup(commands.Cog):
 
   # Commands
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('command_setup', scope=SCOPE),
+    description=app_commands.locale_str('command_setup_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.default_permissions(manage_channels=True)
   @commands.bot_has_permissions(read_messages=True)
@@ -378,7 +381,10 @@ class ConfessionsSetup(commands.Cog):
       self.babel(inter, 'setup_start'), view=self.SetupView(inter, self, channel), ephemeral=True
     )
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('command_shuffle', scope=SCOPE),
+    description=app_commands.locale_str('command_shuffle_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.default_permissions(moderate_members=True)
   async def shuffle(self, inter:discord.Interaction):

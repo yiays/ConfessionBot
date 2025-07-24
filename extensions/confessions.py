@@ -72,7 +72,7 @@ class Confessions(commands.Cog):
     self.confession_cooldown = dict()
 
     self.confess_reply = app_commands.ContextMenu(
-      name="Confession Reply",
+      name=app_commands.locale_str('command_Confession_Reply', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
       allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
       callback=self.confess_reply_callback
@@ -80,7 +80,7 @@ class Confessions(commands.Cog):
     bot.tree.add_command(self.confess_reply)
 
   async def cog_unload(self):
-    self.bot.tree.remove_command(self.confess_reply.name, type=self.confess_reply.type)
+    self.bot.tree.remove_command(self.confess_reply.qualified_name, type=self.confess_reply.type)
 
   # Context menu commands
 
@@ -280,11 +280,14 @@ class Confessions(commands.Cog):
 
   #	Slash commands
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('command_confess', scope=SCOPE),
+    description=app_commands.locale_str('command_confess_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    content="The text of your anonymous message, leave blank for a paragraph editor",
-    image="An optional image that appears below the text"
+    content=app_commands.locale_str('command_confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('command_confess_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess(
@@ -307,9 +310,9 @@ class Confessions(commands.Cog):
   @app_commands.command(name='confess-to')
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    channel="The target channel, can include anonymous feedback channels that you can't see",
-    content="The text of your anonymous message, leave blank for a paragraph editor",
-    image="An optional image that appears below the text"
+    channel=app_commands.locale_str('command_confess-to_channel_desc', scope=SCOPE),
+    content=app_commands.locale_str('command_confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('command_confess_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess_to(
@@ -351,11 +354,14 @@ class Confessions(commands.Cog):
           app_commands.Choice(name=f"{match[1].icon} #{match[0].name}", value=str(match[0].id))
         )
     return results[0:24] + (
-      [app_commands.Choice(name='this list is incomplete, use /list to see all', value='0')]
+      [app_commands.Choice(name=self.babel(inter, 'concat_list'), value='0')]
       if len(results) > 25 else []
     )
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('command_list', scope=SCOPE),
+    description=app_commands.locale_str('command_list_desc', scope=SCOPE)
+  )
   async def list(self, inter:discord.Interaction):
     """
     List all anonymous channels available here

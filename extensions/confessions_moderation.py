@@ -53,7 +53,7 @@ class ConfessionsModeration(commands.Cog):
       raise Exception("Module `confessions` must be enabled!")
 
     self.report = app_commands.ContextMenu(
-      name="Report confession",
+      name=app_commands.locale_str('command_Confession_Report', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
       allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
       callback=self.report_callback
@@ -61,7 +61,7 @@ class ConfessionsModeration(commands.Cog):
     bot.tree.add_command(self.report)
 
   def cog_unload(self):
-    self.bot.tree.remove_command(self.report.name, type=self.report.type)
+    self.bot.tree.remove_command(self.report.qualified_name, type=self.report.type)
 
   # Context menu commands
 
@@ -334,10 +334,13 @@ class ConfessionsModeration(commands.Cog):
 
   # Commands
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('command_block', scope=SCOPE),
+    description=app_commands.locale_str('command_block_desc', scope=SCOPE)
+  )
   @app_commands.describe(
-    anonid="The anonymous id found next to any traceable anonymous message",
-    unblock="Set to true if you want to unblock this id instead"
+    anonid=app_commands.locale_str('command_block_anonid_desc', scope=SCOPE),
+    unblock=app_commands.locale_str('command_block_unblock_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True, private_channels=False)
   @app_commands.default_permissions(moderate_members=True)
