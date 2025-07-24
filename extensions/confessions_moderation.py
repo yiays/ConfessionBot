@@ -19,7 +19,7 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions_common import Crypto
 
 from overlay.extensions.confessions_common import (
-  ConfessionData, CorruptConfessionDataException, safe_fetch_channel
+  ConfessionData, CorruptConfessionDataException, safe_fetch_target
 )
 
 
@@ -104,11 +104,11 @@ class ConfessionsModeration(commands.Cog):
       Send confession to a vetting channel for approval
       Checks are performed at this stage
     """
-    preface = self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.targetchannel.mention)
+    preface = self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.target.mention)
     view = self.PendingConfessionView(self, data)
     success = await data.send_confession(
       inter,
-      channel=vettingchannel,
+      target=vettingchannel,
       webhook_override=False,
       preface_override=preface,
       view=view
@@ -116,7 +116,7 @@ class ConfessionsModeration(commands.Cog):
 
     if success:
       await inter.followup.send(
-        self.babel(inter, 'confession_vetting', channel=data.targetchannel.mention),
+        self.babel(inter, 'confession_vetting', channel=data.target.mention),
         ephemeral=True
       )
 
@@ -127,7 +127,7 @@ class ConfessionsModeration(commands.Cog):
     def __init__(self, parent:ConfessionsModeration, pendingconfession:"ConfessionData"):
       super().__init__(timeout=None)
 
-      guild = pendingconfession.targetchannel.guild
+      guild = pendingconfession.target.guild
       data = pendingconfession.store()
       self.add_item(discord.ui.Button(
         label=parent.babel(guild, 'vetting_approve_button'),
@@ -214,7 +214,7 @@ class ConfessionsModeration(commands.Cog):
     async def on_submit(self, inter: discord.Interaction):
       """ Send report to mod channel as configured """
       if self.parent.config['report_channel']:
-        reportchannel = await safe_fetch_channel(
+        reportchannel = await safe_fetch_target(
           self.parent, inter, int(self.parent.config.get('report_channel'))
         )
         if reportchannel is None:
@@ -306,7 +306,7 @@ class ConfessionsModeration(commands.Cog):
         self.button_lock.remove(custom_id)
         raise e
 
-    metadata = {'user':inter.user.mention, 'channel':pendingconfession.targetchannel.mention}
+    metadata = {'user':inter.user.mention, 'channel':pendingconfession.target.mention}
     if accepted:
       msg = self.babel(inter.guild, 'vetaccepted', **metadata)
     else:
@@ -322,7 +322,7 @@ class ConfessionsModeration(commands.Cog):
     content = self.babel(
       pendingconfession.author,
       'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
-      channel=f"<#{pendingconfession.targetchannel.id}>"
+      channel=f"<#{pendingconfession.target.id}>"
     )
     if str(pendingconfession.author.id) not in self.config.get('dm_notifications', '').split(','):
       try:

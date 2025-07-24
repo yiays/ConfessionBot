@@ -18,9 +18,10 @@ if TYPE_CHECKING:
   from configparser import SectionProxy
 
 from extensions.controlpanel import Toggleable, Stringable, Listable
-from overlay.extensions.confessions_common import \
-  ChannelType, ChannelSelectView, get_channeltypes, findvettingchannel, get_guildchannels,\
-  set_guildchannels
+from overlay.extensions.confessions_common import (
+  Confessable, ChannelType, ChannelSelectView, get_channeltypes, findvettingchannel,
+  get_guildchannels, set_guildchannels
+)
 
 
 class ConfessionsSetup(commands.Cog):
@@ -72,14 +73,14 @@ class ConfessionsSetup(commands.Cog):
 
   class SetupView(ChannelSelectView):
     """ Configure channels and shortcuts to configure guild settings """
-    current_channel: discord.TextChannel
+    current_channel: Confessable
     current_mode: ChannelType
 
     def __init__(
       self,
       inter:discord.Interaction,
       parent:ConfessionsSetup,
-      channel:discord.TextChannel
+      channel:Confessable
     ):
       """
         A SetupView extends upon ChannelSelectView
@@ -112,14 +113,16 @@ class ConfessionsSetup(commands.Cog):
         linkbutton.callback = self.controlpanel_shortcut
         self.add_item(linkbutton)
 
-      self.current_channel = channel
+      self.current_channel = channel.parent if isinstance(channel, discord.Thread) else channel
       guildchannels = get_guildchannels(parent.config, inter.guild.id)
-      self.current_mode = guildchannels.get(channel.id, ChannelType.unset)
+      self.current_mode = guildchannels.get(
+        self.current_channel.id, ChannelType.unset
+      )
       self.update_state()
 
     def regenerate_matches(
       self, parent:ConfessionsSetup, guild:discord.Guild
-    ) -> tuple[discord.TextChannel, ChannelType]:
+    ) -> list[tuple[discord.TextChannel, ChannelType]]:
       """ Create a list of all channels on the server sorted by categories and position """
       if len(guild.channels) == 0:
         return []

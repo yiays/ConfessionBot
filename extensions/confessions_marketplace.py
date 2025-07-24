@@ -79,10 +79,7 @@ class ConfessionsMarketplace(commands.Cog):
     async def on_submit(self, inter:discord.Interaction):
       """ User has completed making their offer """
       guildchannels = get_guildchannels(self.parent.config, inter.guild_id)
-      if (
-        inter.channel_id not in guildchannels or
-        guildchannels[inter.channel_id] != ChannelType.marketplace
-      ):
+      if guildchannels.get(inter.channel_id, ChannelType.unset) != ChannelType.marketplace:
         await inter.response.send_message(self.parent.babel(inter, 'nosendchannel'), ephemeral=True)
         return
 
@@ -95,7 +92,7 @@ class ConfessionsMarketplace(commands.Cog):
 
       pendingconfession = ConfessionData(self.parent.bot.cogs['Confessions'])
       pendingconfession.create(
-        author=inter.user, targetchannel=inter.channel, reference=self.origin.message
+        author=inter.user, target=inter.channel, reference=self.origin.message
       )
       pendingconfession.set_content(embed=embed)
       pendingconfession.channeltype_flags = MarketplaceFlags.OFFER
@@ -276,7 +273,7 @@ class ConfessionsMarketplace(commands.Cog):
     embed.set_footer(text=self.babel(inter, 'shop_disclaimer'))
 
     pendingconfession = ConfessionData(self.bot.cogs['Confessions'])
-    pendingconfession.create(author=inter.user, targetchannel=inter.channel)
+    pendingconfession.create(author=inter.user, target=inter.channel)
     pendingconfession.set_content(embed=embed)
     if image:
       await inter.response.defer(ephemeral=True)
@@ -303,7 +300,7 @@ class ConfessionsMarketplace(commands.Cog):
         'view': self.ListingView(self, inter, id_seller)
       }
     elif data.channeltype_flags == MarketplaceFlags.OFFER:
-      listing = await data.targetchannel.fetch_message(data.reference.id)
+      listing = await data.target.fetch_message(data.reference.id)
       id_seller = listing.components[0].children[0].custom_id[28:]
       raw_buyer = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big'))
       id_buyer = b64encode(raw_buyer).decode('ascii')

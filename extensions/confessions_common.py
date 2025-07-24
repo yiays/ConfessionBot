@@ -23,6 +23,8 @@ if TYPE_CHECKING:
   from configparser import SectionProxy
   from babel import Babel, Resolvable
 
+type Confessable = (discord.TextChannel | discord.Thread)
+
 
 # Data Classes
 
@@ -186,11 +188,11 @@ def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int,
     config.pop(f'{guild_id}_channels')
 
 
-async def safe_fetch_channel(
+async def safe_fetch_target(
   parent:Confessions | ConfessionsModeration,
   inter:discord.Interaction,
   channel_id:int
-) -> Optional[discord.TextChannel]:
+) -> Optional[Confessable]:
   """ Gracefully handles whenever a confession target isn't available """
   try:
     return await parent.bot.fetch_channel(channel_id)
@@ -217,14 +219,14 @@ class NoMemberCacheError(Exception):
 class ChannelSelectView(discord.ui.View):
   """ View for selecting a target interactively """
   page: int = 0
-  selection: Optional[discord.TextChannel] = None
+  selection: Optional[Confessable] = None
   done: bool = False
 
   def __init__(
       self,
       origin:discord.Message | discord.Interaction,
       parent:Confessions | ConfessionsSetup,
-      matches:list[tuple[discord.TextChannel, ChannelType]],
+      matches:list[tuple[Confessable, ChannelType]],
       confession:ConfessionData | None = None
     ):
     super().__init__()
@@ -283,7 +285,9 @@ class ChannelSelectView(discord.ui.View):
     self.update_list()
     guildchannels = get_guildchannels(self.parent.config, self.selection.guild.id)
     vetting = findvettingchannel(guildchannels)
-    channeltype = guildchannels[self.selection.id]
+    channeltype = guildchannels.get(
+      self.selection.parent_id if isinstance(self.selection, discord.Thread) else self.selection.id
+    )
     await inter.response.edit_message(
       content=self.parent.babel(
         inter, 'channelprompted', channel=self.selection.mention,
@@ -302,7 +306,7 @@ class ChannelSelectView(discord.ui.View):
 
     if self.confession is None:
       self.confession = ConfessionData(self.parent)
-      self.confession.create(author=inter.user, targetchannel=self.selection)
+      self.confession.create(author=inter.user, target=self.selection)
       self.confession.set_content(self.origin.content)
 
       if self.origin.attachments:
@@ -310,7 +314,7 @@ class ChannelSelectView(discord.ui.View):
         await self.confession.add_image(attachment=self.origin.attachments[0])
     else:
       # Override targetchannel as this has changed
-      self.confession.create(author=inter.user, targetchannel=self.selection)
+      self.confession.create(author=inter.user, target=self.selection)
 
     if vetting := await self.confession.check_vetting(inter):
       await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
@@ -463,7 +467,7 @@ class ConfessionData:
   DATA_VERSION = 2
   anonid:str | None
   author:discord.User
-  targetchannel:discord.TextChannel
+  target:Confessable
   channeltype_flags:int = 0
   content:str | None = None
   reference:discord.Message | discord.PartialMessage | None = None
@@ -500,10 +504,13 @@ class ConfessionData:
     else:
       raise CorruptConfessionDataException("Data format incorrect;", len(binary), "!=", 26)
     self.author = await self.bot.fetch_user(author_id)
-    self.targetchannel = await self.bot.fetch_channel(targetchannel_id)
-    self.anonid = self.get_anonid(self.targetchannel.guild.id, self.author.id)
-    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
-    self.channeltype = guildchannels.get(self.targetchannel.id, ChannelType.unset)
+    self.target = await self.bot.fetch_channel(targetchannel_id)
+    self.anonid = self.get_anonid(self.target.guild.id, self.author.id)
+    guildchannels = get_guildchannels(self.config, self.target.guild.id)
+    self.channeltype = guildchannels.get(
+      self.target.parent_id if isinstance(self.target, discord.Thread) else self.target.id,
+      ChannelType.unset
+    )
     self.targetchanneltype = self.channeltype
     # References must exist in the cache, meaning confession replies will not survive a restart
     # Note: this assumes the data will only be retreived once
@@ -513,19 +520,22 @@ class ConfessionData:
     self,
     *,
     author:discord.User | None = None,
-    targetchannel:discord.TextChannel | None = None,
+    target:Confessable | None = None,
     reference:discord.Message | None = None
   ):
-    if (author and not targetchannel) or (targetchannel and not author):
+    if (author and not target) or (target and not author):
       raise Exception("Both author and targetchannel must be provided at the same time")
     if author:
       if hasattr(self, 'author') and self.author != author:
         raise Exception("Attempted to change confession author from", self.author, "to", author, "!")
       self.author = author
-      self.targetchannel = targetchannel
-      self.anonid = self.get_anonid(targetchannel.guild.id, author.id)
-      guildchannels = get_guildchannels(self.config, targetchannel.guild.id)
-      self.channeltype = guildchannels.get(targetchannel.id, ChannelType.unset)
+      self.target = target
+      self.anonid = self.get_anonid(target.guild.id, author.id)
+      guildchannels = get_guildchannels(self.config, target.guild.id)
+      self.channeltype = guildchannels.get(
+        target.parent_id if isinstance(target, discord.Thread) else target.id,
+        ChannelType.unset
+      )
       self.targetchanneltype = self.channeltype
     if reference:
       self.reference = reference
@@ -567,7 +577,7 @@ class ConfessionData:
     # Size limit: ~100 bytes
     bversion = self.DATA_VERSION.to_bytes(1, 'big')
     bauthor = self.author.id.to_bytes(8, 'big')
-    btarget = self.targetchannel.id.to_bytes(8, 'big')
+    btarget = self.target.id.to_bytes(8, 'big')
     bflags = self.channeltype_flags.to_bytes(1, 'big')
     if self.reference:
       breference = self.reference.id.to_bytes(8, 'big')
@@ -614,7 +624,7 @@ class ConfessionData:
 
   def check_banned(self) -> bool:
     """ Verify the user hasn't been banned """
-    guild_id = self.targetchannel.guild.id
+    guild_id = self.target.guild.id
     if self.anonid in self.config.get(f"{guild_id}_banned", fallback='').split(','):
       return False
     return True
@@ -622,7 +632,7 @@ class ConfessionData:
   def check_image(self) -> bool:
     """ Only allow images to be sent if imagesupport is enabled and the image is valid """
     image = self.attachment
-    guild_id = self.targetchannel.guild.id
+    guild_id = self.target.guild.id
     if image and image.content_type.startswith('image') and image.size < 25_000_000:
       # Discord size limit
       if bool(self.config.get(f"{guild_id}_imagesupport", fallback=True)):
@@ -643,13 +653,13 @@ class ConfessionData:
   ) -> discord.TextChannel | bool | None:
     """ Check if vetting is required, this is not a part of check_all """
     send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
-    guildchannels = get_guildchannels(self.config, self.targetchannel.guild.id)
+    guildchannels = get_guildchannels(self.config, self.target.guild.id)
     vetting = findvettingchannel(guildchannels)
     if vetting and self.targetchanneltype.vetted:
       if 'ConfessionsModeration' not in self.bot.cogs:
         await send(self.babel(inter, 'no_moderation'), ephemeral=True)
         return False
-      return self.targetchannel.guild.get_channel(vetting)
+      return self.target.guild.get_channel(vetting)
     return None
 
   async def check_all(self, inter:discord.Interaction) -> bool:
@@ -671,7 +681,7 @@ class ConfessionData:
         # Assume that special_cmd can only be called directly as this is most likely true
         await send(self.babel(
           inter, 'wrongcommand',
-          cmd=self.targetchanneltype.special_cmd, channel=self.targetchannel.mention
+          cmd=self.targetchanneltype.special_cmd, channel=self.target.mention
         ), **kwargs)
         return False
     else:
@@ -711,8 +721,8 @@ class ConfessionData:
       return True
     except discord.Forbidden:
       try:
-        await self.targetchannel.send(
-          self.babel(self.targetchannel.guild, 'missingperms', perm='Embed Links')
+        await self.target.send(
+          self.babel(self.target.guild, 'missingperms', perm='Embed Links')
         )
         await send(self.babel(inter, 'embederr'), **kwargs)
       except discord.Forbidden:
@@ -727,7 +737,7 @@ class ConfessionData:
     success_message:bool = False,
     perform_checks:bool = True,
     *,
-    channel:discord.TextChannel | None = None,
+    target:Confessable | None = None,
     webhook_override:bool | None = None,
     preface_override:str | None = None,
     **kwargs
@@ -748,25 +758,27 @@ class ConfessionData:
       await inter.response.defer(ephemeral=True)
 
     # Flag-based behaviour
-    if channel is None:
-      channel = self.targetchannel
+    if target is None:
+      target = self.target
     # Update channeltype, in case this channel is different
-    guildchannels = get_guildchannels(self.config, channel.guild.id)
-    self.channeltype = guildchannels.get(channel.id, ChannelType.unset)
+    guildchannels = get_guildchannels(self.config, target.guild.id)
+    self.channeltype = guildchannels.get(
+      target.parent_id if isinstance(target, discord.Thread) else target.id, ChannelType.unset
+    )
     if perform_checks:
       if not await self.check_all(inter):
         return False
     preface = (
       preface_override if preface_override is not None
-      else self.config.get(f'{channel.guild.id}_preface', fallback='')
+      else self.config.get(f'{target.guild.id}_preface', fallback='')
     )
     use_webhook = (
       webhook_override if webhook_override is not None
-      else self.config.getboolean(f'{channel.guild.id}_webhook', False)
+      else self.config.getboolean(f'{target.guild.id}_webhook', False)
     )
 
     # Allow external modules to modify the message before sending
-    if channel == self.targetchannel:
+    if target == self.target:
       # ...as long as it's not being intercepted by another mechanism - like vetting
       if dep := self.channeltype.dep:
         if dep not in self.bot.cogs:
@@ -789,17 +801,19 @@ class ConfessionData:
       # A best effort to always show replies, even if Discord's API doesn't allow for it
       # Discord does not allow webhooks to reply, disable it
       use_webhook = False
-      if self.reference.channel == channel:
+      if self.reference.channel == target:
         kwargs['reference'] = discord.MessageReference(
-          message_id=self.reference.id, channel_id=channel.id, fail_if_not_exists=False
+          message_id=self.reference.id, channel_id=target.id, fail_if_not_exists=False
         )
       else:
         # Discord does not allow replies to span multiple channels, reference in plaintext instead
-        preface += '\n' + self.babel(channel.guild, 'reply_to', reference=self.reference.jump_url)
+        preface += '\n' + self.babel(target.guild, 'reply_to', reference=self.reference.jump_url)
 
     # Send the confession
     if use_webhook:
-      if webhook := await self.find_or_create_webhook(channel):
+      if webhook := await self.find_or_create_webhook(target):
+        if isinstance(target, discord.Thread):
+          kwargs['thread'] = target
         mentions_in_preface = re.findall(r'<[@!&]+\d+>', preface)
         botcolour = self.bot.config['main']['themecolor'][2:]
         username = (
@@ -817,30 +831,31 @@ class ConfessionData:
         return False
     else:
       self.generate_embed()
-      func = channel.send(preface, embed=self.embed, **kwargs)
+      func = target.send(preface, embed=self.embed, **kwargs)
     success = await self.handle_send_errors(inter, func)
 
-    if 'Log' in self.bot.cogs and channel == self.targetchannel:
+    if 'Log' in self.bot.cogs and target == self.target:
       logentry = (
-        f'{self.targetchannel.guild.name}/{self.anonid} ({self.author.name}): ' +
+        f'{self.target.guild.name}/{self.anonid} ({self.author.name}): ' +
         self.bot.utilities.truncate(self.content) + (' (attachment)' if self.file else '')
       )
       await self.bot.cogs['Log'].log_misc_str(content=logentry)
 
     # Mark the command as complete by sending a success message
     if success and success_message:
-      if inter.channel != self.targetchannel: # confess-to
+      if inter.channel != self.target: # confess-to
         await inter.followup.send(
-          self.babel(inter, 'confession_sent_channel', channel=channel.mention),
+          self.babel(inter, 'confession_sent_channel', channel=target.mention),
           ephemeral=True
         )
       else: # confess
         await inter.followup.send(self.babel(inter, 'confession_sent_below'), ephemeral=True)
     return success
 
-  async def find_or_create_webhook(self, channel:discord.TextChannel) -> discord.Webhook | None:
+  async def find_or_create_webhook(self, target:Confessable) -> discord.Webhook | None:
     """ Tries to find a webhook, or create it, or complain about missing permissions """
     webhook:discord.Webhook
+    channel = target.parent if isinstance(target, discord.Thread) else target
     try:
       for webhook in await channel.webhooks():
         if webhook.user == self.bot.user:
