@@ -232,16 +232,16 @@ class ConfessionsMarketplace(commands.Cog):
   # Slash commands
 
   @app_commands.command(
-    name=app_commands.locale_str('command_sell', scope=SCOPE),
-    description=app_commands.locale_str('command_sell_desc', scope=SCOPE)
+    name=app_commands.locale_str('sell', scope=SCOPE),
+    description=app_commands.locale_str('sell_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    title=app_commands.locale_str('command_sell_title_desc', scope=SCOPE),
-    starting_price=app_commands.locale_str('command_sell_starting_price_desc', scope=SCOPE),
-    payment_methods=app_commands.locale_str('command_sell_payment_methods_desc', scope=SCOPE),
-    description=app_commands.locale_str('command_sell_description_desc', scope=SCOPE),
-    image=app_commands.locale_str('command_sell_image_desc', scope=SCOPE)
+    title=app_commands.locale_str('sell_title_desc', scope=SCOPE),
+    starting_price=app_commands.locale_str('sell_starting_price_desc', scope=SCOPE),
+    payment_methods=app_commands.locale_str('sell_payment_methods_desc', scope=SCOPE),
+    description=app_commands.locale_str('sell_description_desc', scope=SCOPE),
+    image=app_commands.locale_str('sell_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def sell(

@@ -370,8 +370,8 @@ class ConfessionsSetup(commands.Cog):
   # Commands
 
   @app_commands.command(
-    name=app_commands.locale_str('command_setup', scope=SCOPE),
-    description=app_commands.locale_str('command_setup_desc', scope=SCOPE)
+    name=app_commands.locale_str('setup', scope=SCOPE),
+    description=app_commands.locale_str('setup_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.default_permissions(manage_channels=True)
@@ -386,8 +386,8 @@ class ConfessionsSetup(commands.Cog):
     )
 
   @app_commands.command(
-    name=app_commands.locale_str('command_shuffle', scope=SCOPE),
-    description=app_commands.locale_str('command_shuffle_desc', scope=SCOPE)
+    name=app_commands.locale_str('shuffle', scope=SCOPE),
+    description=app_commands.locale_str('shuffle_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.default_permissions(moderate_members=True)

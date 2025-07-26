@@ -73,7 +73,7 @@ class Confessions(commands.Cog):
     self.confession_cooldown = dict()
 
     self.confess_reply = app_commands.ContextMenu(
-      name=app_commands.locale_str('command_Confession_Reply', scope=self.SCOPE),
+      name=app_commands.locale_str('Confession_Reply', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
       allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
       callback=self.confess_reply_callback
@@ -359,13 +359,13 @@ class Confessions(commands.Cog):
   #	Slash commands
 
   @app_commands.command(
-    name=app_commands.locale_str('command_confess', scope=SCOPE),
-    description=app_commands.locale_str('command_confess_desc', scope=SCOPE)
+    name=app_commands.locale_str('confess', scope=SCOPE),
+    description=app_commands.locale_str('confess_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    content=app_commands.locale_str('command_confess_content_desc', scope=SCOPE),
-    image=app_commands.locale_str('command_confess_image_desc', scope=SCOPE)
+    content=app_commands.locale_str('confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('confess_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess(
@@ -385,12 +385,15 @@ class Confessions(commands.Cog):
       await pendingconfession.add_image(attachment=image)
     await self.verify_and_send(inter, pendingconfession)
 
-  @app_commands.command(name='confess-to')
+  @app_commands.command(
+    name=app_commands.locale_str('confess-to', scope=SCOPE),
+    description=app_commands.locale_str('confess-to_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    channel=app_commands.locale_str('command_confess-to_channel_desc', scope=SCOPE),
-    content=app_commands.locale_str('command_confess_content_desc', scope=SCOPE),
-    image=app_commands.locale_str('command_confess_image_desc', scope=SCOPE)
+    channel=app_commands.locale_str('confess-to_channel_desc', scope=SCOPE),
+    content=app_commands.locale_str('confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('confess_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess_to(
@@ -450,8 +453,8 @@ class Confessions(commands.Cog):
     )
 
   @app_commands.command(
-    name=app_commands.locale_str('command_list', scope=SCOPE),
-    description=app_commands.locale_str('command_list_desc', scope=SCOPE)
+    name=app_commands.locale_str('list', scope=SCOPE),
+    description=app_commands.locale_str('list_desc', scope=SCOPE)
   )
   async def list(self, inter:discord.Interaction):
     """

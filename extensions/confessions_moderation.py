@@ -53,7 +53,7 @@ class ConfessionsModeration(commands.Cog):
       raise Exception("Module `confessions` must be enabled!")
 
     self.report = app_commands.ContextMenu(
-      name=app_commands.locale_str('command_Confession_Report', scope=self.SCOPE),
+      name=app_commands.locale_str('Confession_Report', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
       allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
       callback=self.report_callback
@@ -335,12 +335,12 @@ class ConfessionsModeration(commands.Cog):
   # Commands
 
   @app_commands.command(
-    name=app_commands.locale_str('command_block', scope=SCOPE),
-    description=app_commands.locale_str('command_block_desc', scope=SCOPE)
+    name=app_commands.locale_str('block', scope=SCOPE),
+    description=app_commands.locale_str('block_desc', scope=SCOPE)
   )
   @app_commands.describe(
-    anonid=app_commands.locale_str('command_block_anonid_desc', scope=SCOPE),
-    unblock=app_commands.locale_str('command_block_unblock_desc', scope=SCOPE)
+    anonid=app_commands.locale_str('block_anonid_desc', scope=SCOPE),
+    unblock=app_commands.locale_str('block_unblock_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True, private_channels=False)
   @app_commands.default_permissions(moderate_members=True)
