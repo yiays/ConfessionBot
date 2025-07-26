@@ -19,7 +19,7 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions_common import Crypto
 
 from overlay.extensions.confessions_common import (
-  ConfessionData, CorruptConfessionDataException, safe_fetch_channel
+  ConfessionData, CorruptConfessionDataException, safe_fetch_target
 )
 
 
@@ -53,7 +53,7 @@ class ConfessionsModeration(commands.Cog):
       raise Exception("Module `confessions` must be enabled!")
 
     self.report = app_commands.ContextMenu(
-      name="Report confession",
+      name=app_commands.locale_str('Confession_Report', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
       allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
       callback=self.report_callback
@@ -61,7 +61,7 @@ class ConfessionsModeration(commands.Cog):
     bot.tree.add_command(self.report)
 
   def cog_unload(self):
-    self.bot.tree.remove_command(self.report.name, type=self.report.type)
+    self.bot.tree.remove_command(self.report.qualified_name, type=self.report.type)
 
   # Context menu commands
 
@@ -104,11 +104,11 @@ class ConfessionsModeration(commands.Cog):
       Send confession to a vetting channel for approval
       Checks are performed at this stage
     """
-    preface = self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.targetchannel.mention)
+    preface = self.babel(vettingchannel.guild, 'vetmessagecta', channel=data.target.mention)
     view = self.PendingConfessionView(self, data)
     success = await data.send_confession(
       inter,
-      channel=vettingchannel,
+      target=vettingchannel,
       webhook_override=False,
       preface_override=preface,
       view=view
@@ -116,7 +116,7 @@ class ConfessionsModeration(commands.Cog):
 
     if success:
       await inter.followup.send(
-        self.babel(inter, 'confession_vetting', channel=data.targetchannel.mention),
+        self.babel(inter, 'confession_vetting', channel=data.target.mention),
         ephemeral=True
       )
 
@@ -127,7 +127,7 @@ class ConfessionsModeration(commands.Cog):
     def __init__(self, parent:ConfessionsModeration, pendingconfession:"ConfessionData"):
       super().__init__(timeout=None)
 
-      guild = pendingconfession.targetchannel.guild
+      guild = pendingconfession.target.guild
       data = pendingconfession.store()
       self.add_item(discord.ui.Button(
         label=parent.babel(guild, 'vetting_approve_button'),
@@ -214,7 +214,7 @@ class ConfessionsModeration(commands.Cog):
     async def on_submit(self, inter: discord.Interaction):
       """ Send report to mod channel as configured """
       if self.parent.config['report_channel']:
-        reportchannel = await safe_fetch_channel(
+        reportchannel = await safe_fetch_target(
           self.parent, inter, int(self.parent.config.get('report_channel'))
         )
         if reportchannel is None:
@@ -306,7 +306,7 @@ class ConfessionsModeration(commands.Cog):
         self.button_lock.remove(custom_id)
         raise e
 
-    metadata = {'user':inter.user.mention, 'channel':pendingconfession.targetchannel.mention}
+    metadata = {'user':inter.user.mention, 'channel':pendingconfession.target.mention}
     if accepted:
       msg = self.babel(inter.guild, 'vetaccepted', **metadata)
     else:
@@ -322,7 +322,7 @@ class ConfessionsModeration(commands.Cog):
     content = self.babel(
       pendingconfession.author,
       'confession_vetting_accepted' if accepted else 'confession_vetting_denied',
-      channel=f"<#{pendingconfession.targetchannel.id}>"
+      channel=f"<#{pendingconfession.target.id}>"
     )
     if str(pendingconfession.author.id) not in self.config.get('dm_notifications', '').split(','):
       try:
@@ -334,10 +334,13 @@ class ConfessionsModeration(commands.Cog):
 
   # Commands
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('block', scope=SCOPE),
+    description=app_commands.locale_str('block_desc', scope=SCOPE)
+  )
   @app_commands.describe(
-    anonid="The anonymous id found next to any traceable anonymous message",
-    unblock="Set to true if you want to unblock this id instead"
+    anonid=app_commands.locale_str('block_anonid_desc', scope=SCOPE),
+    unblock=app_commands.locale_str('block_unblock_desc', scope=SCOPE)
   )
   @app_commands.allowed_contexts(guilds=True, private_channels=False)
   @app_commands.default_permissions(moderate_members=True)

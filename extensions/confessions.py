@@ -13,7 +13,7 @@ from base64 import b64encode
 from typing import Optional, Union, TYPE_CHECKING
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -21,14 +21,15 @@ if TYPE_CHECKING:
   from configparser import SectionProxy
 
 from overlay.extensions.confessions_common import (
-  ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto, get_guildchannels,
-  safe_fetch_channel
+  Confessable, ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto,
+  get_guildchannels, safe_fetch_target
 )
 
 
 class Confessions(commands.Cog):
   """ Facilitates anonymous messaging with moderation on your server """
   SCOPE = 'confessions'
+  customcommands: dict[int, str] = {}
 
   @property
   def config(self) -> SectionProxy:
@@ -72,15 +73,50 @@ class Confessions(commands.Cog):
     self.confession_cooldown = dict()
 
     self.confess_reply = app_commands.ContextMenu(
-      name="Confession Reply",
+      name=app_commands.locale_str('Confession_Reply', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
       allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
       callback=self.confess_reply_callback
     )
     bot.tree.add_command(self.confess_reply)
+    self.bind_custom_commands.start()
 
   async def cog_unload(self):
-    self.bot.tree.remove_command(self.confess_reply.name, type=self.confess_reply.type)
+    self.bind_custom_commands.stop()
+    self.bot.tree.remove_command(self.confess_reply.qualified_name, type=self.confess_reply.type)
+    for guild_id, cmdname in self.customcommands.items():
+      self.bot.tree.remove_command(cmdname, guild=discord.Object(guild_id))
+
+  @tasks.loop(seconds=10)
+  async def bind_custom_commands(self):
+    """ If any users have requested a custom name for /confess, bind it to the tree """
+    for guild in self.bot.guilds:
+      customname = self.config.get(f'{guild.id}_confessname')
+      if customname:
+        if guild.id in self.customcommands:
+          # Check if custom command already exists
+          if self.customcommands[guild.id] == customname:
+            # No need to rebind unless the name changes
+            continue
+          self.bot.tree.remove_command(self.customcommands[guild.id], guild=guild)
+        self.customcommands[guild.id] = customname
+        self.bot.tree.add_command(
+          app_commands.Command(
+            name=customname,
+            description=app_commands.locale_str('confess_desc', scope=self.SCOPE),
+            callback=self.renamed_confess_callback,
+            guild_ids=[guild.id],
+            allowed_contexts=app_commands.AppCommandContext(guild=True)
+          )
+        )
+        await self.bot.tree.sync(guild=guild)
+        #if self.bot.verbose:
+        print(f"Bound custom command /{customname} to guild {guild.name}")
+      else:
+        # Remove custom command if it exists
+        if guild.id in self.customcommands:
+          self.bot.tree.remove_command(self.customcommands[guild.id], guild=guild)
+          await self.bot.tree.sync(guild=guild)
 
   # Context menu commands
 
@@ -91,24 +127,48 @@ class Confessions(commands.Cog):
       await inter.response.send_message(self.babel(inter, 'confession_reply_failed'), ephemeral=True)
       return
     data = ConfessionData(self)
-    data.create(author=inter.user, targetchannel=inter.channel, reference=message)
+    data.create(author=inter.user, target=inter.channel, reference=message)
     await self.verify_and_send(inter, data)
+
+  @app_commands.describe(
+    content=app_commands.locale_str('confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('confess_image_desc', scope=SCOPE)
+  )
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
+  async def renamed_confess_callback(
+    self,
+    inter:discord.Interaction,
+    content:Optional[app_commands.Range[str, 0, 3900]] = None,
+    image:Optional[discord.Attachment] = None
+  ):
+    """
+      Send an anonymous message to this channel
+    """
+    pendingconfession = ConfessionData(self)
+    pendingconfession.create(author=inter.user, target=inter.channel)
+    pendingconfession.set_content(content)
+    if image:
+      await inter.response.defer(ephemeral=True)
+      await pendingconfession.add_image(attachment=image)
+    await self.verify_and_send(inter, pendingconfession)
 
   #	Utility functions
 
   def generate_list(
     self,
     user:discord.User,
-    matches:list[tuple[discord.TextChannel, ChannelType]],
+    matches:list[tuple[Confessable, ChannelType]],
     vetting:bool
   ) -> str:
     """ Returns a formatted list of available confession targets """
 
     targets = []
     for match in matches:
+      guildname = self.bot.utilities.truncate(match[0].guild.name, 40)
+      indent = 4 if isinstance(match[0], discord.Thread) else 0
       targets.append(
-        f'{match[1].icon} <#{match[0].id}>' +
-        (' ('+match[0].guild.name+')' if not isinstance(user, discord.Member) else '')
+        f'{'\u200f\u200f\u200e \u200e' * indent}{match[1].icon} <#{match[0].id}>' +
+        (' ('+guildname+')' if not isinstance(user, discord.Member) else '')
       )
     vettingwarning = ('\n\n'+self.babel(user, 'vetting') if vetting else '')
 
@@ -116,34 +176,52 @@ class Confessions(commands.Cog):
 
   def scanguild(
     self, member:discord.Member
-  ) -> tuple[list[tuple[discord.TextChannel, ChannelType]], bool]:
+  ) -> tuple[list[tuple[Confessable, ChannelType]], bool]:
     """ Scans a guild for any targets that a member can use for confessions """
 
-    matches:list[tuple[discord.TextChannel, ChannelType]] = []
+    matches:list[tuple[Confessable, ChannelType]] = []
     vetting = False
     guildchannels = get_guildchannels(self.config, member.guild.id)
     for channel in member.guild.channels:
       if channel.id in guildchannels:
-        if guildchannels[channel.id] == ChannelType.vetting:
+        channeltype = guildchannels[channel.id]
+        if channeltype == ChannelType.vetting:
           vetting = True
           continue
-        channel.name = channel.name[:40] + ('...' if len(channel.name) > 40 else '')
-        channel.guild.name = channel.guild.name[:40]+('...' if len(channel.guild.name) > 40 else '')
-        if 'feedback' in guildchannels[channel.id].name:
-          matches.append((channel, guildchannels[channel.id]))
+        if 'feedback' in channeltype.name:
+          matches += [(channel, channeltype)] + self.scanchannel(channel, channeltype)
           continue
         if channel.permissions_for(member).read_messages:
-          matches.append((channel, guildchannels[channel.id]))
+          matches += [(channel, channeltype)] + self.scanchannel(channel, channeltype)
           continue
 
-    matches.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
+    def sort(t:tuple[Confessable, ChannelType]):
+      if isinstance(t[0], discord.TextChannel):
+        return (t[0].category.position if t[0].category else 0, t[0].position)
+      elif isinstance(t[0], discord.Thread):
+        return (t[0].category.position if t[0].category else 0, t[0].parent.position)
+      raise Exception("Confessable target was not a TextChannel or a Thread!")
+    matches.sort(key=sort)
 
     return matches, vetting
+
+  def scanchannel(
+    self, channel:discord.TextChannel, channeltype:ChannelType
+  ) -> list[tuple[Confessable, ChannelType]]:
+    """ Scans a channel for any active threads that can be used for confessions """
+
+    matches:list[Confessable] = []
+    for thread in channel.threads:
+      if thread.type != discord.ChannelType.public_thread:
+        continue
+      matches.append((thread, channeltype))
+
+    return matches
 
   def listavailablechannels(
       self,
       user:Union[discord.User, discord.Member]
-    ) -> tuple[list[tuple[discord.TextChannel, ChannelType]], bool]:
+    ) -> tuple[list[tuple[Confessable, ChannelType]], bool]:
     """
       List all available targets on a server for a member
       List all available targets on all mutual servers for a user
@@ -280,11 +358,14 @@ class Confessions(commands.Cog):
 
   #	Slash commands
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('confess', scope=SCOPE),
+    description=app_commands.locale_str('confess_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    content="The text of your anonymous message, leave blank for a paragraph editor",
-    image="An optional image that appears below the text"
+    content=app_commands.locale_str('confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('confess_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess(
@@ -297,19 +378,22 @@ class Confessions(commands.Cog):
       Send an anonymous message to this channel
     """
     pendingconfession = ConfessionData(self)
-    pendingconfession.create(author=inter.user, targetchannel=inter.channel)
+    pendingconfession.create(author=inter.user, target=inter.channel)
     pendingconfession.set_content(content)
     if image:
       await inter.response.defer(ephemeral=True)
       await pendingconfession.add_image(attachment=image)
     await self.verify_and_send(inter, pendingconfession)
 
-  @app_commands.command(name='confess-to')
+  @app_commands.command(
+    name=app_commands.locale_str('confess-to', scope=SCOPE),
+    description=app_commands.locale_str('confess-to_desc', scope=SCOPE)
+  )
   @app_commands.allowed_contexts(guilds=True)
   @app_commands.describe(
-    channel="The target channel, can include anonymous feedback channels that you can't see",
-    content="The text of your anonymous message, leave blank for a paragraph editor",
-    image="An optional image that appears below the text"
+    channel=app_commands.locale_str('confess-to_channel_desc', scope=SCOPE),
+    content=app_commands.locale_str('confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('confess_image_desc', scope=SCOPE)
   )
   @commands.cooldown(1, 1, type=commands.BucketType.user)
   async def confess_to(
@@ -323,9 +407,9 @@ class Confessions(commands.Cog):
       Send an anonymous message to a specified channel
     """
     if channel.isdigit() and int(channel):
-      if targetchannel := await safe_fetch_channel(self, inter, int(channel)):
+      if targetchannel := await safe_fetch_target(self, inter, int(channel)):
         pendingconfession = ConfessionData(self)
-        pendingconfession.create(author=inter.user, targetchannel=targetchannel)
+        pendingconfession.create(author=inter.user, target=targetchannel)
         pendingconfession.set_content(content)
         if image:
           await inter.response.defer(ephemeral=True)
@@ -347,15 +431,31 @@ class Confessions(commands.Cog):
     matches, _ = self.scanguild(inter.user)
     for match in matches:
       if search in match[0].name:
+        name:str
+        if isinstance(match[0], discord.TextChannel):
+          name = self.bot.utilities.truncate(match[0].name, 40)
+        elif isinstance(match[0], discord.Thread):
+          name = (
+            self.bot.utilities.truncate(match[0].parent.name, 20) + '/'
+            + self.bot.utilities.truncate(match[0].name, 20)
+          )
+        else:
+          name = 'UNKNOWN TYPE'
         results.append(
-          app_commands.Choice(name=f"{match[1].icon} #{match[0].name}", value=str(match[0].id))
+          app_commands.Choice(
+            name=f"{match[1].icon} #{name}",
+            value=str(match[0].id)
+          )
         )
     return results[0:24] + (
-      [app_commands.Choice(name='this list is incomplete, use /list to see all', value='0')]
+      [app_commands.Choice(name=self.babel(inter, 'concat_list'), value='0')]
       if len(results) > 25 else []
     )
 
-  @app_commands.command()
+  @app_commands.command(
+    name=app_commands.locale_str('list', scope=SCOPE),
+    description=app_commands.locale_str('list_desc', scope=SCOPE)
+  )
   async def list(self, inter:discord.Interaction):
     """
     List all anonymous channels available here
