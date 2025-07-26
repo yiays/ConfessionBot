@@ -13,7 +13,7 @@ from base64 import b64encode
 from typing import Optional, Union, TYPE_CHECKING
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
   from main import MerelyBot
@@ -29,6 +29,7 @@ from overlay.extensions.confessions_common import (
 class Confessions(commands.Cog):
   """ Facilitates anonymous messaging with moderation on your server """
   SCOPE = 'confessions'
+  customcommands: dict[int, str] = {}
 
   @property
   def config(self) -> SectionProxy:
@@ -78,9 +79,44 @@ class Confessions(commands.Cog):
       callback=self.confess_reply_callback
     )
     bot.tree.add_command(self.confess_reply)
+    self.bind_custom_commands.start()
 
   async def cog_unload(self):
+    self.bind_custom_commands.stop()
     self.bot.tree.remove_command(self.confess_reply.qualified_name, type=self.confess_reply.type)
+    for guild_id, cmdname in self.customcommands.items():
+      self.bot.tree.remove_command(cmdname, guild=discord.Object(guild_id))
+
+  @tasks.loop(seconds=10)
+  async def bind_custom_commands(self):
+    """ If any users have requested a custom name for /confess, bind it to the tree """
+    for guild in self.bot.guilds:
+      customname = self.config.get(f'{guild.id}_confessname')
+      if customname:
+        if guild.id in self.customcommands:
+          # Check if custom command already exists
+          if self.customcommands[guild.id] == customname:
+            # No need to rebind unless the name changes
+            continue
+          self.bot.tree.remove_command(self.customcommands[guild.id], guild=guild)
+        self.customcommands[guild.id] = customname
+        self.bot.tree.add_command(
+          app_commands.Command(
+            name=customname,
+            description=app_commands.locale_str('confess_desc', scope=self.SCOPE),
+            callback=self.renamed_confess_callback,
+            guild_ids=[guild.id],
+            allowed_contexts=app_commands.AppCommandContext(guild=True)
+          )
+        )
+        await self.bot.tree.sync(guild=guild)
+        #if self.bot.verbose:
+        print(f"Bound custom command /{customname} to guild {guild.name}")
+      else:
+        # Remove custom command if it exists
+        if guild.id in self.customcommands:
+          self.bot.tree.remove_command(self.customcommands[guild.id], guild=guild)
+          await self.bot.tree.sync(guild=guild)
 
   # Context menu commands
 
@@ -93,6 +129,28 @@ class Confessions(commands.Cog):
     data = ConfessionData(self)
     data.create(author=inter.user, target=inter.channel, reference=message)
     await self.verify_and_send(inter, data)
+
+  @app_commands.describe(
+    content=app_commands.locale_str('confess_content_desc', scope=SCOPE),
+    image=app_commands.locale_str('confess_image_desc', scope=SCOPE)
+  )
+  @commands.cooldown(1, 1, type=commands.BucketType.user)
+  async def renamed_confess_callback(
+    self,
+    inter:discord.Interaction,
+    content:Optional[app_commands.Range[str, 0, 3900]] = None,
+    image:Optional[discord.Attachment] = None
+  ):
+    """
+      Send an anonymous message to this channel
+    """
+    pendingconfession = ConfessionData(self)
+    pendingconfession.create(author=inter.user, target=inter.channel)
+    pendingconfession.set_content(content)
+    if image:
+      await inter.response.defer(ephemeral=True)
+      await pendingconfession.add_image(attachment=image)
+    await self.verify_and_send(inter, pendingconfession)
 
   #	Utility functions
 

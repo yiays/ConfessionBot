@@ -62,7 +62,8 @@ class ConfessionsSetup(commands.Cog):
       out += [
         Toggleable(self.SCOPE, f'{inter.guild_id}_imagesupport', 'image_support', default=True),
         Toggleable(self.SCOPE, f'{inter.guild_id}_webhook', 'enable_webhooks', default=False),
-        Stringable(self.SCOPE, f'{inter.guild_id}_preface', 'confession_preface')
+        Stringable(self.SCOPE, f'{inter.guild_id}_preface', 'confession_preface'),
+        Stringable(self.SCOPE, f'{inter.guild_id}_confessname', 'confess_custom_name', r'\p{L}{1,32}')
         #TODO: Add custom pfp stringable, Anon-ID usernames, Anon-Colour pfps
       ]
     return out
