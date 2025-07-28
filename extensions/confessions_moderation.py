@@ -292,7 +292,7 @@ class ConfessionsModeration(commands.Cog):
 
     if accepted:
       try:
-        if inter.message.embeds[0].image:
+        if inter.message.embeds[0].image.url:
           await pendingconfession.add_image(url=inter.message.embeds[0].image.url)
         elif (
           len(inter.message.attachments) and
