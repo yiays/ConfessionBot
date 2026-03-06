@@ -7,8 +7,6 @@
 > [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=562440687363293195&permissions=0&scope=bot%20applications.commands) to your own server
 
 ## News
-![New features you might have missed: Compact confessions; admins with premium can enable this in the /controlpanel. Consolidated control; /controlpanel can be used anywhere to tweak advanced settings. Simpler setup; setup your entire server with /setup. More moderation; right click to confess or report confessions. Built-in branding; Admins with premium can now set the text before confessions.](news/Update%20Poster%20-%20Catchup.webp)
-
 ![ConfessionBot v2.6: Confession Replies; reply to any message anonymously in the right click menu. Easier channel types; Untraceable and traceable modes have been combined into one new type (Anonymous). Marketplace; A marketplace channel type is available to users who pay for a custom bot. Click to command; click on mentioned commands to use them immediately. Second chances; If you send a confession to an unset channel, you can redirect it.](news/Update%20Poster%20-%20v2.6.webp)
 
 ## Usage
@@ -16,7 +14,7 @@
 ### Terms of use
 You are welcome to clone this source and run your own instance for any purpose, but **please don't copy the branding of ConfessionBot!**
 
-Clones of ConfessionBot that have the same branding are harmful for our support server and image. Especially if modifications are made which invade users' privacy.
+Clones of ConfessionBot that have the same branding are harmful for our support server and image.
 
 You can easily rename the bot by changing the botname parameter in `config.ini`. You should also use a different Username and profile picture when creating the bot user.
 
@@ -24,13 +22,26 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
  - Clone [Merely Framework](https://github.com/MerelyServices/Merely-Framework) into a folder
  - Create a subfolder named 'overlay'
  - Clone this project into 'overlay'
- - Install python <=3.10
- - Install required python packages with `python3 -m pip install -r requirements.txt`
- - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token to continue
+ - Install python >= 3.11
+ - Install required python packages with `python3 -m pip install -r requirements.txt -r overlay/requirements.txt`
+ - Run your bot once to generate the config file; `python3 main.py`
+ - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token
     - **[Please don't copy the branding of ConfessionBot!](#Terms-of-use)**
- - Give ConfessionBot the token by setting it in the [main] section of the config
+ - Give ConfessionBot the token by setting it in the [main] section of the config (overlay/config/config.ini)
+   - **Never put your token in config.factory.ini** - this file is public when you commit to GitHub.
  - Run your bot with `python3 main.py`
- - Add your ConfessionBot to your server
+ - Add your bot to your server, use the id from the Discord Developer Portal in the following link;
+   - `https://discord.com/oauth2/authorize?client_id=PASTE_ID_HERE`
+ - *Optional*: change the behaviour and features of your bot in the `config/config.ini` file.
+   - Restart the bot to apply changes; `/die restart:true`
+
+### Updating
+To update, first shut down your bot gracefully with `/die`, then use the following commands.
+
+```sh
+$ git pull
+$ pip install -r requirements.txt -r overlay/requirements.txt
+```
 
 ## Contributing
 ### Translation
