@@ -22,7 +22,7 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
  - Clone [Merely Framework](https://github.com/MerelyServices/Merely-Framework) into a folder
  - Create a subfolder named 'overlay'
  - Clone this project into 'overlay'
- - Install python >= 3.11
+ - Install python >= 3.12
  - Install required python packages with `python3 -m pip install -r requirements.txt -r overlay/requirements.txt`
  - Run your bot once to generate the config file; `python3 main.py`
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token
