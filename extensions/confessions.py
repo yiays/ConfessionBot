@@ -304,6 +304,15 @@ class Confessions(commands.Cog):
       )
       self.add_item(self.content)
 
+      self.image = None
+      if data.attachment is None:
+        self.image = discord.ui.FileUpload(
+          custom_id='image',
+          required=False,
+          max_values=1
+        )
+        self.add_item(self.image)
+
       self.parent = parent
       self.data = data
 
