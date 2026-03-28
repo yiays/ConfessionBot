@@ -638,11 +638,13 @@ class ConfessionData:
     """ Only allow images to be sent if imagesupport is enabled and the image is valid """
     image = self.attachment
     guild_id = self.target.guild.id
-    if image and image.content_type.startswith('image') and image.size < 25_000_000:
-      # Discord size limit
-      if bool(self.config.get(f"{guild_id}_imagesupport", fallback=True)):
-        return True
-      return False
+    if image:
+      assert image.content_type is not None
+      if image.content_type.startswith('image') and image.size < self.target.guild.filesize_limit:
+        # Discord size limit
+        if bool(self.config.get(f"{guild_id}_imagesupport", fallback=True)):
+          return True
+        return False
     raise commands.BadArgument()
 
   def check_spam(self):
