@@ -61,7 +61,7 @@ class Confessions(ConfessionCog):
       if not bot.quiet:
         print(" - WARN: Without `confessions_moderation` enabled, vetting channels won't work")
 
-    self.crypto.key = self.config['secret']
+    self.crypto.setkey(self.config['secret'])
     self.confession_cooldown = dict()
 
     self.confess_reply = app_commands.ContextMenu(

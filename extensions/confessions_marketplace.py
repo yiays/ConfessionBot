@@ -3,7 +3,7 @@
 """
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Any, Literal, TYPE_CHECKING
 from enum import IntEnum
 from base64 import b64encode, b64decode
 import discord
@@ -281,7 +281,7 @@ class ConfessionsMarketplace(ConfessionCog):
   # Special ChannelType code
   async def on_channeltype_send(
     self, inter:discord.Interaction, data:ConfessionData
-  ) -> dict[str] | bool:
+  ) -> dict[str, Any] | Literal[False]:
     """ Add a view for headed for a marketplace channnel """
     if data.channeltype_flags == MarketplaceFlags.LISTING:
       raw_seller = data.parent.crypto.encrypt(data.author.id.to_bytes(8, 'big'))
