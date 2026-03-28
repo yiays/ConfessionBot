@@ -15,10 +15,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from confessions_common import ConfessionCog
+
 if TYPE_CHECKING:
   from main import MerelyBot
-  from babel import Resolvable
-  from configparser import SectionProxy
   from .confessions_moderation import ConfessionsModeration
 
 from overlay.extensions.confessions_common import (
@@ -27,19 +27,10 @@ from overlay.extensions.confessions_common import (
 )
 
 
-class Confessions(commands.Cog):
+class Confessions(ConfessionCog):
   """ Facilitates anonymous messaging with moderation on your server """
   SCOPE = 'confessions'
   customcommands: dict[int, str] = {}
-
-  @property
-  def config(self) -> SectionProxy:
-    """ Shorthand for self.bot.config[scope] """
-    return self.bot.config[self.SCOPE]
-
-  def babel(self, target:Resolvable, key:str, **values: str | bool) -> str:
-    """ Shorthand for self.bot.babel(scope, key, **values) """
-    return self.bot.babel(target, self.SCOPE, key, fallback=None, **values)
 
   def __init__(self, bot:MerelyBot):
     self.bot = bot

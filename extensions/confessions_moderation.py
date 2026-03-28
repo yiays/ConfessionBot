@@ -6,15 +6,15 @@
 from __future__ import annotations
 
 import asyncio, re
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, cast
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from confessions_common import ConfessionCog
+
 if TYPE_CHECKING:
   from main import MerelyBot
-  from babel import Resolvable
-  from configparser import SectionProxy
   from overlay.extensions.confessions import Confessions
   from overlay.extensions.confessions_common import Crypto
 
@@ -23,18 +23,9 @@ from overlay.extensions.confessions_common import (
 )
 
 
-class ConfessionsModeration(commands.Cog):
+class ConfessionsModeration(ConfessionCog):
   """ Moderate anonymous messaging on your server """
   SCOPE = 'confessions'
-
-  @property
-  def config(self) -> SectionProxy:
-    """ Shorthand for self.bot.config[scope] """
-    return self.bot.config[self.SCOPE]
-
-  def babel(self, target:Resolvable, key:str, **values: dict[str, str | bool]) -> str:
-    """ Shorthand for self.bot.babel(scope, key, **values) """
-    return self.bot.babel(target, self.SCOPE, key, **values)
 
   @property
   def crypto(self) -> "Crypto":
@@ -42,7 +33,8 @@ class ConfessionsModeration(commands.Cog):
       raise Exception(
         "Module `confessions` was unloaded when it's still required by `confessions_moderation`!"
       )
-    return self.bot.cogs['Confessions'].crypto
+    ext = cast(Confessions, self.bot.cogs['Confessions'])
+    return ext.crypto
 
   def __init__(self, bot:MerelyBot):
     self.bot = bot
@@ -72,7 +64,7 @@ class ConfessionsModeration(commands.Cog):
       (
         message.author == self.bot.user and
         len(message.embeds) > 0 and
-        message.embeds[0].author is not None and
+        message.embeds[0].author.name is not None and
         message.embeds[0].author.name.startswith('Anon')
       ) or (
         message.application_id == self.bot.application_id and
@@ -170,7 +162,7 @@ class ConfessionsModeration(commands.Cog):
     @discord.ui.button(
       disabled=True, style=discord.ButtonStyle.gray, emoji='➡️', custom_id='confessionreport_confirm'
     )
-    async def report_button(self, inter:discord.Interaction, _:discord.Button):
+    async def report_button(self, inter:discord.Interaction, _:discord.ui.Button):
       """ On click of continue button """
       await inter.response.send_modal(
         self.parent.ReportModal(self.parent, self.message, self.origin)
@@ -189,7 +181,7 @@ class ConfessionsModeration(commands.Cog):
     """ Confirm user input before sending a report """
     def __init__(
         self,
-        parent:"Confessions",
+        parent:ConfessionCog,
         message: discord.Message,
         origin: discord.Interaction
     ):
@@ -215,7 +207,7 @@ class ConfessionsModeration(commands.Cog):
       """ Send report to mod channel as configured """
       if self.parent.config['report_channel']:
         reportchannel = await safe_fetch_target(
-          self.parent, inter, int(self.parent.config.get('report_channel'))
+          self.parent, inter, int(self.parent.config.get('report_channel', fallback=''))
         )
         if reportchannel is None:
           await inter.response.send_message(
@@ -227,6 +219,7 @@ class ConfessionsModeration(commands.Cog):
           embed = self.message.embeds[0]
         else:
           embed = discord.Embed(description=f'**{self.message.author.name}** {self.message.content}')
+        assert inter.guild is not None
         await reportchannel.send(
           self.parent.babel(
             reportchannel.guild, 'new_report',
@@ -249,7 +242,7 @@ class ConfessionsModeration(commands.Cog):
     """ Handle approving and denying confessions """
     if inter.type != discord.InteractionType.component:
       return
-    custom_id = inter.data.get('custom_id')
+    custom_id = inter.data['custom_id']
     if not custom_id.startswith('pendingconfession_'):
       return
     if custom_id in self.button_lock:

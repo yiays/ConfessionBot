@@ -9,7 +9,7 @@ import io, re, secrets
 from base64 import b64encode, b64decode
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, Union, Literal, TYPE_CHECKING
 from collections import OrderedDict
 import discord
 from discord.ext import commands
@@ -21,12 +21,17 @@ if TYPE_CHECKING:
   from overlay.extensions.confessions_moderation import ConfessionsModeration
   from overlay.extensions.confessions_setup import ConfessionsSetup
   from configparser import SectionProxy
+  from main import MerelyCog
   from babel import Babel, Resolvable
 
 type Confessable = (discord.TextChannel | discord.Thread)
 
 
 # Data Classes
+
+class ConfessionCog(MerelyCog):
+  crypto: Crypto
+
 
 class ChannelType:
   """ Anonymous channel types and their properties """
@@ -189,7 +194,7 @@ def set_guildchannels(config:SectionProxy, guild_id:int, guildchannels:dict[int,
 
 
 async def safe_fetch_target(
-  parent:Confessions | ConfessionsModeration,
+  parent:ConfessionCog,
   inter:discord.Interaction,
   channel_id:int
 ) -> Optional[Confessable]:
@@ -225,7 +230,7 @@ class ChannelSelectView(discord.ui.View):
   def __init__(
       self,
       origin:discord.Message | discord.Interaction,
-      parent:Confessions | ConfessionsSetup,
+      parent:ConfessionCog,
       matches:list[tuple[Confessable, ChannelType]],
       confession:ConfessionData | None = None
     ):
@@ -298,7 +303,7 @@ class ChannelSelectView(discord.ui.View):
   @discord.ui.button(
     disabled=False, style=discord.ButtonStyle.primary, emoji='📨', custom_id='confessionchannel_send'
   )
-  async def send_button(self, inter:discord.Interaction, _:discord.Button):
+  async def send_button(self, inter:discord.Interaction, _:discord.ui.Button):
     """ Send the confession """
     if self.selection is None or self.done:
       self.disable(inter)
@@ -365,7 +370,7 @@ class ChannelSelectView(discord.ui.View):
     await inter.response.edit_message(
       content=(
         self.parent.babel(inter, 'channelprompt') + ' ' +
-        self.parent.babel(inter, 'channelprompt_pager', page=self.page + 1)
+        self.parent.babel(inter, 'channelprompt_pager', page=str(self.page + 1))
       ),
       view=self
     )
@@ -466,7 +471,7 @@ class ConfessionData:
   SCOPE = 'confessions' # exists to keep babel happy
   DATA_VERSION = 2
   anonid:str | None
-  author:discord.User
+  author:discord.abc.User
   target:Confessable
   channeltype_flags:int = 0
   content:str | None = None
@@ -477,7 +482,7 @@ class ConfessionData:
   channeltype:ChannelType
   targetchanneltype:ChannelType
 
-  def __init__(self, parent:Union[Confessions, ConfessionsModeration]):
+  def __init__(self, parent:ConfessionCog):
     """ Creates a ConfessionData class, from here, either use from_binary() or create() """
     # Aliases to shorten code
     self.parent = parent
@@ -519,7 +524,7 @@ class ConfessionData:
   def create(
     self,
     *,
-    author:discord.User | None = None,
+    author:discord.abc.User | None = None,
     target:Confessable | None = None,
     reference:discord.Message | None = None
   ):
@@ -650,7 +655,7 @@ class ConfessionData:
   async def check_vetting(
     self,
     inter:discord.Interaction,
-  ) -> discord.TextChannel | bool | None:
+  ) -> discord.TextChannel | Literal[False] | None:
     """ Check if vetting is required, this is not a part of check_all """
     send = (inter.followup.send if inter.response.is_done() else inter.response.send_message)
     guildchannels = get_guildchannels(self.config, self.target.guild.id)

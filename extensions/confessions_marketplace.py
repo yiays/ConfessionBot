@@ -10,10 +10,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from confessions_common import ConfessionCog
+
 if TYPE_CHECKING:
   from main import MerelyBot
-  from babel import Resolvable
-  from configparser import SectionProxy
 
 from overlay.extensions.confessions_common import ChannelType, get_guildchannels, ConfessionData
 
@@ -24,18 +24,9 @@ class MarketplaceFlags(IntEnum):
   OFFER = 2
 
 
-class ConfessionsMarketplace(commands.Cog):
+class ConfessionsMarketplace(ConfessionCog):
   """ Enable anonymous trade """
   SCOPE = 'confessions'
-
-  @property
-  def config(self) -> SectionProxy:
-    """ Shorthand for self.bot.config[scope] """
-    return self.bot.config[self.SCOPE]
-
-  def babel(self, target:Resolvable, key:str, **values: dict[str, str | bool]) -> str:
-    """ Shorthand for self.bot.babel(scope, key, **values) """
-    return self.bot.babel(target, self.SCOPE, key, **values)
 
   def __init__(self, bot:MerelyBot):
     self.bot = bot
