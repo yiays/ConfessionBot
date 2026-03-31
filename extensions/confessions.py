@@ -15,16 +15,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from confessions_common import ConfessionCog
+from .confessions_common import (
+  ConfessionCog, Confessable, ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError,
+  Crypto, get_guildchannels, safe_fetch_target
+)
 
 if TYPE_CHECKING:
   from main import MerelyBot
   from .confessions_moderation import ConfessionsModeration
-
-from overlay.extensions.confessions_common import (
-  Confessable, ChannelType, ChannelSelectView, ConfessionData, NoMemberCacheError, Crypto,
-  get_guildchannels, safe_fetch_target
-)
 
 
 class Confessions(ConfessionCog):
@@ -265,7 +263,7 @@ class Confessions(ConfessionCog):
 
       # Check for vetting
       if vettingchannel := await data.check_vetting(inter):
-        moderation = cast(ConfessionsModeration, self.bot.cogs['ConfessionsModeration'])
+        moderation = cast("ConfessionsModeration", self.bot.cogs['ConfessionsModeration'])
         await moderation.send_vetting(inter, data, vettingchannel)
         return
       if vettingchannel is False:
@@ -328,9 +326,9 @@ class Confessions(ConfessionCog):
     """ Notify users when handling vetting is not possible """
     if inter.type != discord.InteractionType.component:
       return
-    assert inter.data is not None
+    assert inter.data is not None and 'custom_id' in inter.data
     if (
-      inter.data.get('custom_id', default='').startswith('pendingconfession_') and
+      inter.data['custom_id'].startswith('pendingconfession_') and
       'ConfessionsModeration' not in self.bot.cogs
     ):
       await inter.response.send_message(self.babel(inter, 'no_moderation'))

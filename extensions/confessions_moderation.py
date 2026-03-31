@@ -11,16 +11,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from confessions_common import ConfessionCog
+from .confessions_common import (
+  ConfessionCog, ConfessionData, CorruptConfessionDataException, safe_fetch_target
+)
 
 if TYPE_CHECKING:
   from main import MerelyBot
-  from overlay.extensions.confessions import Confessions
-  from overlay.extensions.confessions_common import Crypto
-
-from overlay.extensions.confessions_common import (
-  ConfessionData, CorruptConfessionDataException, safe_fetch_target
-)
+  from confessions_common import Crypto
 
 
 class ConfessionsModeration(ConfessionCog):
@@ -33,7 +30,7 @@ class ConfessionsModeration(ConfessionCog):
       raise Exception(
         "Module `confessions` was unloaded when it's still required by `confessions_moderation`!"
       )
-    ext = cast(Confessions, self.bot.cogs['Confessions'])
+    ext = cast(ConfessionCog, self.bot.cogs['Confessions'])
     return ext.crypto
 
   def __init__(self, bot:MerelyBot):

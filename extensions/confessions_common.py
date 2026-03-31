@@ -14,13 +14,14 @@ import discord
 from discord.ext import commands
 import aiohttp
 
+from main import MerelyCog
+
 if TYPE_CHECKING:
   from collections.abc import Mapping
   from configparser import SectionProxy
-  from main import MerelyCog
   from babel import Babel, Resolvable
   from extensions.log import Log
-  from confessions_moderation import ConfessionsModeration
+  from .confessions_moderation import ConfessionsModeration
 
 type Confessable = (discord.TextChannel | discord.Thread)
 
@@ -345,7 +346,7 @@ class ChannelSelectView(discord.ui.View):
       self.confession.create(author=inter.user, target=self.selection)
 
     if vetting := await self.confession.check_vetting(inter):
-      modcog = cast(ConfessionsModeration, self.parent.bot.cogs['ConfessionsModeration'])
+      modcog = cast("ConfessionsModeration", self.parent.bot.cogs['ConfessionsModeration'])
       await modcog.send_vetting(inter, self.confession, vetting)
       await inter.delete_original_response()
       return
@@ -888,7 +889,7 @@ class ConfessionData:
         f'{self.target.guild.name}/{self.anonid} ({self.author.name}): ' +
         self.bot.utilities.truncate(self.content) + (' (attachment)' if self.file else '')
       )
-      logcog = cast(Log, self.bot.cogs['Log'])
+      logcog = cast("Log", self.bot.cogs['Log'])
       await logcog.log_misc_str(logentry)
 
     # Mark the command as complete by sending a success message

@@ -3,19 +3,18 @@
 """
 from __future__ import annotations
 
-from typing import Optional, Any, Literal, TYPE_CHECKING
+from typing import Optional, Any, Literal, TYPE_CHECKING, cast
 from enum import IntEnum
 from base64 import b64encode, b64decode
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from confessions_common import ConfessionCog
+from .confessions_common import ConfessionCog, ChannelType, get_guildchannels, ConfessionData
 
 if TYPE_CHECKING:
   from main import MerelyBot
-
-from overlay.extensions.confessions_common import ChannelType, get_guildchannels, ConfessionData
+  from .confessions_moderation import ConfessionsModeration
 
 
 class MarketplaceFlags(IntEnum):
@@ -33,6 +32,9 @@ class ConfessionsMarketplace(ConfessionCog):
 
     if 'confessions' not in bot.config['extensions']:
       raise Exception("Module `confessions` must be enabled!")
+    
+    cog = cast(ConfessionCog, bot.cogs['Confessions'])
+    self.crypto = cog.crypto
 
   # Modals
 
@@ -81,7 +83,7 @@ class ConfessionsMarketplace(ConfessionCog):
       embed.add_field(name='Offer payment method:', value=self.method.value, inline=True)
       embed.set_footer(text=self.parent.babel(inter, 'shop_disclaimer'))
 
-      pendingconfession = ConfessionData(self.parent.bot.cogs['Confessions'])
+      pendingconfession = ConfessionData(self.parent)
       pendingconfession.create(
         author=inter.user, target=inter.channel, reference=self.origin.message
       )
@@ -89,9 +91,8 @@ class ConfessionsMarketplace(ConfessionCog):
       pendingconfession.channeltype_flags = MarketplaceFlags.OFFER
 
       if vetting := await pendingconfession.check_vetting(inter):
-        await self.parent.bot.cogs['ConfessionsModeration'].send_vetting(
-          inter, pendingconfession, vetting
-        )
+        cog = cast("ConfessionsModeration", self.bot.cogs['ConfessionsModeration'])
+        await cog.send_vetting(inter, pendingconfession, vetting)
         return
       if vetting is False:
         return
@@ -140,11 +141,12 @@ class ConfessionsMarketplace(ConfessionCog):
     """ Check the button press events and handle relevant ones """
     if inter.type != discord.InteractionType.component:
       return
-    if inter.data.get('custom_id').startswith('confessionmarketplace_offer'):
+    assert inter.data is not None and 'custom_id' in inter.data
+    if inter.data['custom_id'].startswith('confessionmarketplace_offer'):
       return await self.on_create_offer(inter)
-    if inter.data.get('custom_id').startswith('confessionmarketplace_accept'):
+    if inter.data['custom_id'].startswith('confessionmarketplace_accept'):
       return await self.on_accept_offer(inter)
-    if inter.data.get('custom_id').startswith('confessionmarketplace_withdraw'):
+    if inter.data['custom_id'].startswith('confessionmarketplace_withdraw'):
       return await self.on_withdraw(inter)
 
   async def on_create_offer(self, inter:discord.Interaction):
@@ -152,8 +154,9 @@ class ConfessionsMarketplace(ConfessionCog):
     if len(inter.message.embeds) == 0:
       await inter.response.send_message(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
       return
-    id_seller = inter.data.get('custom_id')[28:]
-    raw_buyer = self.bot.cogs['Confessions'].crypto.encrypt(inter.user.id.to_bytes(8, 'big'))
+    assert inter.data is not None and 'custom_id' in inter.data
+    id_seller = inter.data['custom_id'][28:]
+    raw_buyer = self.crypto.encrypt(inter.user.id.to_bytes(8, 'big'))
     id_buyer = b64encode(raw_buyer).decode('ascii')
     if id_seller == id_buyer:
       await inter.response.send_message(self.babel(inter, 'error_self_offer'), ephemeral=True)
@@ -165,14 +168,15 @@ class ConfessionsMarketplace(ConfessionCog):
     if len(listing.embeds) == 0 or len(inter.message.embeds) == 0:
       await inter.response.send_message(self.babel(inter, 'error_embed_deleted'), ephemeral=True)
       return
-    if len(inter.data.get('custom_id')) < 31:
+    assert inter.data is not None and 'custom_id' in inter.data
+    if len(inter.data['custom_id']) < 31:
       await inter.response.send_message(self.babel(inter, 'error_old_offer'), ephemeral=True)
       return
-    encrypted_data = inter.data.get('custom_id')[29:].split('_')
+    encrypted_data = inter.data['custom_id'][29:].split('_')
 
-    raw_seller_id = self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[0])
+    raw_seller_id = self.crypto.decrypt(encrypted_data[0])
     seller_id = int.from_bytes(b64decode(raw_seller_id), 'big')
-    raw_buyer_id = self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[1])
+    raw_buyer_id = self.crypto.decrypt(encrypted_data[1])
     buyer_id = int.from_bytes(b64decode(raw_buyer_id), 'big')
     if seller_id == inter.user.id:
       seller = inter.user
@@ -199,8 +203,9 @@ class ConfessionsMarketplace(ConfessionCog):
     await inter.message.edit(content=self.babel(inter, 'offer_accepted'), view=None)
 
   async def on_withdraw(self, inter:discord.Interaction):
-    encrypted_data = inter.data.get('custom_id')[31:].split('_')
-    raw_owner_id = self.bot.cogs['Confessions'].crypto.decrypt(encrypted_data[-1])
+    assert inter.data is not None and 'custom_id' in inter.data
+    encrypted_data = inter.data['custom_id'][31:].split('_')
+    raw_owner_id = self.crypto.decrypt(encrypted_data[-1])
     owner_id = int.from_bytes(b64decode(raw_owner_id), 'big')
     if owner_id != inter.user.id:
       await inter.response.send_message(
@@ -263,7 +268,7 @@ class ConfessionsMarketplace(ConfessionCog):
     embed.add_field(name='Accepted payment methods:', value=payment_methods, inline=True)
     embed.set_footer(text=self.babel(inter, 'shop_disclaimer'))
 
-    pendingconfession = ConfessionData(self.bot.cogs['Confessions'])
+    pendingconfession = ConfessionData(self)
     pendingconfession.create(author=inter.user, target=inter.channel)
     pendingconfession.set_content(embed=embed)
     if image:
@@ -272,7 +277,8 @@ class ConfessionsMarketplace(ConfessionCog):
     pendingconfession.channeltype_flags = MarketplaceFlags.LISTING
 
     if vetting := await pendingconfession.check_vetting(inter):
-      await self.bot.cogs['ConfessionsModeration'].send_vetting(inter, pendingconfession, vetting)
+      cog = cast("ConfessionsModeration", self.bot.cogs['ConfessionsModeration'])
+      await cog.send_vetting(inter, pendingconfession, vetting)
       return
     if vetting is False:
       return
