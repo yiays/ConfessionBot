@@ -7,24 +7,23 @@ from __future__ import annotations
 
 import asyncio
 from base64 import b64encode
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from confessions_common import ConfessionCog
-
-if TYPE_CHECKING:
-  from main import MerelyBot
-
-from extensions.controlpanel import Toggleable, Stringable, Listable
-from overlay.extensions.confessions_common import (
-  Confessable, ChannelType, ChannelSelectView, get_channeltypes, findvettingchannel,
+from extensions.controlpanel import ControlPanelCog, Toggleable, Stringable, Listable
+from .confessions_common import (
+  ConfessionCog, Confessable, ChannelType, ChannelSelectView, get_channeltypes, findvettingchannel,
   get_guildchannels, set_guildchannels
 )
 
+if TYPE_CHECKING:
+  from main import MerelyBot
+  from extensions.controlpanel import ControlPanel
 
-class ConfessionsSetup(ConfessionCog):
+
+class ConfessionsSetup(ConfessionCog, ControlPanelCog):
   """ Configure anonymous messaging on your server """
   SCOPE = 'confessions'
 
@@ -65,7 +64,7 @@ class ConfessionsSetup(ConfessionCog):
 
   class SetupView(ChannelSelectView):
     """ Configure channels and shortcuts to configure guild settings """
-    current_channel: Confessable
+    current_channel: discord.TextChannel
     current_mode: ChannelType
 
     def __init__(
@@ -80,6 +79,7 @@ class ConfessionsSetup(ConfessionCog):
         Adds a mode select, an untraceable toggle, and documentation about channel types.
       """
       # Find channel types in config
+      assert inter.guild is not None
       matches = self.regenerate_matches(parent, inter.guild)
       super().__init__(inter, parent, matches)
       self.channel_selector.callback = self.channel_selector_override
@@ -87,7 +87,7 @@ class ConfessionsSetup(ConfessionCog):
       self.mode_selector.options = [
         discord.SelectOption(
           label=mode.localname(babel=parent.bot.babel, target=inter, long=False),
-          value=mode.value,
+          value=str(mode.value),
           emoji=mode.icon
         )
         for mode in get_channeltypes(self.parent.bot.cogs) if mode.value not in (0, 4)
@@ -105,7 +105,11 @@ class ConfessionsSetup(ConfessionCog):
         linkbutton.callback = self.controlpanel_shortcut
         self.add_item(linkbutton)
 
-      self.current_channel = channel.parent if isinstance(channel, discord.Thread) else channel
+      if isinstance(channel, discord.Thread):
+        assert isinstance(channel.parent, discord.TextChannel)
+        self.current_channel = channel.parent
+      else:
+        self.current_channel = channel
       guildchannels = get_guildchannels(parent.config, inter.guild.id)
       self.current_mode = guildchannels.get(
         self.current_channel.id, ChannelType.unset
@@ -113,20 +117,23 @@ class ConfessionsSetup(ConfessionCog):
       self.update_state()
 
     def regenerate_matches(
-      self, parent:ConfessionsSetup, guild:discord.Guild
-    ) -> list[tuple[discord.TextChannel, ChannelType]]:
+      self, parent:ConfessionCog, guild:discord.Guild
+    ) -> list[tuple[Confessable, ChannelType]]:
       """ Create a list of all channels on the server sorted by categories and position """
       if len(guild.channels) == 0:
         return []
+      assert parent.bot.user is not None
       botmember = guild.get_member(parent.bot.user.id)
+      assert botmember is not None
       guildchannels = get_guildchannels(parent.config, guild.id)
-      out = [(c, guildchannels.get(c.id, ChannelType.unset)) for c in guild.channels if (
+      channeldata: list[tuple[discord.TextChannel, ChannelType]]
+      channeldata = [(c, guildchannels.get(c.id, ChannelType.unset)) for c in guild.channels if (
         isinstance(c, discord.TextChannel) and c.permissions_for(botmember).read_messages
       )]
-      out.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
-      return out
+      channeldata.sort(key=lambda t: (t[0].category.position if t[0].category else 0, t[0].position))
+      return cast(list[tuple[Confessable, ChannelType]], channeldata)
 
-    async def controlpanel_shortcut(self, inter:discord.Interaction):
+    async def controlpanel_shortcut(self, interaction:discord.Interaction):
       """
         Invite the user to change server-wide settings in the controlpanel
 
@@ -135,9 +142,8 @@ class ConfessionsSetup(ConfessionCog):
       """
       if 'ControlPanel' not in self.parent.bot.cogs:
         raise Exception("ControlPanel was unloaded")
-      await self.parent.bot.cogs['ControlPanel'].controlpanel.callback(
-        self.parent.bot.cogs['ControlPanel'], inter
-      )
+      cog = cast("ControlPanel", self.parent.bot.cogs['ControlPanel'])
+      await cog.controlpanel.callback(cog, interaction) # type: ignore[attr-defined]
 
     async def set(
       self, inter:discord.Interaction, channel:discord.TextChannel, mode:ChannelType
@@ -169,6 +175,7 @@ class ConfessionsSetup(ConfessionCog):
       modestring = (
         f'setsuccess{mode.value}' if mode != ChannelType.unset else f'unsetsuccess{old_mode.value}'
       )
+      assert inter.guild is not None
       tutorial = self.parent.babel(inter.guild, modestring) + ' '
       if mode == ChannelType.unset:
         if old_mode in (ChannelType.traceable, ChannelType.untraceable):
@@ -226,28 +233,37 @@ class ConfessionsSetup(ConfessionCog):
         + '\n' + self.parent.babel(inter, 'state_cta')
       ), view=self)
 
-    async def channel_selector_override(self, inter:discord.Interaction):
+    async def channel_selector_override(self, interaction:discord.Interaction):
       """ Update the message to preview the selected target """
-      if inter.user != self.origin.user:
-        await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
+      if isinstance(self.origin, discord.Message):
+        originuser = self.origin.author
+      else:
+        assert isinstance(self.origin, discord.Interaction)
+        originuser = self.origin.user
+      if interaction.user != originuser:
+        await interaction.response.send_message(
+          self.parent.bot.babel(interaction, 'error', 'wronguser')
+        )
         return
       self.send_button.disabled = False
       channel_id = int(self.channel_selector.values[0])
       try:
-        self.current_channel = await self.parent.bot.fetch_channel(channel_id)
+        channel = await self.parent.bot.fetch_channel(channel_id)
+        assert isinstance(channel, discord.TextChannel)
+        self.current_channel = channel
       except discord.Forbidden:
         self.current_mode = ChannelType.unset
         self.update_state()
-        await self.update_message(inter)
-        await inter.response.send_message(
-          content=self.parent.babel(inter, 'setup_state_missing', channel_id=channel_id),
+        await self.update_message(interaction)
+        await interaction.response.send_message(
+          content=self.parent.babel(interaction, 'setup_state_missing', channel_id=str(channel_id)),
           ephemeral=True
         )
         return
       guildchannels = get_guildchannels(self.parent.config, self.current_channel.guild.id)
       self.current_mode = guildchannels.get(self.current_channel.id, ChannelType.unset)
       self.update_state()
-      await self.update_message(inter)
+      await self.update_message(interaction)
 
     @discord.ui.button(emoji='❓', row=4, custom_id='confessionsetup_help')
     async def help(self, inter:discord.Interaction, _:discord.ui.Button):
@@ -262,21 +278,27 @@ class ConfessionsSetup(ConfessionCog):
 
     @discord.ui.select(custom_id='confessionsetup_mode')
     async def mode_selector(self, inter:discord.Interaction, this:discord.ui.Select):
-      if inter.user != self.origin.user:
+      if isinstance(self.origin, discord.Message):
+        originuser = self.origin.author
+      else:
+        assert isinstance(self.origin, discord.Interaction)
+        originuser = self.origin.user
+      if inter.user != originuser:
         await inter.response.send_message(self.parent.bot.babel(inter, 'error', 'wronguser'))
         return
 
       await self.set(inter, self.current_channel, ChannelType.from_value(this.values[0]))
 
     async def on_timeout(self):
-      for component in self.children:
-        if isinstance(component, (discord.ui.Button, discord.ui.Select)):
-          component.disabled = True
-      try:
-        msg = await self.origin.original_response()
-        await msg.edit(view=self)
-      except discord.HTTPException:
-        pass
+      if isinstance(self.origin, discord.Interaction):
+        for component in self.children:
+          if isinstance(component, (discord.ui.Button, discord.ui.Select)):
+            component.disabled = True
+        try:
+          msg = await self.origin.original_response()
+          await msg.edit(view=self)
+        except discord.HTTPException:
+          pass
 
   class BanResetView(discord.ui.View):
     """ Warns user about the ban reset before shuffle is performed """
@@ -289,10 +311,11 @@ class ConfessionsSetup(ConfessionCog):
       self.continue_button.label = parent.babel(origin, 'shufflebanresetconfirm')
 
     @discord.ui.button(style=discord.ButtonStyle.green, emoji='➡️', custom_id='shufflebanreset_yes')
-    async def continue_button(self, inter:discord.Interaction, _:discord.Button):
+    async def continue_button(self, inter:discord.Interaction, _:discord.ui.Button):
       """ On click of continue button """
+      assert inter.guild is not None
       self.parent.config.pop(str(inter.guild.id)+'_banned')
-      self.parent.perform_shuffle(inter.guild_id)
+      self.parent.perform_shuffle(inter.guild.id)
       await inter.response.send_message(self.parent.babel(inter, 'shufflesuccess'))
       await self.origin.delete_original_response()
 
@@ -371,7 +394,9 @@ class ConfessionsSetup(ConfessionCog):
     """
       Change confessions settings on this server
     """
-    channel = self.bot.get_channel(inter.channel_id)
+    assert inter.channel is not None
+    channel = self.bot.get_channel(inter.channel.id)
+    assert channel is not None and isinstance(channel, (discord.TextChannel, discord.Thread))
     await inter.response.send_message(
       self.babel(inter, 'setup_start'), view=self.SetupView(inter, self, channel), ephemeral=True
     )
@@ -386,6 +411,7 @@ class ConfessionsSetup(ConfessionCog):
     """
       Change all anon-ids on a server
     """
+    assert inter.guild is not None
     if str(inter.guild.id)+'_banned' in self.config:
       await inter.response.send_message(
         self.babel(inter, 'shufflebanresetwarning'),
@@ -394,11 +420,12 @@ class ConfessionsSetup(ConfessionCog):
       )
       return
 
-    self.perform_shuffle(inter.guild_id)
+    self.perform_shuffle(inter.guild.id)
     await inter.response.send_message(self.babel(inter, 'shufflesuccess'))
 
   def perform_shuffle(self, guild_id:int):
-    salt = self.bot.cogs['Confessions'].crypto.srandom_token()
+    cog = cast(ConfessionCog, self.bot.cogs['Confessions'])
+    salt = cog.crypto.srandom_token()
     self.bot.config.set(self.SCOPE, str(guild_id) + '_shuffle', b64encode(salt).decode('ascii'))
     self.bot.config.save()
 
