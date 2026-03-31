@@ -492,7 +492,7 @@ class ConfessionData:
   SCOPE = 'confessions' # exists to keep babel happy
   DATA_VERSION = 2
   anonid:str | None
-  author:discord.abc.User
+  author:discord.Member
   target:Confessable
   channeltype_flags:int = 0
   content:str | None = None
@@ -529,9 +529,9 @@ class ConfessionData:
       reference_id = int.from_bytes(binary[18:26], 'big')
     else:
       raise CorruptConfessionDataException("Data format incorrect;", len(binary), "!=", 26)
-    self.author = await self.bot.fetch_user(author_id)
     targetchannel = await self.bot.fetch_channel(targetchannel_id)
     assert isinstance(targetchannel, discord.TextChannel)
+    self.author = await targetchannel.guild.fetch_member(author_id)
     self.target = targetchannel
     self.anonid = self.get_anonid(self.target.guild.id, self.author.id)
     guildchannels = get_guildchannels(self.config, self.target.guild.id)
@@ -549,14 +549,20 @@ class ConfessionData:
     *,
     author:discord.abc.User | None = None,
     target:Confessable | None = None,
-    reference:discord.Message | None = None
+    reference:discord.Message | discord.PartialMessage | None = None
   ):
     if reference:
       self.reference = reference
     elif author and target:
       if hasattr(self, 'author') and self.author != author:
         raise Exception("Attempted to change confession author from", self.author, "to", author, "!")
-      self.author = author
+      if isinstance(author, discord.User):
+        member = target.guild.get_member(author.id)
+        assert member is not None
+        self.author = member
+      else:
+        assert isinstance(author, discord.Member)
+        self.author = author
       self.target = target
       self.anonid = self.get_anonid(target.guild.id, author.id)
       guildchannels = get_guildchannels(self.config, target.guild.id)

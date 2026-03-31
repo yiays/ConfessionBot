@@ -242,6 +242,7 @@ class ConfessionsModeration(ConfessionCog):
     """ Handle approving and denying confessions """
     if inter.type != discord.InteractionType.component:
       return
+    assert inter.data is not None and 'custom_id' in inter.data
     custom_id = inter.data['custom_id']
     if not custom_id.startswith('pendingconfession_'):
       return
@@ -251,9 +252,10 @@ class ConfessionsModeration(ConfessionCog):
       )
       return
 
-    await inter.response.defer()
     self.button_lock.append(custom_id)
+    await inter.response.defer()
     accepted = False
+    assert inter.message is not None and inter.guild is not None
     try:
       if custom_id.startswith('pendingconfession_approve_'):
         accepted = True
@@ -264,7 +266,8 @@ class ConfessionsModeration(ConfessionCog):
           # Try and recover reference if it's lost
           if match := self.jump_url_pattern.search(inter.message.content):
             _, channel_id, message_id = map(int, match.groups())
-            channel = inter.guild.get_channel(channel_id)
+            channel = inter.guild.get_channel_or_thread(channel_id)
+            assert isinstance(channel, (discord.TextChannel, discord.Thread))
             reference = channel.get_partial_message(message_id)
             pendingconfession.create(reference=reference)
       elif custom_id.startswith('pendingconfession_deny_'):
@@ -289,6 +292,7 @@ class ConfessionsModeration(ConfessionCog):
           await pendingconfession.add_image(url=inter.message.embeds[0].image.url)
         elif (
           len(inter.message.attachments) and
+          inter.message.attachments[0].content_type is not None and
           inter.message.attachments[0].content_type.startswith('image')
         ):
           await pendingconfession.add_image(attachment=inter.message.attachments[0])
@@ -346,6 +350,7 @@ class ConfessionsModeration(ConfessionCog):
     """
       Block or unblock anon-ids from confessing
     """
+    assert inter.guild is not None
     banlist_raw = self.config.get(f'{inter.guild.id}_banned', fallback='')
     banlist = banlist_raw.split(',')
     if anonid is None:
