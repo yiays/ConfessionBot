@@ -176,7 +176,7 @@ class Confessions(ConfessionCog):
     guildchannels = get_guildchannels(self.config, member.guild.id)
     for channel in member.guild.channels:
       if channel.id in guildchannels:
-        assert channel is discord.TextChannel
+        assert isinstance(channel, discord.TextChannel)
         channeltype = guildchannels[channel.id]
         if channeltype == ChannelType.vetting:
           vetting = True

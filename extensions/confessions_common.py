@@ -548,32 +548,30 @@ class ConfessionData:
   def create(
     self,
     *,
-    author:discord.abc.User | None = None,
-    target:Confessable | None = None,
+    author:discord.abc.User,
+    target:Confessable,
     reference:discord.Message | discord.PartialMessage | None = None
   ):
+    """ Creates a pending confession from user and target data """
+    if hasattr(self, 'author') and self.author != author:
+      raise Exception("Attempted to change confession author from", self.author, "to", author, "!")
+    if isinstance(author, discord.User):
+      member = target.guild.get_member(author.id)
+      assert member is not None
+      self.author = member
+    else:
+      assert isinstance(author, discord.Member)
+      self.author = author
+    self.target = target
+    self.anonid = self.get_anonid(target.guild.id, author.id)
     if reference:
       self.reference = reference
-    elif author and target:
-      if hasattr(self, 'author') and self.author != author:
-        raise Exception("Attempted to change confession author from", self.author, "to", author, "!")
-      if isinstance(author, discord.User):
-        member = target.guild.get_member(author.id)
-        assert member is not None
-        self.author = member
-      else:
-        assert isinstance(author, discord.Member)
-        self.author = author
-      self.target = target
-      self.anonid = self.get_anonid(target.guild.id, author.id)
-      guildchannels = get_guildchannels(self.config, target.guild.id)
-      self.channeltype = guildchannels.get(
-        target.parent_id if isinstance(target, discord.Thread) else target.id,
-        ChannelType.unset
-      )
-      self.targetchanneltype = self.channeltype
-    else:
-      raise Exception("Both author and targetchannel must be provided at the same time")
+    guildchannels = get_guildchannels(self.config, target.guild.id)
+    self.channeltype = guildchannels.get(
+      target.parent_id if isinstance(target, discord.Thread) else target.id,
+      ChannelType.unset
+    )
+    self.targetchanneltype = self.channeltype
 
   def set_content(self, content:Optional[str] = '', *, embed:Optional[discord.Embed] = None):
     self.content = content

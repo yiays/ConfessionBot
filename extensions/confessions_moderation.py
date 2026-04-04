@@ -266,7 +266,7 @@ class ConfessionsModeration(ConfessionCog):
             channel = inter.guild.get_channel_or_thread(channel_id)
             assert isinstance(channel, (discord.TextChannel, discord.Thread))
             reference = channel.get_partial_message(message_id)
-            pendingconfession.create(reference=reference)
+            pendingconfession.reference = reference
       elif custom_id.startswith('pendingconfession_deny_'):
         pendingconfession = ConfessionData(self)
         await pendingconfession.from_binary(self.crypto, custom_id[23:])
