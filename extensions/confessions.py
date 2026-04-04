@@ -274,11 +274,11 @@ class Confessions(ConfessionCog):
 
     else:
       # User never input any message, give them a paragraph editor
-      await inter.response.send_modal(self.ConfessionModal(self, inter, data))
+      await inter.response.send_modal(self.ComposeModal(self, inter, data))
 
   # Modals
 
-  class ConfessionModal(discord.ui.Modal):
+  class ComposeModal(discord.ui.Modal):
     """ Modal for completing an incomplete confession """
     def __init__(
       self,
@@ -290,6 +290,7 @@ class Confessions(ConfessionCog):
         title=parent.babel(origin, 'editor_title'),
         custom_id="confession_modal_"+str(origin.id)
       )
+
       self.content = discord.ui.TextInput(
         label=parent.babel(origin, 'editor_message_label'),
         placeholder=parent.babel(origin, 'editor_message_placeholder'),
@@ -307,7 +308,11 @@ class Confessions(ConfessionCog):
           required=False,
           max_values=1
         )
-        self.add_item(self.image)
+        self.imageLabel = discord.ui.Label(
+          text="Image (optional)",
+          component=self.image
+        )
+        self.add_item(self.imageLabel)
 
       self.parent = parent
       self.data = data

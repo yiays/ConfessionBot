@@ -221,7 +221,7 @@ class ConfessionsModeration(ConfessionCog):
           self.parent.babel(
             reportchannel.guild, 'new_report',
             server=f'{inter.guild.name} ({inter.guild.id})',
-            user=f'{inter.user.mention} ({inter.user.name}#{inter.user.discriminator})',
+            user=f'{inter.user.mention} ({inter.user.name})',
             reason=self.report_reason.value
           ),
           embed=embed,
