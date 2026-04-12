@@ -11,6 +11,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from extensions.controlpanel import ControlPanelCog, Stringable
 from .confessions_common import (
   ConfessionCog, ConfessionData, CorruptConfessionDataException, safe_fetch_target
 )
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
   from confessions_common import Crypto
 
 
-class ConfessionsModeration(ConfessionCog):
+class ConfessionsModeration(ConfessionCog, ControlPanelCog):
   """ Moderate anonymous messaging on your server """
   SCOPE = 'confessions'
 
@@ -48,6 +49,18 @@ class ConfessionsModeration(ConfessionCog):
       callback=self.report_callback
     )
     bot.tree.add_command(self.report)
+
+  def controlpanel_settings(self, inter:discord.Interaction):
+    # ControlPanel integration
+    if inter.guild and inter.permissions.administrator:
+      return [Stringable(
+        self.SCOPE, f'{inter.guild_id}_badwords', 'bad_words_list_name', r'[\p{L}\d ,\n\-]+(?<![, ])$'
+      )]
+    return []
+
+  def controlpanel_theme(self) -> tuple[str, discord.ButtonStyle]:
+    # Controlpanel custom theme for buttons
+    return (self.SCOPE, discord.ButtonStyle.blurple)
 
   def cog_unload(self):
     self.bot.tree.remove_command(self.report.qualified_name, type=self.report.type)

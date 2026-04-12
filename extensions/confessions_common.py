@@ -685,6 +685,14 @@ class ConfessionData:
         return False
     return True
 
+  def check_badwords(self, inter:discord.Interaction):
+    """ Verify message doesn't contain spam as defined in [confessions] spam_flags """
+    key = f'{inter.guild_id}_badwords'
+    for badword in self.config.get(key, fallback='').split(','):
+      if self.content and badword.strip().lower() in self.content.lower():
+        return False
+    return True
+
   async def check_vetting(
     self,
     inter:discord.Interaction,
@@ -730,6 +738,10 @@ class ConfessionData:
 
     if not self.check_banned():
       await send(self.babel(inter, 'nosendbanned'), **kwargs)
+      return False
+
+    if not self.check_badwords(inter):
+      await send(self.babel(inter, 'nobadword'), **kwargs)
       return False
 
     if self.attachment:
