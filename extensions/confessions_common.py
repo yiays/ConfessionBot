@@ -688,7 +688,10 @@ class ConfessionData:
   def check_badwords(self, inter:discord.Interaction):
     """ Verify message doesn't contain spam as defined in [confessions] spam_flags """
     key = f'{inter.guild_id}_badwords'
-    for badword in self.config.get(key, fallback='').split(','):
+    badwords = self.config.get(key, fallback='')
+    if len(badwords) == 0:
+      return True
+    for badword in badwords.split(','):
       if self.content and badword.strip().lower() in self.content.lower():
         return False
     return True
