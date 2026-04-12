@@ -20,14 +20,20 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
 
 ### Setup Instructions
  - Clone [Merely Framework](https://github.com/MerelyServices/Merely-Framework) into a folder
- - Create a subfolder named 'overlay'
- - Clone this project into 'overlay'
+   - ```sh
+     git clone https://github.com/MerelyServices/Merely-Framework.git ConfessionBot
+ - Clone this project into a subfolder named 'overlay'
+   - ```sh
+     cd ConfessionBot
+     git clone https://github.com/yiays/ConfessionBot.git overlay
  - Install python >= 3.12
- - Install required python packages with `python3 -m pip install -r requirements.txt -r overlay/requirements.txt`
+ - Install required python packages
+   - ```sh
+     python3 -m pip install -r requirements.txt -r overlay/requirements.txt
  - Run your bot once to generate the config file; `python3 main.py`
  - Create a discord bot in the [Discord Developer Portal](https://discordapp.com/developers/applications/), you will need the token
     - **[Please don't copy the branding of ConfessionBot!](#Terms-of-use)**
- - Give ConfessionBot the token by setting it in the [main] section of the config (overlay/config/config.ini)
+ - Give ConfessionBot the token by setting it in the `[main]` section of the config (overlay/config/config.ini)
    - **Never put your token in config.factory.ini** - this file is public when you commit to GitHub.
  - Run your bot with `python3 main.py`
  - Add your bot to your server, use the id from the Discord Developer Portal in the following link;
