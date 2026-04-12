@@ -45,8 +45,9 @@ You can easily rename the bot by changing the botname parameter in `config.ini`.
 To update, first shut down your bot gracefully with `/die`, then use the following commands.
 
 ```sh
-$ git pull
-$ pip install -r requirements.txt -r overlay/requirements.txt
+git pull
+git -C overlay pull
+pip install -r requirements.txt -r overlay/requirements.txt
 ```
 
 ## Contributing
