@@ -62,6 +62,7 @@ class Confessions(ConfessionCog):
     self.crypto.setkey(self.config['secret'])
     self.confession_cooldown = dict()
 
+    # Add confession reply option to context menu
     self.confess_reply = app_commands.ContextMenu(
       name=app_commands.locale_str('Confession_Reply', scope=self.SCOPE),
       allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=False),
@@ -69,16 +70,36 @@ class Confessions(ConfessionCog):
       callback=self.confess_reply_callback
     )
     bot.tree.add_command(self.confess_reply)
-    self.bind_custom_commands.start()
+
+    # Add /anon equivalents to /confess commands
+    self.bot.tree.add_command(
+      app_commands.Command(
+        name=app_commands.locale_str('anon', scope=self.SCOPE),
+        description=app_commands.locale_str('confess_desc', scope=self.SCOPE),
+        callback=self.renamed_confess_callback,
+        allowed_contexts=app_commands.AppCommandContext(guild=True)
+      )
+    )
+    self.bot.tree.add_command(
+      app_commands.Command(
+        name=app_commands.locale_str('anon-to', scope=self.SCOPE),
+        description=app_commands.locale_str('confess-to_desc', scope=self.SCOPE),
+        callback=self.renamed_confess_callback,
+        allowed_contexts=app_commands.AppCommandContext(guild=True)
+      )
+    )
+
+    # Initialize regular task to bind custom /confess aliases
+    self.bind_command_aliases.start()
 
   async def cog_unload(self):
-    self.bind_custom_commands.stop()
+    self.bind_command_aliases.stop()
     self.bot.tree.remove_command(self.confess_reply.qualified_name, type=self.confess_reply.type)
     for guild_id, cmdname in self.customcommands.items():
       self.bot.tree.remove_command(cmdname, guild=discord.Object(guild_id))
 
   @tasks.loop(seconds=10)
-  async def bind_custom_commands(self):
+  async def bind_command_aliases(self):
     """ If any users have requested a custom name for /confess, bind it to the tree """
     for guild in self.bot.guilds:
       customname = self.config.get(f'{guild.id}_confessname')
