@@ -673,7 +673,7 @@ class ConfessionData:
       assert image.content_type is not None
       if image.content_type.startswith('image') and image.size < self.target.guild.filesize_limit:
         # Discord size limit
-        if bool(self.config.get(f"{guild_id}_imagesupport", fallback=True)):
+        if self.config.getboolean(f"{guild_id}_imagesupport", fallback=True):
           return True
         return False
     raise commands.BadArgument()
