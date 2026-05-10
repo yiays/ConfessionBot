@@ -323,7 +323,8 @@ class Confessions(ConfessionCog):
       self.add_item(self.content)
 
       self.image = None
-      if data.attachment is None:
+      image_support = parent.config.getboolean(f"{origin.guild_id}_imagesupport", fallback=True)
+      if data.attachment is None and image_support:
         self.image = discord.ui.FileUpload(
           custom_id='image',
           required=False,
