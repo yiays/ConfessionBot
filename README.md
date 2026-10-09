@@ -7,7 +7,7 @@
 > [Invite ConfessionBot](https://discord.com/oauth2/authorize?client_id=562440687363293195&permissions=0&scope=bot%20applications.commands) to your own server
 
 ## News
-![ConfessionBot v2.6: Confession Replies; reply to any message anonymously in the right click menu. Easier channel types; Untraceable and traceable modes have been combined into one new type (Anonymous). Marketplace; A marketplace channel type is available to users who pay for a custom bot. Click to command; click on mentioned commands to use them immediately. Second chances; If you send a confession to an unset channel, you can redirect it.](news/Update%20Poster%20-%20v2.6.webp)
+![ConfessionBot v2.9: Custom command; change the /confess command to anything you like in /controlpanel. Confess in threads; Active threads within set channels are now also confession channels. More translation; Commands can now be translated to your system locale. Block words; Automatically block certain words on your server. Clean old messages; Old anonymous messages can now be deleted automatically.](news/Update%20Poster%20-%20v2.9.webp)
 
 ## Usage
 

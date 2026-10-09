@@ -215,14 +215,14 @@ async def safe_fetch_target(
   """ Gracefully handles whenever a confession target isn't available """
   try:
     result = await parent.bot.fetch_channel(channel_id)
-    assert isinstance(result, discord.TextChannel)
-    return result
-  except discord.Forbidden | discord.NotFound:
+    if isinstance(result, (discord.TextChannel, discord.Thread)):
+      return result
+  except (discord.Forbidden, discord.NotFound, discord.HTTPException):
     await inter.response.send_message(
       parent.babel(inter, 'missingchannelerr') + ' (fetch)',
       ephemeral=True
     )
-    return None
+  return None
 
 
 # Exceptions
